@@ -18,6 +18,9 @@ const HomePage = lazy(() =>
 const ProductsPage = lazy(() =>
   import("@/pages/ProductsPage").then((m) => ({ default: m.ProductsPage })),
 );
+const ProductDetailPage = lazy(() =>
+  import("@/pages/ProductDetailPage").then((m) => ({ default: m.ProductDetailPage })),
+);
 const NotFoundPage = lazy(() =>
   import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
 );
@@ -42,6 +45,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/products" element={<ProductsPage />} />
+            <Route path="/products/:slug" element={<ProductDetailPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
