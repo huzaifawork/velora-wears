@@ -418,8 +418,8 @@ It also reads the product's SUMMARY, because `ratingAvg`, `ratingCount`, `inStoc
 `lowStock` are precomputed at write time and exist only there — the storefront must never
 average reviews at read time (§19). That needed a new `getProductSummaryBySlug` on the
 `CatalogSource` interface, implemented in both sources, and **a new `slug` index on
-`productSummaries` in `database.rules.json`** — added, but **not yet deployed**: run
-`npm run deploy:rules` before the storefront ever reads from the database.
+`productSummaries` in `database.rules.json`** — added and **deployed** to the live database
+on 2026-08-29 with `npm run deploy:rules`.
 
 **Reads come in two waves**, which is the pattern any dependent read should copy:
 
@@ -539,9 +539,6 @@ wants; do not build both.
 - **Category URL shape** (section 5) — `?category=` works today and everything links to it.
   Whether categories also get their own route, and which one is canonical, is Huzaifa's
   call. Do not build both.
-- **`database.rules.json` has an undeployed change.** Section 4 added a `slug` index on
-  `productSummaries`. It changes nothing while the storefront serves demo data, but
-  `npm run deploy:rules` must run before the database is read from.
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
 - **Delivery charges** (section 10) — flat rate or per city? Undecided.
 - **Admin dashboard spec** (section 8) — still pending from the client.
