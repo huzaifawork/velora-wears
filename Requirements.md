@@ -739,6 +739,32 @@ a different file is not acceptable.
   between pages.
 - Before writing a new component, check whether an existing one can take a prop instead.
 
+### Data source — a temporary decision, not part of the spec
+
+> **Status: temporary. Added 2026-08-28. Remove this subsection when it no longer applies.**
+
+The client has not purchased the Firebase Blaze plan yet. Until the storefront has been
+reviewed and Blaze is enabled, the catalog is served from **demo data held in the frontend**
+rather than from the Realtime Database.
+
+This is a staging decision only. It does **not** change the architecture above, and it is
+bound by two rules that keep it from becoming technical debt:
+
+1. **The data layer's public interface does not change.** Demo data is served through the
+   same `queries.ts` functions, with the same async signatures, typed against the same
+   `shared/types.ts` contract. Pages and components import from `queries.ts` and must never
+   import the demo data directly — so they cannot tell the difference, and none of them need
+   editing when the switch happens.
+2. **Switching to the Realtime Database is a one-file change**, controlled by a single flag.
+   The Realtime Database implementation stays in place and is not deleted.
+
+Demo product images are committed to the repository and served as static assets. They are
+not uploaded to Firebase Storage, which is unavailable without Blaze.
+
+Both the demo data and the demo images are **throwaway**. They are removed once the admin
+dashboard (section 8) can create real products, and the storefront then reads live data as
+described in sections 18 and 19.
+
 ---
 
 ## 19. Performance and Query Optimisation

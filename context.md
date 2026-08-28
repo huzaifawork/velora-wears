@@ -85,14 +85,15 @@ Storefront builds clean; functions typecheck clean.
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
 | Routing | react-router-dom, one placeholder route |
 | Firebase client | Wired, web app registered, config in `storefront/.env.local` |
-| Query layer | Written and documented — **not yet exercised against real data** |
+| Query layer | Written; **serves demo data from `lib/demoData.ts`**, not the database |
+| Data source | `VITE_DATA_SOURCE=demo`. Switches to `firebase` when Blaze is bought |
 | Cloud Functions | Scaffolded, typechecks; `placeOrder` **throws "unimplemented"** |
 | Database rules | Deployed — catalog readable, all client writes denied |
 | Data contract | `shared/types.ts` written |
 | Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
 | Product features | **None.** No catalog, cart, checkout, auth, reviews, admin |
 | Landing page | **Not built (section 2 — next).** Home is a brand holding page |
-| Seed data | **Database is empty.** Nothing to render yet |
+| Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
 | Lint | `npm run lint` **fails** — `storefront/eslint.config.js` does not exist |
 
 ### Layout
@@ -171,6 +172,9 @@ Functions dependencies install separately, once: change into `functions/` and ru
 - **Every new `orderByChild` needs a matching `.indexOn`** in `database.rules.json`, added in
   the same change. Missing indexes are the main cause of slow RTDB apps.
 - **List views read `productSummaries`, never `products`.**
+- **Never import `lib/demoData.ts` from a component or page.** Go through
+  `lib/queries.ts` — that indirection is what makes switching to the database a
+  one-file change instead of a rewrite.
 - **Build a shared component before writing markup twice** (§18). Extend `Button` with a
   variant rather than styling a one-off button somewhere else.
 - No hardcoded colours in components — use the tokens in `storefront/src/index.css`.
@@ -248,25 +252,51 @@ one starts.
 
 ### The next task in detail — section 2, the landing page
 
-The landing page needs a Featured Products section and a Categories section, so **the
-database has to have data first**. Agreed with Huzaifa: write a seed script.
+**Decided 2026-08-28: the catalog is served from demo data in the frontend, NOT from the
+Realtime Database, until the client buys Blaze and the storefront has been reviewed.**
 
-1. **Seed script** (Node + Admin SDK, run locally with the key in `secrets/`) that writes a
-   handful of realistic shirts and hoodies with per-size stock, plus categories and
-   `settings/public`. It must write `products` **and** `productSummaries` together — that
-   dual write is exactly what Developer B's dashboard will have to do. Placeholder images
-   are fine, but store both `thumb` and `full`.
-   *Note: `firebase-admin` is not currently a root dependency — add it as a devDependency.*
-   The script must be **idempotent** (safe to re-run) and must support **`--clear`** to
-   remove everything it wrote, since this data is thrown away once the admin dashboard
-   can create real products.
-   Images go in `storefront/public/products/` and are referenced by path — **not** Firebase
-   Storage, which is unavailable without Blaze.
-2. **Verify `storefront/src/lib/queries.ts` against real data.** It has never actually run.
-   **Known bug to fix:** `getSettings()` reads `settings`, but the rules only expose
-   `settings/public` — that read will be denied. Confirm every index works.
-3. **Build the landing page** from reusable components. `ProductCard` built here is the same
-   one the products page uses in section 3 — build it once, properly.
+To be clear about the reasoning, because it is easy to get wrong: seeding the database does
+**not** require Blaze — that was verified with a live write/read/delete probe on Spark. This
+is Huzaifa's staging decision, not a technical limit. The database stays untouched for now.
+
+The rule that keeps this from becoming debt: **the data layer's interface does not change.**
+
+```
+components/pages  -->  lib/queries.ts  -->  lib/demoData.ts      <- today
+                             |
+                             +---------->  Realtime Database      <- one flag flip, later
+```
+
+1. **`storefront/src/lib/demoData.ts`** — the demo catalog: roughly a dozen shirts and
+   hoodies, categories, and a `settings` object. Type every record against
+   `shared/types.ts` (`ProductSummary`, `Product`, `Category`, `Settings`) and export them
+   as those types — that way the compiler enforces the real contract and the shapes cannot
+   drift from what Developer B's dashboard will write. Include per-size stock covering all
+   three states: in stock, low stock, and a size that is sold out, so the section 11 badges
+   have something real to render.
+2. **`storefront/src/lib/queries.ts`** — keep every exported function exactly as it is
+   (`listProducts`, `getProductBySlug`, `searchProducts`, `getCategories`, `getSettings`),
+   same async signatures, same return types. Switch the *implementation* on a flag —
+   `VITE_DATA_SOURCE` (`demo` | `firebase`, defaulting to `demo`). Add it to
+   `storefront/.env.example`, `storefront/.env.local`, and Vercel.
+   **Do not delete the existing Realtime Database code** — it is what we switch back on.
+   Keep the demo path async and sorted/limited the same way, so switching cannot surprise us.
+3. **Pages and components must import from `queries.ts` only.** Never import `demoData`
+   directly in a component — that is what makes the eventual switch a one-file change.
+4. **Images** — commit to `storefront/public/products/`, referenced by path. Both a `thumb`
+   and a `full` variant per image, WebP, with known width/height so the grid reserves space
+   and does not shift (section 19). Not Firebase Storage: unavailable without Blaze.
+5. **Then build the landing page** from reusable components. The `ProductCard` built here is
+   the same one the products page uses in section 3 — build it once, properly.
+
+**When Blaze is bought and the switch happens**, the checklist is: fix the `getSettings()`
+path bug below, write the seed script (Admin SDK, dual-writes `products` +
+`productSummaries`, idempotent, with a `--clear` flag), flip `VITE_DATA_SOURCE` to
+`firebase`, verify every index, then delete `demoData.ts` and the demo images.
+
+> **Known bug, still unfixed:** `getSettings()` reads `settings`, but the rules only expose
+> `settings/public` — that read will be denied the moment we switch to the database. It is
+> latent today because nothing runs it. Fix it as part of the switch.
 
 ## 9. Open questions — ask before inventing
 
@@ -282,9 +312,12 @@ database has to have data first**. Agreed with Huzaifa: write a seed script.
 - **Blaze plan.** Not enabled, and the client has not bought it yet. Blocks *only* Cloud
   Functions — so checkout (section 7) and `placeOrder`. Everything up to and including the
   cart can be finished without it. Seeding does **not** need it.
-- **Demo data is temporary.** It gets deleted once Developer B's admin dashboard can create
-  real products. The seed script must therefore ship a `--clear` flag that removes
-  everything it wrote, so the handover is one command and not a manual cleanup.
+- **Demo data is temporary, and lives in the frontend for now** (`lib/demoData.ts`), not in
+  the database — Huzaifa's staging decision while the client has not bought Blaze. It is
+  deleted once the admin dashboard can create real products. The seed script that replaces
+  it must be idempotent and ship a `--clear` flag, so the handover is one command.
+- **The database is deliberately empty and stays that way for now.** Do not seed it without
+  asking — the storefront is not reading from it yet.
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
 - **Delivery charges** (section 10) — flat rate or per city? Undecided.
 - **Admin dashboard spec** (section 8) — still pending from the client.
