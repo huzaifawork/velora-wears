@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  /** Where the catalog is read from. Defaults to `demo` when unset. */
+  readonly VITE_DATA_SOURCE?: "demo" | "firebase";
+
   readonly VITE_FIREBASE_API_KEY: string;
   readonly VITE_FIREBASE_AUTH_DOMAIN: string;
   readonly VITE_FIREBASE_DATABASE_URL: string;

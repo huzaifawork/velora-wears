@@ -4,7 +4,9 @@ node_modules/
 # build output
 dist/
 build/
-lib/
+# Cloud Functions compile to functions/lib. Scoped on purpose: a bare `lib/`
+# also swallowed storefront/src/lib, so the read layer was never committed.
+functions/lib/
 *.tsbuildinfo
 .vite/
 
