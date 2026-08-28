@@ -3,8 +3,8 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-28. Scaffold complete. **Requirements section 1 (brand identity) is
-built.** Everything from section 2 onward is still to do.
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1 (brand identity) and
+2 (landing page) are built.** Everything from section 3 onward is still to do.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -85,30 +85,41 @@ Storefront builds clean; functions typecheck clean.
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
 | Routing | react-router-dom, one placeholder route |
 | Firebase client | Wired, web app registered, config in `storefront/.env.local` |
-| Query layer | Written; **serves demo data from `lib/demoData.ts`**, not the database |
+| Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
 | Data source | `VITE_DATA_SOURCE=demo`. Switches to `firebase` when Blaze is bought |
 | Cloud Functions | Scaffolded, typechecks; `placeOrder` **throws "unimplemented"** |
 | Database rules | Deployed — catalog readable, all client writes denied |
 | Data contract | `shared/types.ts` written |
 | Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
-| Product features | **None.** No catalog, cart, checkout, auth, reviews, admin |
-| Landing page | **Not built (section 2 — next).** Home is a brand holding page |
+| Landing page | **Done (section 2).** Hero, categories, featured grid, promos, story, reviews, Instagram strip, CTA, footer |
+| Demo catalog | 12 products, 3 categories, 6 reviews, settings — all typed against `shared/types.ts` |
+| Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
+| Product features | **None yet.** No products page, cart, checkout, auth, reviews, admin |
 | Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
-| Lint | `npm run lint` **fails** — `storefront/eslint.config.js` does not exist |
+| Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
 ### Layout
 
 ```
 storefront/          React + Vite (Developer A)
   public/                  favicon.svg, logo-mark.svg - standalone brand assets
+  public/products/         DEMO product images, thumb + full WebP (throwaway)
+  public/banners/          DEMO hero and promo art (throwaway)
+  public/categories/       DEMO category tiles (throwaway)
   src/components/brand/    Logo.tsx - the ONLY definition of the logo
-  src/components/ui/       reusable primitives - Button exists as the pattern
-  src/components/layout/   Container, Header, Footer
-  src/features/            EMPTY - product/cart/checkout/reviews go here
-  src/pages/               HomePage placeholder
+  src/components/ui/       Button, Badge, Rating, Image, Marquee, SectionHeading, Skeleton
+  src/components/layout/   Container, Header (mobile nav + announcement), Footer
+  src/features/home/       landing sections - Hero, CategoryStrip, FeaturedProducts,
+                           PromoBanners, BrandIntro, Testimonials, InstagramStrip,
+                           ValueProps, CtaBand
+  src/features/products/   ProductCard, ProductGrid, StockBadge - reused by sections 3/5/13
+  src/pages/               HomePage, NotFoundPage
   src/lib/firebase.ts      client SDK init
-  src/lib/queries.ts       read layer - READ THE COMMENTS, they encode section 19
-  src/hooks/               EMPTY
+  src/lib/queries.ts       read layer + cache + THE SOURCE SWITCH
+  src/lib/sources/         CatalogSource (the interface), firebaseSource, demoSource
+  src/lib/demoData.ts      throwaway demo catalog - never import from a component
+  src/lib/format.ts        formatPrice / formatRating
+  src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
 functions/           Cloud Functions, Admin SDK, own node_modules (NOT a workspace)
 shared/types.ts      DATA CONTRACT - shared with Developer B
@@ -215,8 +226,8 @@ one starts.
 | # | Requirements section | State |
 | --- | --- | --- |
 | 1 | Brand overview — logo, palette, typography | **Done** |
-| 2 | Landing page — hero, featured, categories, testimonials, footer | **Next** |
-| 3 | Products page — grid, cards | to do |
+| 2 | Landing page — hero, featured, categories, testimonials, footer | **Done** |
+| 3 | Products page — grid, cards | **Next** |
 | 4 | Product details — gallery, size selection | to do |
 | 5 | Categories | to do |
 | 6 | Shopping cart | to do |
@@ -250,65 +261,102 @@ one starts.
 - **`Button` refactor** — now also exports `buttonClasses()`, so a `Link` can be styled
   identically without duplicating the styles. Use it for link-buttons.
 
-### The next task in detail — section 2, the landing page
+### What section 2 delivered
 
-**Decided 2026-08-28: the catalog is served from demo data in the frontend, NOT from the
-Realtime Database, until the client buys Blaze and the storefront has been reviewed.**
+The landing page at <https://velora-wears.vercel.app>, built from reusable components, in
+this order: hero → running promise ticker → reassurance strip → category bento → featured
+product grid → two promo banners → dark brand story → customer reviews → Instagram strip →
+closing CTA → full footer.
 
-To be clear about the reasoning, because it is easy to get wrong: seeding the database does
-**not** require Blaze — that was verified with a live write/read/delete probe on Spark. This
-is Huzaifa's staging decision, not a technical limit. The database stays untouched for now.
-
-The rule that keeps this from becoming debt: **the data layer's interface does not change.**
+**The data layer was rebuilt around a switch, not a rewrite.**
 
 ```
-components/pages  -->  lib/queries.ts  -->  lib/demoData.ts      <- today
+pages/components  -->  lib/queries.ts  -->  lib/sources/demoSource.ts   <- today
+                        (cache +               reads lib/demoData.ts
+                         source switch)
                              |
-                             +---------->  Realtime Database      <- one flag flip, later
+                             +---------->  lib/sources/firebaseSource.ts  <- one flag flip
+                                              reads the Realtime Database
 ```
 
-1. **`storefront/src/lib/demoData.ts`** — the demo catalog: roughly a dozen shirts and
-   hoodies, categories, and a `settings` object. Type every record against
-   `shared/types.ts` (`ProductSummary`, `Product`, `Category`, `Settings`) and export them
-   as those types — that way the compiler enforces the real contract and the shapes cannot
-   drift from what Developer B's dashboard will write. Include per-size stock covering all
-   three states: in stock, low stock, and a size that is sold out, so the section 11 badges
-   have something real to render.
-2. **`storefront/src/lib/queries.ts`** — keep every exported function exactly as it is
-   (`listProducts`, `getProductBySlug`, `searchProducts`, `getCategories`, `getSettings`),
-   same async signatures, same return types. Switch the *implementation* on a flag —
-   `VITE_DATA_SOURCE` (`demo` | `firebase`, defaulting to `demo`). Add it to
-   `storefront/.env.example`, `storefront/.env.local`, and Vercel.
-   **Do not delete the existing Realtime Database code** — it is what we switch back on.
-   Keep the demo path async and sorted/limited the same way, so switching cannot surprise us.
-3. **Pages and components must import from `queries.ts` only.** Never import `demoData`
-   directly in a component — that is what makes the eventual switch a one-file change.
-4. **Images** — commit to `storefront/public/products/`, referenced by path. Both a `thumb`
-   and a `full` variant per image, WebP, with known width/height so the grid reserves space
-   and does not shift (section 19). Not Firebase Storage: unavailable without Blaze.
-5. **Then build the landing page** from reusable components. The `ProductCard` built here is
-   the same one the products page uses in section 3 — build it once, properly.
+- Both sources implement the same `CatalogSource` interface (`lib/sources/CatalogSource.ts`),
+  so adding a method to one without the other **stops compiling**. Ordering is shared through
+  one `sortSummaries` helper, so the two cannot drift.
+- The source module is imported **dynamically**, so in demo mode the Firebase SDK is never
+  downloaded by the browser at all — the build reports the `firebase` chunk as empty.
+- The demo source imitates RTDB on purpose: async, `active`-filtered, sorted, limited, and
+  **prefix-only search**, because that is all `startAt`/`endAt` can do.
+- `VITE_DATA_SOURCE` (`demo` | `firebase`, default `demo`) is in `.env.example`,
+  `.env.local`, and set on Vercel for all three environments.
 
-**When Blaze is bought and the switch happens**, the checklist is: fix the `getSettings()`
-path bug below, write the seed script (Admin SDK, dual-writes `products` +
-`productSummaries`, idempotent, with a `--clear` flag), flip `VITE_DATA_SOURCE` to
-`firebase`, verify every index, then delete `demoData.ts` and the demo images.
+**Components built once, to be reused:** `ProductCard` / `ProductGrid` / `StockBadge` are the
+same ones sections 3, 5, 11 and 13 will use — do not write a second grid. `Image` makes
+`width`/`height` compulsory so nothing shifts while loading. `Rating`, `Badge`, `Marquee`,
+`SectionHeading`, `Skeleton` are the shared primitives. `useAsync(load, key)` is the only
+data-loading hook: the **key must contain every input**, since it is what triggers a reload.
 
-> **Known bug, still unfixed:** `getSettings()` reads `settings`, but the rules only expose
-> `settings/public` — that read will be denied the moment we switch to the database. It is
-> latent today because nothing runs it. Fix it as part of the switch.
+**Demo catalog:** 12 products across shirts / hoodies / essentials, deliberately covering
+every stock state — one product entirely sold out (Kohl Poplin Shirt), two on low stock, and
+several with a single size sold out — so section 11's badges have real data to render.
+Six reviews from Pakistani customers feed the testimonials, typed as real `Review` records.
+
+**Demo images** are generated flat-lay illustrations, committed under `public/products`,
+`public/banners`, `public/categories`: WebP, `thumb` (600x800) + `full` (1100x1467), 430 KB
+for all 48 files. **They must be replaced with real photography before the client signs off.**
+
+**Also fixed in this section:**
+
+- `npm run lint` now works — flat ESLint config added, with two project rules encoded:
+  importing `lib/demoData` outside `demoSource.ts` is an **error**, and so is importing
+  `firebase-admin` anywhere in the storefront.
+- `getSettings()` now reads `settings/public`, which is what the rules actually expose. The
+  latent bug noted here previously is gone.
+- Header gained a working mobile menu and the admin-configurable announcement bar; the footer
+  became the real four-column footer.
+- Routes are lazy-loaded, and `NotFoundPage` catches the not-yet-built routes so links from
+  the landing page never land on a blank screen.
+
+### The next task — section 3, the products page
+
+Requirements section 3: a dedicated page at `/products` listing everything, with image, name,
+price and category on each card.
+
+1. **Reuse `ProductGrid`.** It already handles loading, empty and loaded states. If the page
+   needs something new, add a prop — do not fork it.
+2. Read through `listProducts({ categorySlug, sort, limit })`. The `?category=` query
+   parameter is already what the header, footer, category tiles and promo banners link to.
+3. Filters and sorting are **section 14**, and search is **section 13** — build section 3
+   first and stop, unless Huzaifa says otherwise.
+4. Pagination: `listProducts` is limited to 24. A "load more" needs a real cursor; RTDB
+   pagination is `startAfter` on the ordering key, not an offset.
+
+**When Blaze is bought and the switch happens**, the checklist is: write the seed script
+(Admin SDK, dual-writes `products` + `productSummaries`, idempotent, with a `--clear` flag),
+flip `VITE_DATA_SOURCE` to `firebase` locally and on Vercel, verify every index, decide where
+landing-page testimonials come from (see below), then delete `demoData.ts`, `demoSource.ts`
+and the demo images.
+
+> **Known gap, by design:** `firebaseSource.listTestimonials()` returns an empty array, so the
+> testimonials section hides itself when the flag flips. Reviews live at
+> `reviews/{productId}/{id}` with no flat node to read the newest few from, and reading every
+> product's reviews is exactly what section 19 forbids. Section 16 resolves it with a
+> denormalised, admin-maintained featured-reviews node — agree that node with Developer B
+> before building it, because it is a shared-contract change.
 
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
   built and in use. Huzaifa can still ask for changes; edit the tokens in `index.css` and
   `Logo.tsx`, never override colours in a component.
-- **Product images — decided.** No real photography exists, and Firebase Storage is
-  unavailable without Blaze (see section 2). So demo images are **committed to the repo**
-  under `storefront/public/products/` and served by Vercel's CDN: free, fast, no billing,
-  and deleted in one commit when real photography arrives. Store both a `thumb` and a
-  `full` variant per image, in WebP, with known dimensions — section 19 still applies to
-  placeholders. **These must be replaced before the client sees a finished site.**
+- **Product images — decided and built.** No real photography exists, and Firebase Storage
+  is unavailable without Blaze. Demo images are **generated flat-lay illustrations committed
+  to the repo** under `storefront/public/{products,banners,categories}` and served by
+  Vercel's CDN: free, fast, no billing, deleted in one commit when real photography arrives.
+  Both `thumb` and `full` variants, WebP, known dimensions. **Ask the client for real
+  photography — these must be replaced before sign-off.**
+- **Placeholder contact details, still to be replaced.** The footer's Instagram, WhatsApp and
+  Facebook links, `hello@velorawears.pk`, `+92 000 0000000`, and the `@velorawears` handle in
+  the Instagram strip are invented. Get the brand's real accounts from the client.
 - **Blaze plan.** Not enabled, and the client has not bought it yet. Blocks *only* Cloud
   Functions — so checkout (section 7) and `placeOrder`. Everything up to and including the
   cart can be finished without it. Seeding does **not** need it.
@@ -316,6 +364,9 @@ path bug below, write the seed script (Admin SDK, dual-writes `products` +
   the database — Huzaifa's staging decision while the client has not bought Blaze. It is
   deleted once the admin dashboard can create real products. The seed script that replaces
   it must be idempotent and ship a `--clear` flag, so the handover is one command.
+- **Landing-page testimonials after the switch** — the demo path serves six reviews; the
+  Realtime Database path returns none until section 16 defines a featured-reviews node.
+  Agree that node with Developer B before section 16 starts.
 - **The database is deliberately empty and stays that way for now.** Do not seed it without
   asking — the storefront is not reading from it yet.
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
@@ -350,6 +401,10 @@ vercel env ls                  # confirm the 7 VITE_FIREBASE_* vars, 3 environme
 | Rewrites | all routes to `/index.html` — required, this is an SPA |
 
 ### Environment variables — already configured, do not re-add
+
+`VITE_DATA_SOURCE` is set to `demo` for **Production, Preview and Development**. Flipping the
+storefront to the Realtime Database means changing it there and redeploying — Vite inlines it
+at build time.
 
 All seven `VITE_FIREBASE_*` variables are set for **Production, Preview and Development**
 (21 rows). `storefront/.env.local` is gitignored, so Vercel could not have got them from the
