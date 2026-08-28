@@ -4,6 +4,7 @@ import { Route, Routes } from "react-router-dom";
 import { Container } from "@/components/layout/Container";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { ScrollToTop } from "@/components/layout/ScrollToTop";
 import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
@@ -13,6 +14,9 @@ import { Skeleton } from "@/components/ui/Skeleton";
  */
 const HomePage = lazy(() =>
   import("@/pages/HomePage").then((m) => ({ default: m.HomePage })),
+);
+const ProductsPage = lazy(() =>
+  import("@/pages/ProductsPage").then((m) => ({ default: m.ProductsPage })),
 );
 const NotFoundPage = lazy(() =>
   import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
@@ -31,11 +35,13 @@ function RouteFallback() {
 export default function App() {
   return (
     <div className="flex min-h-screen flex-col">
+      <ScrollToTop />
       <Header />
       <main className="flex-1">
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/products" element={<ProductsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
