@@ -34,6 +34,8 @@ export interface CatalogSource {
   searchProducts(term: string, limit: number): Promise<ProductSummary[]>;
   getCategories(): Promise<Category[]>;
   getSettings(): Promise<Settings | null>;
+  /** Visible reviews for one product, newest first (section 16). */
+  listReviews(productId: string, limit: number): Promise<Review[]>;
   /** Recent reviews for the landing page testimonials (sections 2 and 16). */
   listTestimonials(limit: number): Promise<Review[]>;
 }

@@ -28,7 +28,7 @@ export function HomePage() {
     "home:featured:8",
   );
   const settings = useAsync(() => getSettings(), "settings");
-  const testimonials = useAsync(() => listTestimonials(3), "testimonials:3");
+  const testimonials = useAsync(() => listTestimonials(6), "testimonials:6");
 
   const [products, categories] = featured.data ?? [undefined, undefined];
 

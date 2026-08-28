@@ -65,9 +65,34 @@ async function getSettings(): Promise<Settings | null> {
   return { ...demoSettings };
 }
 
-async function listTestimonials(limit: number): Promise<Review[]> {
-  const rows = demoReviews.filter((r) => !r.hidden && r.verifiedPurchase);
+/** Newest first, hidden reviews excluded — an admin hides spam (section 16). */
+async function listReviews(productId: string, limit: number): Promise<Review[]> {
+  const rows = demoReviews.filter((r) => r.productId === productId && !r.hidden);
   return clone(rows)
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit);
+}
+
+/**
+ * Testimonials take the best review of each product rather than the newest
+ * overall, so the landing strip shows a spread of the collection instead of
+ * three reviews of the same hoodie. Anything hidden, unverified, or below four
+ * stars is never a testimonial.
+ */
+async function listTestimonials(limit: number): Promise<Review[]> {
+  const bestPerProduct = new Map<string, Review>();
+
+  for (const review of demoReviews) {
+    if (review.hidden || !review.verifiedPurchase || review.rating < 4) continue;
+    const held = bestPerProduct.get(review.productId);
+    const better =
+      !held ||
+      review.rating > held.rating ||
+      (review.rating === held.rating && review.createdAt > held.createdAt);
+    if (better) bestPerProduct.set(review.productId, review);
+  }
+
+  return clone([...bestPerProduct.values()])
     .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, limit);
 }
@@ -78,5 +103,6 @@ export const demoSource: CatalogSource = {
   searchProducts,
   getCategories,
   getSettings,
+  listReviews,
   listTestimonials,
 };

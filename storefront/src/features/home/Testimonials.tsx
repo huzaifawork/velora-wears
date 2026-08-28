@@ -36,6 +36,9 @@ export function Testimonials({
   // empty shell. (The Realtime Database path returns none until section 16.)
   if (!loading && (!reviews || reviews.length === 0)) return null;
 
+  // The average of what is on screen. A catalogue-wide figure would have to be
+  // precomputed and written by the admin dashboard (requirements section 19) —
+  // it must never be calculated by reading every review.
   const average =
     reviews && reviews.length > 0
       ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
@@ -55,15 +58,15 @@ export function Testimonials({
           <div className="mt-8 flex flex-col items-center gap-2">
             <Rating rating={average} size="md" />
             <p className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
-              {formatRating(average)} average &middot; {reviews.length} verified{" "}
-              {reviews.length === 1 ? "review" : "reviews"}
+              {formatRating(average)} average from the {reviews.length} verified{" "}
+              {reviews.length === 1 ? "review" : "reviews"} below
             </p>
           </div>
         )}
 
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {loading
-            ? Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-60 w-full" />)
+            ? Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-60 w-full" />)
             : reviews?.map((review) => (
                 <figure
                   key={review.id}

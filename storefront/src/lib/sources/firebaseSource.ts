@@ -3,6 +3,7 @@ import {
   equalTo,
   get,
   limitToFirst,
+  limitToLast,
   orderByChild,
   query,
   ref,
@@ -98,6 +99,26 @@ async function getSettings(): Promise<Settings | null> {
 }
 
 /**
+ * Reviews for one product, newest first.
+ *
+ * Reads `reviews/{productId}` only — never the whole `reviews` node — ordered by
+ * the indexed `createdAt` and bounded with `limitToLast`, which is how RTDB
+ * expresses "the most recent N". Hidden reviews are filtered client-side: the
+ * rules keep them readable, and an admin hiding spam must not leave a gap in
+ * the page (requirements sections 16 and 19).
+ */
+async function listReviews(productId: string, limit: number): Promise<Review[]> {
+  const q = query(
+    ref(getDb(), `reviews/${productId}`),
+    orderByChild("createdAt"),
+    limitToLast(limit),
+  );
+  return toArray<Review>((await get(q)).val())
+    .filter((r) => !r.hidden)
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/**
  * Landing-page testimonials.
  *
  * Reviews are stored per product (`reviews/{productId}/{reviewId}`), so there is
@@ -117,5 +138,6 @@ export const firebaseSource: CatalogSource = {
   searchProducts,
   getCategories,
   getSettings,
+  listReviews,
   listTestimonials,
 };

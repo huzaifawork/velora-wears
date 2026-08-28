@@ -96,6 +96,13 @@ export function getSettings(): Promise<Settings | null> {
   return cached("settings", async () => (await source()).getSettings());
 }
 
+/** Visible reviews for one product, newest first (requirements section 16). */
+export function listReviews(productId: string, limit = 20): Promise<Review[]> {
+  return cached(`reviews:${productId}:${limit}`, async () =>
+    (await source()).listReviews(productId, limit),
+  );
+}
+
 /** Verified customer reviews for the landing page (requirements sections 2 and 16). */
 export function listTestimonials(limit = 6): Promise<Review[]> {
   return cached(`testimonials:${limit}`, async () => (await source()).listTestimonials(limit));

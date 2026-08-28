@@ -49,8 +49,6 @@ interface Seed {
   /** Alt text for the front image — describes the garment, not the file. */
   alt: string;
   sizes: Record<Size, number>;
-  ratingAvg: number;
-  ratingCount: number;
   /** Days after T0 the product was added; drives `newest` ordering. */
   addedOn: number;
 }
@@ -65,8 +63,6 @@ const seeds: Seed[] = [
     description:
       "An everyday oxford cut clean through the body, in a mid-weight cotton that holds its shape after a wash. Mother-of-pearl buttons, a single chest pocket, and a collar with enough structure to wear open or closed.",
     sizes: { S: 12, M: 8, L: 5 },
-    ratingAvg: 4.8,
-    ratingCount: 24,
     addedOn: 26,
   },
   {
@@ -78,8 +74,6 @@ const seeds: Seed[] = [
     description:
       "Pure linen, washed soft before it reaches you, so it drapes from the first wear rather than the tenth. Built for Karachi humidity and long afternoons — breathable, light, and unbothered by creasing.",
     sizes: { S: 3, M: 9, L: 0 },
-    ratingAvg: 4.6,
-    ratingCount: 31,
     addedOn: 24,
   },
   {
@@ -91,8 +85,6 @@ const seeds: Seed[] = [
     description:
       "A crisp poplin in a near-black charcoal — the shirt that works for a dinner, an interview, and the office on the same week. Slim through the sleeve, straight at the hem, finished with a hidden button stand.",
     sizes: { S: 0, M: 0, L: 0 },
-    ratingAvg: 4.7,
-    ratingCount: 18,
     addedOn: 21,
   },
   {
@@ -104,8 +96,6 @@ const seeds: Seed[] = [
     description:
       "An open camp collar in a soft sage viscose blend, cut relaxed through the chest. Short sleeves, a boxy hem you can wear untucked, and a colour that sits well against every skin tone.",
     sizes: { S: 6, M: 2, L: 7 },
-    ratingAvg: 4.5,
-    ratingCount: 12,
     addedOn: 18,
   },
   {
@@ -117,8 +107,6 @@ const seeds: Seed[] = [
     description:
       "Half shirt, half light jacket. Heavy cotton twill, two chest pockets, and a squared shoulder that layers over a tee in October and under a coat in January.",
     sizes: { S: 4, M: 5, L: 11 },
-    ratingAvg: 4.9,
-    ratingCount: 9,
     addedOn: 15,
   },
   {
@@ -130,8 +118,6 @@ const seeds: Seed[] = [
     description:
       "400 GSM brushed fleece with a double-layer hood that actually stands up. Ribbed cuffs and hem, a deep kangaroo pocket, and flat drawcords that do not fray. The one you will reach for all winter.",
     sizes: { S: 9, M: 14, L: 6 },
-    ratingAvg: 4.9,
-    ratingCount: 47,
     addedOn: 27,
   },
   {
@@ -143,8 +129,6 @@ const seeds: Seed[] = [
     description:
       "A full-zip in a warm sand fleece, with a YKK zip and split kangaroo pockets. Cut slightly cropped so it sits at the waist, not below it.",
     sizes: { S: 2, M: 0, L: 3 },
-    ratingAvg: 4.4,
-    ratingCount: 15,
     addedOn: 22,
   },
   {
@@ -156,8 +140,6 @@ const seeds: Seed[] = [
     description:
       "Boxy, cropped, and dyed a warm clay that softens with every wash. Loop-back cotton inside, so it breathes far better than a brushed fleece in mid-season weather.",
     sizes: { S: 7, M: 5, L: 0 },
-    ratingAvg: 4.6,
-    ratingCount: 21,
     addedOn: 19,
   },
   {
@@ -169,8 +151,6 @@ const seeds: Seed[] = [
     description:
       "The plain one, done properly. A true black that stays black, a regular fit with room to layer, and reinforced seams at every stress point.",
     sizes: { S: 0, M: 3, L: 8 },
-    ratingAvg: 4.7,
-    ratingCount: 33,
     addedOn: 16,
   },
   {
@@ -182,8 +162,6 @@ const seeds: Seed[] = [
     description:
       "A heavyweight 240 GSM cotton tee with a boxy body and a ribbed neck that holds. Pre-shrunk, so the fit you buy is the fit you keep.",
     sizes: { S: 18, M: 22, L: 15 },
-    ratingAvg: 4.8,
-    ratingCount: 56,
     addedOn: 25,
   },
   {
@@ -195,8 +173,6 @@ const seeds: Seed[] = [
     description:
       "A fine rib that follows the body without clinging to it. Stretches, recovers, and layers under a shirt or an overshirt without bunching.",
     sizes: { S: 2, M: 1, L: 0 },
-    ratingAvg: 4.3,
-    ratingCount: 14,
     addedOn: 12,
   },
   {
@@ -208,8 +184,6 @@ const seeds: Seed[] = [
     description:
       "A classic crew in an oat-toned loop-back cotton, with ribbed cuffs and a clean, unbranded chest. Quietly the most worn thing in the collection.",
     sizes: { S: 5, M: 8, L: 4 },
-    ratingAvg: 4.5,
-    ratingCount: 27,
     addedOn: 9,
   },
 ];
@@ -264,10 +238,388 @@ export const demoProducts: Product[] = seeds.map((seed, i) => ({
   updatedAt: T0 + seed.addedOn * day,
 }));
 
+/**
+ * Customer reviews — `reviews/{productId}/{reviewId}`.
+ *
+ * Mock data for now, but shaped exactly like the real thing (requirements
+ * sections 2 and 16): every review is tied to a confirmed order, carries a
+ * display name only, and never exposes the customer's email or phone.
+ *
+ * These drive three things, so they are worth keeping realistic:
+ *
+ *  1. the landing page testimonials (section 2);
+ *  2. the `ratingAvg` / `ratingCount` on every product summary, which are
+ *     DERIVED below rather than typed by hand — the same precomputation the
+ *     admin dashboard must do at write time (section 19);
+ *  3. the reviews list on the product detail page, when section 16 builds it.
+ *
+ * `hidden` reviews exist here on purpose: an admin can hide spam (section 16),
+ * and every read path must filter them out. One is seeded so that filter is
+ * exercised rather than assumed.
+ */
+interface ReviewSeed {
+  /** Product this review belongs to, by slug. */
+  slug: string;
+  rating: 1 | 2 | 3 | 4 | 5;
+  displayName: string;
+  comment: string;
+  /** Days after T0 the review was left. */
+  on: number;
+  hidden?: boolean;
+}
+
+const reviewSeeds: ReviewSeed[] = [
+  // --- Meridian Oxford Shirt ------------------------------------------------
+  {
+    slug: "meridian-oxford-shirt",
+    rating: 5,
+    displayName: "Ahmed Nawaz",
+    comment:
+      "Wore the oxford to a wedding in Rawalpindi and got asked where it was from twice. The collar holds its shape without any starch.",
+    on: 26,
+  },
+  {
+    slug: "meridian-oxford-shirt",
+    rating: 5,
+    displayName: "Fahad Iqbal",
+    comment:
+      "Fabric is thicker than the usual online oxford and it did not shrink after two washes. Medium fit me exactly as the size guide said.",
+    on: 21,
+  },
+  {
+    slug: "meridian-oxford-shirt",
+    rating: 4,
+    displayName: "Kamran Sheikh",
+    comment:
+      "Very good shirt for the price. It creases a little more than I expected, but a quick iron sorts it out.",
+    on: 14,
+  },
+
+  // --- Noor Linen Shirt -----------------------------------------------------
+  {
+    slug: "noor-linen-shirt",
+    rating: 5,
+    displayName: "Bilal Ahmed",
+    comment:
+      "Perfect for Karachi weather. Stitching is clean and the size guide was accurate, which is rare when ordering online here.",
+    on: 25,
+  },
+  {
+    slug: "noor-linen-shirt",
+    rating: 5,
+    displayName: "Mariam Khan",
+    comment:
+      "Real linen, not a blend pretending to be one. It breathes properly in Hyderabad heat and looks smart untucked.",
+    on: 19,
+  },
+  {
+    slug: "noor-linen-shirt",
+    rating: 4,
+    displayName: "Owais Farooq",
+    comment:
+      "Lovely colour and finish. Linen wrinkles, so know what you are buying — but that is the fabric, not the shirt.",
+    on: 12,
+  },
+
+  // --- Kohl Poplin Shirt ----------------------------------------------------
+  {
+    slug: "kohl-poplin-shirt",
+    rating: 5,
+    displayName: "Saad Rehman",
+    comment:
+      "Ordered it for interviews and ended up wearing it every week. The black has not faded at all after several washes.",
+    on: 23,
+  },
+  {
+    slug: "kohl-poplin-shirt",
+    rating: 5,
+    displayName: "Talha Mehmood",
+    comment:
+      "Crisp poplin, proper buttons, and the hidden placket looks expensive. Delivered to Faisalabad in three days.",
+    on: 17,
+  },
+  {
+    slug: "kohl-poplin-shirt",
+    rating: 4,
+    displayName: "Danish Bhatti",
+    comment:
+      "Slim through the sleeve, so size up if you have broader arms. Quality itself is excellent.",
+    on: 10,
+  },
+
+  // --- Sahil Camp-Collar Shirt ---------------------------------------------
+  {
+    slug: "sahil-camp-collar-shirt",
+    rating: 5,
+    displayName: "Zohaib Ali",
+    comment:
+      "The sage colour is exactly as photographed. Light enough for Multan summers and the camp collar sits flat without fussing.",
+    on: 20,
+  },
+  {
+    slug: "sahil-camp-collar-shirt",
+    rating: 4,
+    displayName: "Anum Pervaiz",
+    comment:
+      "Bought it for my brother and he has not taken it off. Relaxed fit, good drape, arrived neatly pressed.",
+    on: 13,
+  },
+
+  // --- Marble Twill Overshirt ----------------------------------------------
+  {
+    slug: "marble-twill-overshirt",
+    rating: 5,
+    displayName: "Usman Raza",
+    comment:
+      "Excellent quality for the price. I sized up on their advice and it layers really well over a kurta as well.",
+    on: 22,
+  },
+  {
+    slug: "marble-twill-overshirt",
+    rating: 5,
+    displayName: "Rehan Baig",
+    comment:
+      "Heavy twill that actually blocks the wind in Abbottabad. Works as a light jacket most of the year.",
+    on: 11,
+  },
+
+  // --- Anwar Heavyweight Hoodie --------------------------------------------
+  {
+    slug: "anwar-heavyweight-hoodie",
+    rating: 5,
+    displayName: "Ayesha Siddiqui",
+    comment:
+      "Ordered on a Monday and it reached Lahore by Wednesday. The fleece is genuinely thick — not the thin stuff you usually get at this price.",
+    on: 27,
+  },
+  {
+    slug: "anwar-heavyweight-hoodie",
+    rating: 5,
+    displayName: "Hassan Javed",
+    comment:
+      "The hood actually stands up instead of flopping over, and the drawcords have not frayed. Worth every rupee.",
+    on: 24,
+  },
+  {
+    slug: "anwar-heavyweight-hoodie",
+    rating: 5,
+    displayName: "Iqra Waseem",
+    comment:
+      "Warmest thing I own now. Paid cash at the door in Islamabad and the courier waited while I checked the parcel.",
+    on: 18,
+  },
+  {
+    slug: "anwar-heavyweight-hoodie",
+    rating: 4,
+    displayName: "Waleed Akram",
+    comment:
+      "Very warm and well made. It is genuinely heavy, so it is winter-only — which is what I wanted.",
+    on: 9,
+  },
+
+  // --- Dune Zip Hoodie ------------------------------------------------------
+  {
+    slug: "dune-zip-hoodie",
+    rating: 5,
+    displayName: "Nimra Shahid",
+    comment:
+      "The sand colour goes with everything and the zip feels solid, not the flimsy kind that catches.",
+    on: 21,
+  },
+  {
+    slug: "dune-zip-hoodie",
+    rating: 4,
+    displayName: "Junaid Rafiq",
+    comment:
+      "Cropped fit is accurate to the description. Sits right at the waist on me at 5'10 in a large.",
+    on: 15,
+  },
+  {
+    slug: "dune-zip-hoodie",
+    rating: 4,
+    displayName: "Hafsa Ejaz",
+    comment:
+      "Good weight for Sialkot autumn. Only wish they restocked medium faster — it sells out quickly.",
+    on: 8,
+  },
+
+  // --- Ravi Cropped Hoodie --------------------------------------------------
+  {
+    slug: "ravi-cropped-hoodie",
+    rating: 5,
+    displayName: "Areeba Aslam",
+    comment:
+      "The clay shade is even nicer in person. Loop-back cotton, so it is comfortable indoors without overheating.",
+    on: 19,
+  },
+  {
+    slug: "ravi-cropped-hoodie",
+    rating: 5,
+    displayName: "Sidra Kamal",
+    comment:
+      "Second order from Velora and the packaging was just as careful. Delivered to Gujranwala in two days.",
+    on: 16,
+  },
+  {
+    slug: "ravi-cropped-hoodie",
+    rating: 3,
+    displayName: "Komal Riaz",
+    comment:
+      "Lovely material, but the crop is shorter than I expected on a small. Exchange for a medium was handled without any argument.",
+    on: 7,
+  },
+
+  // --- Sable Essential Hoodie -----------------------------------------------
+  {
+    slug: "sable-essential-hoodie",
+    rating: 5,
+    displayName: "Zainab Malik",
+    comment:
+      "Delivery to Multan took three days and the packaging was proper — nothing was creased or damaged.",
+    on: 23,
+  },
+  {
+    slug: "sable-essential-hoodie",
+    rating: 5,
+    displayName: "Imran Qureshi",
+    comment:
+      "A true black that has stayed black. Plain, well cut, no oversized logo — exactly what I was looking for.",
+    on: 14,
+  },
+  {
+    slug: "sable-essential-hoodie",
+    rating: 4,
+    displayName: "Tooba Naveed",
+    comment:
+      "Roomy enough to layer over a shirt. Seams feel reinforced where they usually give way.",
+    on: 6,
+  },
+
+  // --- Sadaf Boxy Tee -------------------------------------------------------
+  {
+    slug: "sadaf-boxy-tee",
+    rating: 5,
+    displayName: "Hira Fatima",
+    comment:
+      "Paid cash at the door in Islamabad, no advance payment stress. The tee is heavier than I expected and has kept its shape after four washes.",
+    on: 26,
+  },
+  {
+    slug: "sadaf-boxy-tee",
+    rating: 5,
+    displayName: "Sana Yousuf",
+    comment:
+      "Finally a plain tee that is not see-through. The neck rib has not stretched out, which is my usual complaint.",
+    on: 20,
+  },
+  {
+    slug: "sadaf-boxy-tee",
+    rating: 5,
+    displayName: "Faizan Sattar",
+    comment:
+      "Bought two. Pre-shrunk as claimed — same fit after washing as the day it arrived in Peshawar.",
+    on: 13,
+  },
+  {
+    slug: "sadaf-boxy-tee",
+    rating: 4,
+    displayName: "Amna Rashid",
+    comment:
+      "Boxy is boxy, so check the measurements before ordering. Fabric quality is excellent for the price.",
+    on: 5,
+  },
+  {
+    slug: "sadaf-boxy-tee",
+    rating: 5,
+    displayName: "Best Deals PK",
+    comment:
+      "CHEAPEST CLOTHES ONLINE VISIT OUR PAGE FOR DISCOUNT CODES AND FREE SHIPPING OFFERS",
+    on: 4,
+    hidden: true,
+  },
+
+  // --- Core Ribbed Tee ------------------------------------------------------
+  {
+    slug: "core-ribbed-tee",
+    rating: 4,
+    displayName: "Rabia Noor",
+    comment:
+      "Follows the shape without clinging, and it layers under a shirt without bunching at the waist.",
+    on: 17,
+  },
+  {
+    slug: "core-ribbed-tee",
+    rating: 4,
+    displayName: "Shahzaib Anwar",
+    comment:
+      "Good stretch and recovery. Runs slightly snug, so consider a size up if you prefer a looser fit.",
+    on: 9,
+  },
+
+  // --- Rehan Crew Sweatshirt ------------------------------------------------
+  {
+    slug: "rehan-crew-sweatshirt",
+    rating: 5,
+    displayName: "Mehwish Adeel",
+    comment:
+      "The oat colour is beautiful and it has become the thing I reach for every evening in Quetta.",
+    on: 18,
+  },
+  {
+    slug: "rehan-crew-sweatshirt",
+    rating: 5,
+    displayName: "Adnan Yusuf",
+    comment:
+      "Clean, unbranded chest — exactly what I wanted. Cuffs are ribbed properly so the sleeves stay put.",
+    on: 12,
+  },
+  {
+    slug: "rehan-crew-sweatshirt",
+    rating: 4,
+    displayName: "Laiba Tariq",
+    comment:
+      "Comfortable and well finished. Arrived in Bahawalpur a day earlier than the estimate.",
+    on: 6,
+  },
+];
+
+/** Product id for a slug, so review seeds can be written against readable names. */
+const productIdBySlug = new Map(demoProducts.map((p) => [p.slug, p.id]));
+
+export const demoReviews: Review[] = reviewSeeds.map((seed, i) => ({
+  id: `demo-rev-${String(i + 1).padStart(2, "0")}`,
+  productId: productIdBySlug.get(seed.slug) ?? "",
+  // Reviews are authorised by the order, not by an account (requirements 16).
+  orderId: `demo-ord-${String(i + 1).padStart(2, "0")}`,
+  rating: seed.rating,
+  comment: seed.comment,
+  displayName: seed.displayName,
+  verifiedPurchase: true,
+  hidden: seed.hidden ?? false,
+  createdAt: T0 + seed.on * day,
+}));
+
+/**
+ * Rating aggregates, precomputed per product from the visible reviews.
+ *
+ * This mirrors what the admin dashboard has to do whenever a review is written,
+ * edited, hidden or removed: the storefront's grids must never compute an
+ * average across a product's reviews at read time (requirements section 19).
+ */
+const ratingByProduct = new Map<string, { avg: number; count: number }>();
+
+for (const product of demoProducts) {
+  const visible = demoReviews.filter((r) => r.productId === product.id && !r.hidden);
+  const count = visible.length;
+  const avg =
+    count === 0 ? 0 : Math.round((visible.reduce((sum, r) => sum + r.rating, 0) / count) * 10) / 10;
+  ratingByProduct.set(product.id, { avg, count });
+}
+
 /** `productSummaries/{id}` — the denormalised list projection. */
-export const demoSummaries: ProductSummary[] = demoProducts.map((product, i) => {
-  const seed = seeds[i];
+export const demoSummaries: ProductSummary[] = demoProducts.map((product) => {
   const remaining = totalStock(product.sizes);
+  const rating = ratingByProduct.get(product.id) ?? { avg: 0, count: 0 };
   return {
     id: product.id,
     name: product.name,
@@ -277,8 +629,8 @@ export const demoSummaries: ProductSummary[] = demoProducts.map((product, i) => 
     thumb: product.images[0].thumb,
     inStock: remaining > 0,
     lowStock: remaining > 0 && remaining <= demoSettings.lowStockThreshold + 1,
-    ratingAvg: seed.ratingAvg,
-    ratingCount: seed.ratingCount,
+    ratingAvg: rating.avg,
+    ratingCount: rating.count,
     active: true,
     createdAt: product.createdAt,
     searchText: `${product.name} ${product.categorySlug}`.toLowerCase(),
@@ -306,87 +658,5 @@ export const demoCategories: Category[] = [
     sortOrder: 3,
     thumb: "/categories/essentials.webp",
     productCount: demoSummaries.filter((p) => p.categorySlug === "essentials").length,
-  },
-];
-
-/**
- * Customer reviews, used for the landing page testimonials (requirements
- * sections 2 and 16). Typed as real `Review` records so the testimonial strip
- * keeps working unchanged when section 16 wires it to genuine reviews.
- *
- * The email on the order is never part of this record — only a display name.
- */
-export const demoReviews: Review[] = [
-  {
-    id: "demo-rev-1",
-    productId: "demo-06",
-    orderId: "demo-ord-1",
-    rating: 5,
-    comment:
-      "Ordered the heavyweight hoodie on a Monday and it reached Lahore by Wednesday. The fleece is genuinely thick — not the thin stuff you usually get at this price.",
-    displayName: "Ayesha Siddiqui",
-    verifiedPurchase: true,
-    hidden: false,
-    createdAt: T0 + 20 * day,
-  },
-  {
-    id: "demo-rev-2",
-    productId: "demo-02",
-    orderId: "demo-ord-2",
-    rating: 5,
-    comment:
-      "The linen shirt is perfect for Karachi weather. Stitching is clean and the size guide was accurate, which is rare when ordering online here.",
-    displayName: "Bilal Ahmed",
-    verifiedPurchase: true,
-    hidden: false,
-    createdAt: T0 + 18 * day,
-  },
-  {
-    id: "demo-rev-3",
-    productId: "demo-10",
-    orderId: "demo-ord-3",
-    rating: 5,
-    comment:
-      "Paid cash at the door in Islamabad, no advance payment stress. The tee is heavier than I expected and has kept its shape after four washes.",
-    displayName: "Hira Fatima",
-    verifiedPurchase: true,
-    hidden: false,
-    createdAt: T0 + 16 * day,
-  },
-  {
-    id: "demo-rev-4",
-    productId: "demo-05",
-    orderId: "demo-ord-4",
-    rating: 4,
-    comment:
-      "The overshirt is excellent quality for the price. I sized up on advice from their team and it layers really well over a kurta as well.",
-    displayName: "Usman Raza",
-    verifiedPurchase: true,
-    hidden: false,
-    createdAt: T0 + 14 * day,
-  },
-  {
-    id: "demo-rev-5",
-    productId: "demo-09",
-    orderId: "demo-ord-5",
-    rating: 5,
-    comment:
-      "Second order from Velora. Delivery to Multan took three days and the packaging was proper — nothing was creased or damaged.",
-    displayName: "Zainab Malik",
-    verifiedPurchase: true,
-    hidden: false,
-    createdAt: T0 + 11 * day,
-  },
-  {
-    id: "demo-rev-6",
-    productId: "demo-01",
-    orderId: "demo-ord-6",
-    rating: 5,
-    comment:
-      "Wore the oxford to a wedding in Rawalpindi and got asked where it was from twice. Collar holds its shape without any starch.",
-    displayName: "Ahmed Nawaz",
-    verifiedPurchase: true,
-    hidden: false,
-    createdAt: T0 + 8 * day,
   },
 ];
