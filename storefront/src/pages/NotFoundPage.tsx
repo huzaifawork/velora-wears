@@ -7,10 +7,10 @@ import { buttonClasses } from "@/components/ui/Button";
 /**
  * Catch-all page.
  *
- * It also covers the routes that are specified but not built yet — the products
- * grid, product details, cart and checkout arrive in requirements sections 3, 4,
- * 6 and 7 — so a link from the landing page lands somewhere deliberate instead
- * of on a blank screen.
+ * It also covers the routes that are specified but not built yet — product
+ * details, the cart and checkout arrive in requirements sections 4, 6 and 7 —
+ * so a link from the landing page lands somewhere deliberate instead of on a
+ * blank screen.
  */
 export function NotFoundPage() {
   return (
@@ -21,12 +21,17 @@ export function NotFoundPage() {
         This part of the store is still being built.
       </h1>
       <p className="mt-5 max-w-prose leading-relaxed text-ink-soft">
-        The collection, product pages and checkout are on their way. In the meantime, everything
-        that is ready lives on the home page.
+        Individual product pages and checkout are on their way. In the meantime the full
+        collection is ready to browse.
       </p>
-      <Link to="/" className={`${buttonClasses({ size: "lg" })} mt-9`}>
-        Back to home
-      </Link>
+      <div className="mt-9 flex flex-wrap justify-center gap-3">
+        <Link to="/products" className={buttonClasses({ size: "lg" })}>
+          Shop the collection
+        </Link>
+        <Link to="/" className={buttonClasses({ variant: "secondary", size: "lg" })}>
+          Back to home
+        </Link>
+      </div>
     </Container>
   );
 }

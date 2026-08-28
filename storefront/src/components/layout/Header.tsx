@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 
 import { Logo } from "@/components/brand/Logo";
 import { Container } from "@/components/layout/Container";
@@ -14,17 +14,29 @@ import { getSettings } from "@/lib/queries";
  * Search and the cart control arrive with requirements sections 13 and 6.
  */
 
-const links = [
+/**
+ * Every nav item points at the SAME path and differs only by `?category=`, so
+ * the active one has to be decided on the query string. `NavLink` matches on
+ * the path alone and would light all four at once on /products?category=shirts.
+ */
+const links: { to: string; label: string; category?: string }[] = [
   { to: "/products", label: "Shop all" },
-  { to: "/products?category=shirts", label: "Shirts" },
-  { to: "/products?category=hoodies", label: "Hoodies" },
-  { to: "/products?category=essentials", label: "Essentials" },
+  { to: "/products?category=shirts", label: "Shirts", category: "shirts" },
+  { to: "/products?category=hoodies", label: "Hoodies", category: "hoodies" },
+  { to: "/products?category=essentials", label: "Essentials", category: "essentials" },
 ];
 
 const linkClasses = "text-xs font-medium tracking-eyebrow uppercase transition hover:text-accent";
 
 export function Header() {
   const [open, setOpen] = useState(false);
+  const [params] = useSearchParams();
+  const isProducts = useLocation().pathname === "/products";
+
+  // Undefined on every page that is not a category listing, which is exactly
+  // what "Shop all" carries — so it is active on a bare /products and nowhere
+  // else. `useSearchParams` also re-renders the header when the query changes.
+  const currentCategory = params.get("category")?.trim() || undefined;
 
   // The announcement is admin-configurable (settings/public), cached by the
   // query layer, so this costs one read for the whole session.
@@ -49,17 +61,19 @@ export function Header() {
         </Link>
 
         <nav className="hidden items-center gap-9 lg:flex" aria-label="Primary">
-          {links.map((link) => (
-            <NavLink
-              key={link.label}
-              to={link.to}
-              className={({ isActive }) =>
-                `${linkClasses} ${isActive ? "text-accent" : "text-ink-soft"}`
-              }
-            >
-              {link.label}
-            </NavLink>
-          ))}
+          {links.map((link) => {
+            const active = isProducts && link.category === currentCategory;
+            return (
+              <Link
+                key={link.label}
+                to={link.to}
+                aria-current={active ? "page" : undefined}
+                className={`${linkClasses} ${active ? "text-accent" : "text-ink-soft"}`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
         </nav>
 
         <button
@@ -95,20 +109,22 @@ export function Header() {
           className="border-t border-line bg-canvas lg:hidden"
         >
           <Container className="flex flex-col py-2">
-            {links.map((link) => (
-              <NavLink
-                key={link.label}
-                to={link.to}
-                onClick={() => setOpen(false)}
-                className={({ isActive }) =>
-                  `${linkClasses} border-b border-line py-4 last:border-0 ${
-                    isActive ? "text-accent" : "text-ink"
-                  }`
-                }
-              >
-                {link.label}
-              </NavLink>
-            ))}
+            {links.map((link) => {
+              const active = isProducts && link.category === currentCategory;
+              return (
+                <Link
+                  key={link.label}
+                  to={link.to}
+                  onClick={() => setOpen(false)}
+                  aria-current={active ? "page" : undefined}
+                  className={`${linkClasses} border-b border-line py-4 last:border-0 ${
+                    active ? "text-accent" : "text-ink"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
           </Container>
         </nav>
       )}
