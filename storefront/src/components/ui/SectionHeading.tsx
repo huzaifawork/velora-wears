@@ -10,6 +10,10 @@ import type { ReactNode } from "react";
  * override it — which of the two wins is decided by their order in the
  * generated stylesheet, not by their order in the attribute — so a centred
  * heading silently rendered left-aligned.
+ *
+ * `as` exists because a PAGE needs its title to be the `h1` while a section
+ * inside a page must not be — the styling is identical, only the level differs,
+ * so this takes a prop rather than becoming a second component (section 18).
  */
 export function SectionHeading({
   eyebrow,
@@ -17,6 +21,7 @@ export function SectionHeading({
   description,
   action,
   align = "left",
+  as: Heading = "h2",
   className = "",
 }: {
   eyebrow?: string;
@@ -25,6 +30,8 @@ export function SectionHeading({
   /** Usually a "View all" link, shown beside the title on wide screens. */
   action?: ReactNode;
   align?: "left" | "center";
+  /** Heading level. `h1` for a page title, `h2` (the default) for a section. */
+  as?: "h1" | "h2";
   className?: string;
 }) {
   const centered = align === "center";
@@ -39,7 +46,9 @@ export function SectionHeading({
         {eyebrow && (
           <p className="text-[0.625rem] tracking-eyebrow text-accent uppercase">{eyebrow}</p>
         )}
-        <h2 className="mt-3 text-3xl leading-tight text-balance sm:text-4xl">{title}</h2>
+        <Heading className="mt-3 text-3xl leading-tight text-balance sm:text-4xl">
+          {title}
+        </Heading>
         {description && (
           <p className="mt-4 leading-relaxed text-pretty text-ink-soft">{description}</p>
         )}

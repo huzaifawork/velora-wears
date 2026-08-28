@@ -5,7 +5,7 @@ import { Image } from "@/components/ui/Image";
 import { Rating } from "@/components/ui/Rating";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StockBadge } from "@/features/products/StockBadge";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, prettifySlug } from "@/lib/format";
 
 /**
  * THE product card. Built here for the landing page's featured strip and reused
@@ -23,11 +23,6 @@ import { formatPrice } from "@/lib/format";
  * ratio (see the shared contract in requirements section 20).
  */
 const CARD_IMAGE = { width: 600, height: 800 } as const;
-
-/** `hoodies` -> `Hoodies`, used until a category name is passed in. */
-function prettifySlug(slug: string): string {
-  return slug.charAt(0).toUpperCase() + slug.slice(1);
-}
 
 export function ProductCard({
   product,

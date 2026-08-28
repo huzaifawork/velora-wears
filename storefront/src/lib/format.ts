@@ -18,3 +18,13 @@ export function formatPrice(amount: number): string {
 export function formatRating(rating: number): string {
   return rating.toFixed(1);
 }
+
+/**
+ * `hoodies` -> `Hoodies`. A stand-in for a category's real display name, used
+ * on a product card before the categories have loaded and in the page title
+ * while a category page is still fetching. Always prefer the `name` on the
+ * `Category` record when it is available.
+ */
+export function prettifySlug(slug: string): string {
+  return slug.charAt(0).toUpperCase() + slug.slice(1);
+}
