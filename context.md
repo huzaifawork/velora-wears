@@ -10,10 +10,13 @@ still to do.
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
 >
-> **Routine at the end of every section:** build and typecheck clean → commit in focused
-> commits (**no `Co-Authored-By` trailer**) → push to `main` → `vercel deploy --prod --yes`
-> → update this file. The client's link never changes, so every section ships to the same
-> URL: <https://velora-wears.vercel.app>
+> **Routine at the end of every section:** build, typecheck and lint clean → update this
+> file → commit in focused commits (**no `Co-Authored-By` trailer**) → push to `main`.
+>
+> **That is the whole deploy.** The GitHub repo is connected to Vercel, so pushing to `main`
+> builds and ships to production on its own — do **not** also run `vercel deploy --prod`,
+> it just builds the same commit a second time. The client's link never changes, so every
+> section lands on the same URL: <https://velora-wears.vercel.app>
 
 ---
 
@@ -167,8 +170,9 @@ npm run typecheck
 npm run deploy:rules        # deploys database.rules.json to LIVE
 npm run deploy:functions    # needs Blaze plan
 npm run emulators           # local database + functions
-vercel deploy --prod --yes  # deploy to https://velora-wears.vercel.app (see section 10)
 ```
+
+Deploying is `git push origin main` — Vercel builds it. See section 10.
 
 Functions dependencies install separately, once: change into `functions/` and run
 `npm install`.
@@ -475,13 +479,17 @@ Deployed on **Vercel**, under the `huzaifas-projects-eabfae35` scope, project `v
 The GitHub repo is connected, so **every push to `main` deploys automatically**. Firebase
 Hosting config still exists in `firebase.json` but is not the deployment path.
 
-We redeploy after finishing each requirements section, always to the same URL, so the
-client's link never changes.
+Each requirements section ships when it is pushed, always to the same URL, so the client's
+link never changes.
 
 ```bash
-vercel deploy --prod --yes     # deploy the current working tree to the live URL
+git push origin main           # THIS is the deploy - Vercel builds the commit
 vercel env ls                  # confirm the 7 VITE_FIREBASE_* vars, 3 environments each
 ```
+
+`vercel deploy --prod --yes` exists and works, but after a push it is redundant — it uploads
+the working tree and rebuilds the same commit Vercel is already building. Only reach for it
+to ship something that is deliberately not on `main`.
 
 `vercel.json` at the repo root drives the build:
 
