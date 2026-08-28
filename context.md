@@ -4,8 +4,8 @@
 This file is the *state of the work*; `Requirements.md` is the spec.
 
 Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1 (brand identity),
-2 (landing page) and 3 (products page) are built.** Everything from section 4 onward is
-still to do.
+2 (landing page), 3 (products page) and 4 (product details page) are built.** Everything
+from section 5 onward is still to do.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -87,7 +87,7 @@ Storefront builds clean; functions typecheck clean.
 | Area | State |
 | --- | --- |
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
-| Routing | react-router-dom, `/` and `/products`, lazy-loaded, scroll reset on navigate |
+| Routing | react-router-dom, `/`, `/products` and `/products/:slug`, lazy-loaded, scroll reset on navigate |
 | Firebase client | Wired, web app registered, config in `storefront/.env.local` |
 | Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
 | Data source | `VITE_DATA_SOURCE=demo`. Switches to `firebase` when Blaze is bought |
@@ -97,10 +97,11 @@ Storefront builds clean; functions typecheck clean.
 | Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
 | Landing page | **Done (section 2).** Hero, categories, featured grid, promos, story, reviews, Instagram strip, CTA, footer |
 | Products page | **Done (section 3).** `/products`, honours `?category=`, reuses `ProductGrid` |
+| Product details | **Done (section 4).** `/products/:slug` — gallery, size selection, reviews, related |
 | Demo catalog | 12 products, 3 categories, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
-| Product features | Products listing only. No detail page, cart, checkout, auth, review UI, admin |
+| Product features | Listing and detail. No cart, checkout, auth, review UI, search, filters, admin |
 | Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
@@ -114,18 +115,21 @@ storefront/          React + Vite (Developer A)
   public/categories/       DEMO category tiles (throwaway)
   src/components/brand/    Logo.tsx - the ONLY definition of the logo
   src/components/ui/       Button, Badge, Rating, Image, Marquee, SectionHeading, Skeleton
-  src/components/layout/   Container, PageHeader, ScrollToTop,
+  src/components/layout/   Container, PageHeader, Breadcrumbs, ValueProps, ScrollToTop,
                            Header (mobile nav + announcement), Footer
   src/features/home/       landing sections - Hero, CategoryStrip, FeaturedProducts,
                            PromoBanners, BrandIntro, Testimonials, InstagramStrip,
-                           ValueProps, CtaBand
+                           CtaBand
   src/features/products/   ProductCard, ProductGrid, StockBadge - reused by sections 3/5/13
-  src/pages/               HomePage, ProductsPage, NotFoundPage
+                           ProductGallery, SizeSelector, RelatedProducts
+  src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews
+  src/pages/               HomePage, ProductsPage, ProductDetailPage, NotFoundPage
   src/lib/firebase.ts      client SDK init
   src/lib/queries.ts       read layer + cache + THE SOURCE SWITCH
   src/lib/sources/         CatalogSource (the interface), firebaseSource, demoSource
   src/lib/demoData.ts      throwaway demo catalog - never import from a component
-  src/lib/format.ts        formatPrice / formatRating
+  src/lib/format.ts        formatPrice / formatRating / formatDate / prettifySlug
+  src/lib/sizes.ts         SIZES + SIZE_LABELS - the order sizes are shown in
   src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
 functions/           Cloud Functions, Admin SDK, own node_modules (NOT a workspace)
@@ -236,8 +240,8 @@ one starts.
 | 1 | Brand overview — logo, palette, typography | **Done** |
 | 2 | Landing page — hero, featured, categories, testimonials, footer | **Done** |
 | 3 | Products page — grid, cards | **Done** |
-| 4 | Product details — gallery, size selection | **Next** |
-| 5 | Categories | to do |
+| 4 | Product details — gallery, size selection | **Done** |
+| 5 | Categories | **Next** |
 | 6 | Shopping cart | to do |
 | 7 | Checkout — guest + signed in | to do |
 | 8 | *Admin dashboard — **Developer B**, not us* | not ours |
@@ -398,25 +402,92 @@ is 12, so everything fits today. A real "load more" needs a cursor — RTDB pagi
 `CatalogSource` interface and both implementations. That belongs with section 14, where the
 sort order it has to page through is decided.
 
-### The next task — section 4, the product details page
+### What section 4 delivered
 
-Requirements section 4: `/products/:slug` with name, price, description, category, an image
-gallery, and S/M/L size selection before adding to cart.
+`/products/:slug` — the product detail page. Name, price, description, category, an image
+gallery and S/M/L size selection, which is what requirements section 4 asks for, plus the
+review display section 16 asks to appear here.
 
-1. **Open with `PageHeader`** or a gallery-led layout — either way, do not write a new header
-   block. `ProductCard` already links to `/products/${slug}`, so the route shape is fixed.
-2. Read through `getProductBySlug(slug)`, which returns the **full** `Product` — the only
-   place the storefront is allowed to read `products` rather than `productSummaries`.
-   It returns `null` for an unknown or inactive slug; render a real "not found" state.
-3. The gallery loads `images[0]` eagerly and the rest afterwards (section 19). `ProductImage`
-   already carries `thumb`, `full`, `width` and `height` — use them, `Image` requires them.
-4. Size selection reads `product.sizes` (`Record<Size, SizeStock>`). A size with `stock: 0`
-   must be visibly unavailable and **not selectable** (section 11) — the demo catalog has
-   products with a single size sold out precisely so this can be seen.
-5. Reviews: `listReviews(productId, limit)` is wired through both sources and ready to render.
-   The review *form* is section 16 — display only for now.
-6. "Add to cart" is section 6. Build the size selector and leave the button leading nowhere
-   obvious, or stop before it, but do not start the cart.
+**The page composes, like the products page does.** The gallery, the size selector, the
+review list and the related strip are each their own component under `features/`; the page
+holds the reads, the layout and the one piece of state that is genuinely the page's own
+(which size is chosen).
+
+**It is the only page that reads a full `products` record**, through `getProductBySlug`.
+It also reads the product's SUMMARY, because `ratingAvg`, `ratingCount`, `inStock` and
+`lowStock` are precomputed at write time and exist only there — the storefront must never
+average reviews at read time (§19). That needed a new `getProductSummaryBySlug` on the
+`CatalogSource` interface, implemented in both sources, and **a new `slug` index on
+`productSummaries` in `database.rules.json`** — added, but **not yet deployed**: run
+`npm run deploy:rules` before the storefront ever reads from the database.
+
+**Reads come in two waves**, which is the pattern any dependent read should copy:
+
+1. keyed on the slug in the URL — product, summary, categories, settings, in one
+   `Promise.all`;
+2. keyed on what wave one returned — `listReviews(product.id)` and the related products
+   for `product.categorySlug`. Each has its own `useAsync` key and its own skeleton, so a
+   slow reviews read never holds up the product itself.
+
+**Size selection is real, and it is the gate on the cart.** `SizeSelector` reads
+`product.sizes`, renders S/M/L in the fixed order from the new `lib/sizes.ts`, and a size
+with `stock: 0` is struck through and genuinely `disabled` — section 11 requires that an
+unavailable option cannot be purchased. The remaining count for the chosen size is
+announced underneath ("Only 2 left in Medium"), using `lowStockThreshold` from settings.
+"Add to bag" is disabled until a size is chosen, and permanently on a piece where every
+size is gone. **The cart is section 6 and is not started** — the button sets a line of
+copy saying so.
+
+**The gallery** keeps only the selected image in the DOM at full resolution. Stacking all
+the images and hiding the inactive ones would download the whole set, because they are in
+the viewport and `loading="lazy"` would not help; the first image loads eagerly and the
+rest only when a thumbnail is clicked (§19). Thumbnails use the `thumb` variant the
+visitor has usually already downloaded on the grid they came from.
+
+**Three components were shared rather than duplicated:**
+
+- `ReviewCard` (`features/reviews/`) was extracted from the landing page's testimonials
+  and is now used by both surfaces, with an optional date on the product page. Use it for
+  section 16's review list too.
+- `ValueProps` **moved** from `features/home/` to `components/layout/`. It is a page-level
+  band, not a landing-page section, and the product page needs the same four promises —
+  writing them a second time would have duplicated the copy and the settings-driven
+  delivery threshold.
+- `Breadcrumbs` (`components/layout/`) is new. Section 5 and the cart should use it.
+
+**A bug worth remembering:** react-router swaps `:slug` **without unmounting the page**,
+so a plain `useState` for the chosen size carried "M" from one product to the next — where
+M might be sold out, leaving a sold-out size selected with the add button live. The
+selection is now stamped with the slug it was made for and resets during render. Any
+per-product state added later (quantity, in section 6) has the same trap.
+
+**A product URL that matches nothing is the detail page's own state**, not `NotFoundPage`:
+`getProductBySlug` returns `null` for an unknown *and* for an inactive product, and the
+page says so and offers the collection.
+
+**Not built, deliberately:** the review form (section 16), quantity selection and the cart
+(section 6), and a size guide. There is no "notify me when back in stock" — it needs a
+write path, and every client write is denied by design.
+
+### The next task — section 5, categories
+
+Requirements section 5: products organised into categories, and users able to view and
+browse products by the category they choose.
+
+Most of the machinery already exists — read it before building anything:
+
+1. `categories` are already modelled, seeded, and read through `getCategories()`, each
+   with `name`, `slug`, `thumb` and a precomputed `productCount`.
+2. `/products?category=<slug>` already lists a category, with an unknown-slug state, and
+   the header, footer, category tiles, promo banners, breadcrumbs and the related strip
+   all already link to it.
+3. `CategoryStrip` on the landing page is the category bento.
+
+So the open question is what section 5 still owes: most likely a **category landing route**
+(`/category/:slug` or a `/categories` index) and, if so, whether `?category=` should
+redirect to it so there is one canonical URL per category rather than two — decide that
+before writing anything, because every existing link would move. Ask Huzaifa which he
+wants; do not build both.
 
 **When Blaze is bought and the switch happens**, the checklist is:
 
@@ -465,6 +536,12 @@ gallery, and S/M/L size selection before adding to cart.
   Agree that node with Developer B before section 16 starts.
 - **The database is deliberately empty and stays that way for now.** Do not seed it without
   asking — the storefront is not reading from it yet.
+- **Category URL shape** (section 5) — `?category=` works today and everything links to it.
+  Whether categories also get their own route, and which one is canonical, is Huzaifa's
+  call. Do not build both.
+- **`database.rules.json` has an undeployed change.** Section 4 added a `slug` index on
+  `productSummaries`. It changes nothing while the storefront serves demo data, but
+  `npm run deploy:rules` must run before the database is read from.
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
 - **Delivery charges** (section 10) — flat rate or per city? Undecided.
 - **Admin dashboard spec** (section 8) — still pending from the client.
