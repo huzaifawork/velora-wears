@@ -3,8 +3,9 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1 (brand identity) and
-2 (landing page) are built.** Everything from section 3 onward is still to do.
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1 (brand identity),
+2 (landing page) and 3 (products page) are built.** Everything from section 4 onward is
+still to do.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -83,7 +84,7 @@ Storefront builds clean; functions typecheck clean.
 | Area | State |
 | --- | --- |
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
-| Routing | react-router-dom, one placeholder route |
+| Routing | react-router-dom, `/` and `/products`, lazy-loaded, scroll reset on navigate |
 | Firebase client | Wired, web app registered, config in `storefront/.env.local` |
 | Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
 | Data source | `VITE_DATA_SOURCE=demo`. Switches to `firebase` when Blaze is bought |
@@ -92,10 +93,11 @@ Storefront builds clean; functions typecheck clean.
 | Data contract | `shared/types.ts` written |
 | Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
 | Landing page | **Done (section 2).** Hero, categories, featured grid, promos, story, reviews, Instagram strip, CTA, footer |
+| Products page | **Done (section 3).** `/products`, honours `?category=`, reuses `ProductGrid` |
 | Demo catalog | 12 products, 3 categories, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
-| Product features | **None yet.** No products page, cart, checkout, auth, reviews, admin |
+| Product features | Products listing only. No detail page, cart, checkout, auth, review UI, admin |
 | Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
@@ -109,12 +111,13 @@ storefront/          React + Vite (Developer A)
   public/categories/       DEMO category tiles (throwaway)
   src/components/brand/    Logo.tsx - the ONLY definition of the logo
   src/components/ui/       Button, Badge, Rating, Image, Marquee, SectionHeading, Skeleton
-  src/components/layout/   Container, Header (mobile nav + announcement), Footer
+  src/components/layout/   Container, PageHeader, ScrollToTop,
+                           Header (mobile nav + announcement), Footer
   src/features/home/       landing sections - Hero, CategoryStrip, FeaturedProducts,
                            PromoBanners, BrandIntro, Testimonials, InstagramStrip,
                            ValueProps, CtaBand
   src/features/products/   ProductCard, ProductGrid, StockBadge - reused by sections 3/5/13
-  src/pages/               HomePage, NotFoundPage
+  src/pages/               HomePage, ProductsPage, NotFoundPage
   src/lib/firebase.ts      client SDK init
   src/lib/queries.ts       read layer + cache + THE SOURCE SWITCH
   src/lib/sources/         CatalogSource (the interface), firebaseSource, demoSource
@@ -228,8 +231,8 @@ one starts.
 | --- | --- | --- |
 | 1 | Brand overview — logo, palette, typography | **Done** |
 | 2 | Landing page — hero, featured, categories, testimonials, footer | **Done** |
-| 3 | Products page — grid, cards | **Next** |
-| 4 | Product details — gallery, size selection | to do |
+| 3 | Products page — grid, cards | **Done** |
+| 4 | Product details — gallery, size selection | **Next** |
 | 5 | Categories | to do |
 | 6 | Shopping cart | to do |
 | 7 | Checkout — guest + signed in | to do |
@@ -338,19 +341,78 @@ for all 48 files. **They must be replaced with real photography before the clien
 - Routes are lazy-loaded, and `NotFoundPage` catches the not-yet-built routes so links from
   the landing page never land on a blank screen.
 
-### The next task — section 3, the products page
+### What section 3 delivered
 
-Requirements section 3: a dedicated page at `/products` listing everything, with image, name,
-price and category on each card.
+`/products` at <https://velora-wears.vercel.app/products> — the full catalog as cards
+carrying image, name, price and category, which is exactly what requirements section 3 asks
+for and nothing more.
 
-1. **Reuse `ProductGrid`.** It already handles loading, empty and loaded states. If the page
-   needs something new, add a prop — do not fork it.
-2. Read through `listProducts({ categorySlug, sort, limit })`. The `?category=` query
-   parameter is already what the header, footer, category tiles and promo banners link to.
-3. Filters and sorting are **section 14**, and search is **section 13** — build section 3
-   first and stop, unless Huzaifa says otherwise.
-4. Pagination: `listProducts` is limited to 24. A "load more" needs a real cursor; RTDB
-   pagination is `startAfter` on the ordering key, not an offset.
+**The page composes; it does not draw.** `ProductsPage` is ~100 lines and contains no grid
+markup: the cards are the same `ProductCard` / `ProductGrid` the landing page's featured
+strip renders, so the two surfaces cannot drift into looking like different shops. It reads
+through `listProducts` like everything else, so it is identical on the demo source and on
+the Realtime Database.
+
+**`?category=` is honoured, but there is no filter UI.** The header, footer, category tiles
+and promo banners were already linking to `/products?category=hoodies`, so the page reads
+the parameter and lists that category. That is URL state only — **the filter and sort
+CONTROLS are section 14 and search is section 13; neither is built.** The count row above
+the grid is deliberately a flex row with room on the right: that is where section 14's sort
+control and filter chips go.
+
+An unknown `?category=` slug (a stale or hand-typed link) renders an explicit message rather
+than an empty grid, and the title falls back to a prettified slug while the categories are
+still loading so it does not flip from "The whole collection" to "Hoodies" as data lands.
+
+**Two components were generalised rather than duplicated:**
+
+- `SectionHeading` gained an `as` prop (`h1` | `h2`). A page title must be the `h1`; the
+  styling is otherwise identical, so it took a prop instead of becoming a second component.
+- `PageHeader` (`components/layout/`) is the standard band at the top of an inner page —
+  `Container` + `SectionHeading as="h1"` + an optional row underneath. **Sections 4, 5, 6
+  and 13 should all open with this**, not with their own header markup.
+- `prettifySlug` moved from `ProductCard` into `lib/format.ts`, since two callers now need it.
+
+**Two navigation bugs were latent while `/` was the only route, and are fixed:**
+
+1. The header's four links all point at `/products` and differ only by the query string.
+   `NavLink` matches on the *path* alone, so on `/products?category=shirts` all four lit up
+   at once. Active state is now decided on the query string — beware of this if you add more
+   query-differentiated links.
+2. React Router does not reset scroll position on navigation the way a browser does on a page
+   load, so "Shop all" in the footer opened the products page already scrolled down it.
+   `components/layout/ScrollToTop.tsx` fixes it, jumping instantly (`html` carries
+   `scroll-behavior: smooth` for anchors, which would otherwise animate the whole page) and
+   leaving `#hash` links alone. It keys on `search` as well as `pathname`, because
+   `/products?category=hoodies` is a different page to `/products`.
+
+`NotFoundPage` no longer describes the collection as unbuilt and links to it.
+
+**Not built, deliberately:** pagination. `listProducts` is bounded at 24 and the demo catalog
+is 12, so everything fits today. A real "load more" needs a cursor — RTDB paginates with
+`startAfter` on the ordering key, not an offset — which means a change to the shared
+`CatalogSource` interface and both implementations. That belongs with section 14, where the
+sort order it has to page through is decided.
+
+### The next task — section 4, the product details page
+
+Requirements section 4: `/products/:slug` with name, price, description, category, an image
+gallery, and S/M/L size selection before adding to cart.
+
+1. **Open with `PageHeader`** or a gallery-led layout — either way, do not write a new header
+   block. `ProductCard` already links to `/products/${slug}`, so the route shape is fixed.
+2. Read through `getProductBySlug(slug)`, which returns the **full** `Product` — the only
+   place the storefront is allowed to read `products` rather than `productSummaries`.
+   It returns `null` for an unknown or inactive slug; render a real "not found" state.
+3. The gallery loads `images[0]` eagerly and the rest afterwards (section 19). `ProductImage`
+   already carries `thumb`, `full`, `width` and `height` — use them, `Image` requires them.
+4. Size selection reads `product.sizes` (`Record<Size, SizeStock>`). A size with `stock: 0`
+   must be visibly unavailable and **not selectable** (section 11) — the demo catalog has
+   products with a single size sold out precisely so this can be seen.
+5. Reviews: `listReviews(productId, limit)` is wired through both sources and ready to render.
+   The review *form* is section 16 — display only for now.
+6. "Add to cart" is section 6. Build the size selector and leave the button leading nowhere
+   obvious, or stop before it, but do not start the cart.
 
 **When Blaze is bought and the switch happens**, the checklist is:
 
