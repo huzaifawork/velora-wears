@@ -62,9 +62,17 @@ Browser (React + Vite)
 Client writes are denied everywhere. The admin dashboard writes via Firebase Auth, with the
 admin's UID listed under `admins/{uid}`.
 
-> **Cloud Functions needs the Blaze (pay-as-you-go) plan.** The free tier is generous, but
-> billing must be enabled on the Firebase project before the order flow can deploy. This is
-> not done yet and will block checkout — `Requirements.md` section 7.
+> **What the free (Spark) plan does and does not block.** The client has not bought Blaze
+> yet. Verified on 2026-08-28 by probing the live project:
+>
+> - **Realtime Database writes via the Admin SDK work.** A write + read-back + delete probe
+>   succeeded on Spark, so **seeding demo data needs no billing**. Sections 2-6 (landing,
+>   products, product details, categories, cart) can all be built and demoed in full.
+> - **Cloud Storage is NOT provisioned** — `velora-wears.firebasestorage.app` returns 404,
+>   because new Firebase projects require Blaze for Storage. So **product images must not be
+>   uploaded to Firebase Storage.** See the image decision in section 9.
+> - **Cloud Functions cannot deploy** without Blaze. This is the one hard stop: it blocks
+>   `placeOrder`, and therefore checkout — `Requirements.md` section 7.
 
 ---
 
@@ -249,6 +257,11 @@ database has to have data first**. Agreed with Huzaifa: write a seed script.
    dual write is exactly what Developer B's dashboard will have to do. Placeholder images
    are fine, but store both `thumb` and `full`.
    *Note: `firebase-admin` is not currently a root dependency — add it as a devDependency.*
+   The script must be **idempotent** (safe to re-run) and must support **`--clear`** to
+   remove everything it wrote, since this data is thrown away once the admin dashboard
+   can create real products.
+   Images go in `storefront/public/products/` and are referenced by path — **not** Firebase
+   Storage, which is unavailable without Blaze.
 2. **Verify `storefront/src/lib/queries.ts` against real data.** It has never actually run.
    **Known bug to fix:** `getSettings()` reads `settings`, but the rules only expose
    `settings/public` — that read will be denied. Confirm every index works.
@@ -260,9 +273,18 @@ database has to have data first**. Agreed with Huzaifa: write a seed script.
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
   built and in use. Huzaifa can still ask for changes; edit the tokens in `index.css` and
   `Logo.tsx`, never override colours in a component.
-- **Product images.** No real photography exists. Seeding with placeholders for now, agreed
-  with Huzaifa — these must be replaced before the client sees a finished site.
-- **Blaze plan.** Not enabled. Blocks checkout (section 7) and the `placeOrder` function.
+- **Product images — decided.** No real photography exists, and Firebase Storage is
+  unavailable without Blaze (see section 2). So demo images are **committed to the repo**
+  under `storefront/public/products/` and served by Vercel's CDN: free, fast, no billing,
+  and deleted in one commit when real photography arrives. Store both a `thumb` and a
+  `full` variant per image, in WebP, with known dimensions — section 19 still applies to
+  placeholders. **These must be replaced before the client sees a finished site.**
+- **Blaze plan.** Not enabled, and the client has not bought it yet. Blocks *only* Cloud
+  Functions — so checkout (section 7) and `placeOrder`. Everything up to and including the
+  cart can be finished without it. Seeding does **not** need it.
+- **Demo data is temporary.** It gets deleted once Developer B's admin dashboard can create
+  real products. The seed script must therefore ship a `--clear` flag that removes
+  everything it wrote, so the handover is one command and not a manual cleanup.
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
 - **Delivery charges** (section 10) — flat rate or per city? Undecided.
 - **Admin dashboard spec** (section 8) — still pending from the client.
