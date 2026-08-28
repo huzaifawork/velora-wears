@@ -81,6 +81,16 @@ export function getProductBySlug(slug: string): Promise<Product | null> {
   return cached(`product:${slug}`, async () => (await source()).getProductBySlug(slug));
 }
 
+/**
+ * The list projection for one product, read alongside the full record on the
+ * detail page. It carries the PRECOMPUTED rating average, review count and
+ * stock flags, which the full `Product` record does not — the storefront must
+ * never average reviews at read time (requirements sections 16 and 19).
+ */
+export function getProductSummaryBySlug(slug: string): Promise<ProductSummary | null> {
+  return cached(`summary:${slug}`, async () => (await source()).getProductSummaryBySlug(slug));
+}
+
 /** Search (requirements section 13 — runs on Enter/button, not per keystroke). */
 export function searchProducts(term: string, limit = 24): Promise<ProductSummary[]> {
   return cached(`search:${term.trim().toLowerCase()}:${limit}`, async () =>

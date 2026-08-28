@@ -72,6 +72,24 @@ async function getProductBySlug(slug: string): Promise<Product | null> {
 }
 
 /**
+ * The SUMMARY for one product, read alongside the full record on the detail
+ * page (requirements sections 16 and 19).
+ *
+ * The rating average and the stock flags are precomputed at write time and live
+ * only on the summary — the detail page must display them, not recompute an
+ * average by reading every review. One indexed lookup of a small node.
+ */
+async function getProductSummaryBySlug(slug: string): Promise<ProductSummary | null> {
+  const q = query(
+    ref(getDb(), "productSummaries"),
+    orderByChild("slug"),
+    equalTo(slug),
+    limitToFirst(1),
+  );
+  return toArray<ProductSummary>((await get(q)).val()).filter((p) => p.active)[0] ?? null;
+}
+
+/**
  * Search (requirements section 13 — runs on Enter/button, not per keystroke).
  * Prefix match against the denormalised lowercase `searchText` field.
  */
@@ -135,6 +153,7 @@ async function listTestimonials(): Promise<Review[]> {
 export const firebaseSource: CatalogSource = {
   listProducts,
   getProductBySlug,
+  getProductSummaryBySlug,
   searchProducts,
   getCategories,
   getSettings,

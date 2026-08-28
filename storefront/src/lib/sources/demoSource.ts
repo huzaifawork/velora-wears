@@ -50,6 +50,11 @@ async function getProductBySlug(slug: string): Promise<Product | null> {
   return found ? structuredClone(found) : null;
 }
 
+async function getProductSummaryBySlug(slug: string): Promise<ProductSummary | null> {
+  const found = demoSummaries.find((p) => p.slug === slug && p.active);
+  return found ? { ...found } : null;
+}
+
 async function searchProducts(term: string, limit: number): Promise<ProductSummary[]> {
   const t = term.trim().toLowerCase();
   if (!t) return [];
@@ -100,6 +105,7 @@ async function listTestimonials(limit: number): Promise<Review[]> {
 export const demoSource: CatalogSource = {
   listProducts,
   getProductBySlug,
+  getProductSummaryBySlug,
   searchProducts,
   getCategories,
   getSettings,

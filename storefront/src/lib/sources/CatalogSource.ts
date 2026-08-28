@@ -31,6 +31,8 @@ export interface ResolvedListOptions {
 export interface CatalogSource {
   listProducts(options: ResolvedListOptions): Promise<ProductSummary[]>;
   getProductBySlug(slug: string): Promise<Product | null>;
+  /** The list projection for ONE product — its precomputed rating and stock flags. */
+  getProductSummaryBySlug(slug: string): Promise<ProductSummary | null>;
   searchProducts(term: string, limit: number): Promise<ProductSummary[]>;
   getCategories(): Promise<Category[]>;
   getSettings(): Promise<Settings | null>;

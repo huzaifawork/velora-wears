@@ -28,3 +28,17 @@ export function formatRating(rating: number): string {
 export function prettifySlug(slug: string): string {
   return slug.charAt(0).toUpperCase() + slug.slice(1);
 }
+
+/**
+ * `1755043200000` -> `12 Aug 2026`. Used on reviews now, and by the order
+ * pages in sections 7 and 12 — dates are formatted in exactly one place.
+ */
+const dateFormat = new Intl.DateTimeFormat("en-PK", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+export function formatDate(timestamp: number): string {
+  return dateFormat.format(new Date(timestamp));
+}
