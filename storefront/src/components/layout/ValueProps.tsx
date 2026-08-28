@@ -3,7 +3,13 @@ import { Container } from "@/components/layout/Container";
 import { formatPrice } from "@/lib/format";
 
 /**
- * The reassurance strip under the hero (requirements section 2).
+ * The reassurance strip: cash on delivery, delivery, exchanges, quality.
+ *
+ * It sits under the hero on the landing page (requirements section 2) and again
+ * under a product, where the same four questions decide whether someone orders.
+ * It lives in `layout/` rather than `features/home/` for exactly that reason —
+ * it is a page-level band, not a landing-page section, and the copy must be
+ * written once (section 18).
  *
  * The delivery promise is read from the admin-configurable settings rather than
  * hardcoded, so it stays true when the admin changes the threshold in the

@@ -1,3 +1,4 @@
+import { ValueProps } from "@/components/layout/ValueProps";
 import { useAsync } from "@/hooks/useAsync";
 import { getCategories, getSettings, listProducts, listTestimonials } from "@/lib/queries";
 import { BrandIntro } from "@/features/home/BrandIntro";
@@ -8,7 +9,6 @@ import { Hero } from "@/features/home/Hero";
 import { InstagramStrip } from "@/features/home/InstagramStrip";
 import { PromoBanners } from "@/features/home/PromoBanners";
 import { Testimonials } from "@/features/home/Testimonials";
-import { ValueProps } from "@/features/home/ValueProps";
 
 /**
  * The landing page (requirements section 2).
