@@ -265,24 +265,40 @@ database has to have data first**. Agreed with Huzaifa: write a seed script.
 
 ## 10. Deployment
 
-The client is shown the site via **Vercel** (Huzaifa deploys manually from the GitHub repo).
-Firebase Hosting config still exists in `firebase.json` but is not the deployment path.
+**Live URL (this is the link the client gets):** <https://velora-wears.vercel.app>
 
-`vercel.json` at the repo root already sets the build for this workspace layout:
+Deployed on **Vercel**, under the `huzaifas-projects-eabfae35` scope, project `velora-wears`.
+The GitHub repo is connected, so **every push to `main` deploys automatically**. Firebase
+Hosting config still exists in `firebase.json` but is not the deployment path.
+
+We redeploy after finishing each requirements section, always to the same URL, so the
+client's link never changes.
+
+```bash
+vercel deploy --prod --yes     # deploy the current working tree to the live URL
+vercel env ls                  # confirm the 7 VITE_FIREBASE_* vars, 3 environments each
+```
+
+`vercel.json` at the repo root drives the build:
 
 | Setting | Value |
 | --- | --- |
-| Root Directory | repo root (**not** `storefront/`) |
+| Root Directory | repo root (**not** `storefront/`) — the storefront is an npm workspace |
 | Build command | `npm run build` |
 | Output directory | `storefront/dist` |
 | Rewrites | all routes to `/index.html` — required, this is an SPA |
 
-> **The one thing that will break the deploy.** `storefront/.env.local` is gitignored, so
-> Vercel does not have the Firebase config. All seven `VITE_FIREBASE_*` variables must be
-> added in the Vercel project settings, for Production **and** Preview. Vite inlines them at
-> **build** time, so they must exist *before* the build runs, and the project must be
-> redeployed after they are added.
->
-> Right now a missing config would not be noticed — nothing imports `firebase.ts` yet, so it
-> is tree-shaken out of the bundle. From section 2 onward the site will fail at runtime with
-> "Firebase config missing" if the variables are absent.
+### Environment variables — already configured, do not re-add
+
+All seven `VITE_FIREBASE_*` variables are set for **Production, Preview and Development**
+(21 rows). `storefront/.env.local` is gitignored, so Vercel could not have got them from the
+repo.
+
+Two of them — `VITE_FIREBASE_API_KEY` and `VITE_FIREBASE_DATABASE_URL` — need
+`vercel env add <NAME> <env> --type config`. The CLI refuses them without an explicit type,
+because a `VITE_` prefix publishes the value to every visitor. **`config` is correct here**:
+Firebase web config is public by design and must be inlined into the browser bundle for the
+client SDK to work at all. The security boundary is `database.rules.json`, not secrecy. Do
+not "fix" this by making them secrets — it would break the client SDK.
+
+> Vite inlines these at **build** time, so changing one requires a redeploy to take effect.
