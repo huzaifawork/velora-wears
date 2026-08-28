@@ -8,6 +8,11 @@ built.** Everything from section 2 onward is still to do.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
+>
+> **Routine at the end of every section:** build and typecheck clean → commit in focused
+> commits (**no `Co-Authored-By` trailer**) → push to `main` → `vercel deploy --prod --yes`
+> → update this file. The client's link never changes, so every section ships to the same
+> URL: <https://velora-wears.vercel.app>
 
 ---
 
@@ -59,7 +64,7 @@ admin's UID listed under `admins/{uid}`.
 
 > **Cloud Functions needs the Blaze (pay-as-you-go) plan.** The free tier is generous, but
 > billing must be enabled on the Firebase project before the order flow can deploy. This is
-> not done yet and will block build step 4.
+> not done yet and will block checkout — `Requirements.md` section 7.
 
 ---
 
@@ -138,6 +143,7 @@ npm run typecheck
 npm run deploy:rules        # deploys database.rules.json to LIVE
 npm run deploy:functions    # needs Blaze plan
 npm run emulators           # local database + functions
+vercel deploy --prod --yes  # deploy to https://velora-wears.vercel.app (see section 10)
 ```
 
 Functions dependencies install separately, once: change into `functions/` and run
