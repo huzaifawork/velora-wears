@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/*
+ * Brand tokens. Defined once here and referenced everywhere via Tailwind
+ * utilities — do not hardcode hex values in components.
+ * Palette is provisional until the brand identity is agreed.
+ */
+@theme {
+  --color-ink: #17151a;
+  --color-ink-soft: #55505c;
+  --color-canvas: #ffffff;
+  --color-canvas-alt: #f6f4f2;
+  --color-brand: #1f1b2e;
+  --color-brand-accent: #b8925a;
+  --color-line: #e6e2de;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}

@@ -1,194 +1,221 @@
 # Velora Wears — Session Context
 
-**Read this first in a new session.** It captures everything decided and built so far, so
-you can start feature work without re-deriving the setup.
+**Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
+This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-28. Setup is complete; **no product features are built yet.**
+Last updated: 2026-08-28. Setup and scaffold complete. **No product features are built yet.**
 
 ---
 
-## 1. What this project is
+## 1. The project
 
-An e-commerce storefront for **Velora Wears**, a Pakistani fashion/clothing brand. The full
-specification lives in [`Requirements.md`](Requirements.md) — read it in full before
-building. This file is the *state of the work*, not a replacement for the spec.
+An e-commerce storefront for **Velora Wears**, a Pakistani fashion brand. Two developers:
 
-Defining constraints from the spec:
+- **Developer A** builds the storefront, Cloud Functions, and the order flow.
+- **Developer B** (Huzaifa's friend) builds the **admin dashboard** — sections 8 and 20 of
+  the requirements. **Do not build the admin dashboard.**
 
-- **Guest checkout is mandatory.** Orders must be placeable without signing in (§7).
-- **Cash on Delivery only.** No payment gateway in v1 (§9).
-- **Reviews are tied to purchases, not accounts.** Both signed-in buyers and guests with a
+### Constraints that shape everything
+
+- **React + Vite is mandatory** (§18). Not Next.js — the original scaffold was migrated.
+- **Realtime Database, not Firestore** (§18). Firestore was mentioned in conversation; the
+  confirmed decision is RTDB, which is what is live and configured.
+- **Guest checkout is mandatory** — orders without signing in (§7).
+- **Cash on Delivery only** in v1 (§9).
+- **Reviews are tied to a purchase, not an account** — signed-in buyers *and* guests with a
   confirmed order can review (§16).
-- **Server-side validation is non-negotiable.** Never trust client-sent prices or totals;
-  recompute on the server (§17).
-- Delivery charges are admin-configurable and must flow into the checkout total (§10).
-- Stock is tracked **per size**, and out-of-stock options must not be purchasable (§11).
-- Mobile-first responsiveness is a hard requirement (§15).
+- **Never trust client-sent prices or totals.** Recompute server-side (§17).
+- **Reusable components, no duplicated code** (§18).
+- **Speed is a stated requirement** — indexed queries, small list payloads, image
+  variants (§19).
+- Stock is tracked **per size**; out-of-stock options must not be purchasable (§11).
 
 ---
 
-## 2. Current state
+## 2. Architecture, and why
 
-Setup is finished and verified end to end. Two commits on `main`, pushed, working tree clean.
+The storefront is a browser SPA, so it **cannot** hold the Admin SDK service account key —
+that would hand full database control to any visitor. Hence the split:
+
+```
+Browser (React + Vite)
+   |
+   +-- Firebase CLIENT SDK --read--> Realtime Database
+   |     public catalog only; rules allow read on
+   |     products, productSummaries, categories,
+   |     settings/public, reviews
+   |
+   +-- Cloud Functions (callable) --write--> Realtime Database
+         trusted server code, Admin SDK
+         recomputes totals, re-checks stock, writes orders
+```
+
+Client writes are denied everywhere. The admin dashboard writes via Firebase Auth, with the
+admin's UID listed under `admins/{uid}`.
+
+> **Cloud Functions needs the Blaze (pay-as-you-go) plan.** The free tier is generous, but
+> billing must be enabled on the Firebase project before the order flow can deploy. This is
+> not done yet and will block build step 4.
+
+---
+
+## 3. Current state
+
+Storefront builds clean; functions typecheck clean.
 
 | Area | State |
 | --- | --- |
-| Scaffold | Next.js 15.5 App Router + TypeScript, builds and typechecks clean |
-| Styling | Tailwind CSS v4 (via `@tailwindcss/postcss`), no component library chosen yet |
-| Firebase | Admin SDK wired, **live connection verified** against Realtime Database |
-| Database rules | Deny-all, deployed and verified (anonymous read returns 401) |
-| Product features | **None.** No products, cart, checkout, auth, reviews, or admin |
-| Design | No logo, no design system, no brand palette chosen yet |
+| Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
+| Routing | react-router-dom, one placeholder route |
+| Firebase client | Wired, web app registered, config in `storefront/.env.local` |
+| Query layer | Written and documented — **not yet exercised against real data** |
+| Cloud Functions | Scaffolded, typechecks; `placeOrder` **throws "unimplemented"** |
+| Database rules | Deployed — catalog readable, all client writes denied |
+| Data contract | `shared/types.ts` written |
+| Product features | **None.** No catalog, cart, checkout, auth, reviews, admin |
+| Design | **No logo, no brand palette agreed.** Tokens in `index.css` are provisional |
+| Seed data | **Database is empty.** Nothing to render yet |
 
-### What exists in code
+### Layout
 
 ```
-src/
-├── app/
-│   ├── api/health/route.ts   # setup smoke check — reports config presence only
-│   ├── layout.tsx            # bare shell, no header/footer yet
-│   ├── page.tsx              # placeholder page
-│   └── globals.css           # Tailwind import + minimal light/dark tokens
-├── components/               # EMPTY
-└── lib/
-    ├── env.ts                # server-side env accessors
-    └── firebase/
-        ├── admin.ts          # Admin SDK singleton (server-only)
-        └── db.ts             # readPath / writePath helpers — thin, extend these
-database.rules.json           # deny-all, deployed
-firebase.json                 # rules + emulator config
-.firebaserc                   # project link (committed, no secrets)
+storefront/          React + Vite (Developer A)
+  src/components/ui/       reusable primitives - Button exists as the pattern
+  src/components/layout/   Container, Header, Footer
+  src/features/            EMPTY - product/cart/checkout/reviews go here
+  src/pages/               HomePage placeholder
+  src/lib/firebase.ts      client SDK init
+  src/lib/queries.ts       read layer - READ THE COMMENTS, they encode section 19
+  src/hooks/               EMPTY
+admin/               Developer B's dashboard - placeholder + contract notes
+functions/           Cloud Functions, Admin SDK, own node_modules (NOT a workspace)
+shared/types.ts      DATA CONTRACT - shared with Developer B
+database.rules.json  deployed
 ```
+
+npm workspaces cover `storefront` and `shared` only. `functions/` installs separately
+(run `npm install` inside that folder) — this is deliberate, because Firebase deploys that
+folder on its own and hoisted dependencies break it.
 
 ---
 
-## 3. Firebase facts
+## 4. Firebase facts
 
 | | |
 | --- | --- |
 | Project ID | `velora-wears` |
-| Project number | `290582204238` |
-| RTDB instance | `velora-wears-default-rtdb` |
-| Region | `asia-southeast1` |
+| RTDB instance | `velora-wears-default-rtdb`, region `asia-southeast1` |
 | Database URL | `https://velora-wears-default-rtdb.asia-southeast1.firebasedatabase.app` |
+| Web app ID | `1:290582204238:web:e6e3b2b3caad444d7a581f` |
 | CLI account | `mhuzaifatariq7@gmail.com` |
+| Functions region | `asia-southeast1` (set in `functions/src/index.ts`) |
 
-**The database is currently empty.** No seed data exists.
+**Credentials.** The Admin SDK key is at
+`secrets/velora-wears-firebase-adminsdk-fbsvc-5f0b34bfb9.json` — gitignored, never commit,
+never print. It is only for local scripts; deployed functions use the runtime service account.
 
-Credentials: the Admin SDK service account JSON lives at
-`./secrets/velora-wears-firebase-adminsdk-fbsvc-5f0b34bfb9.json` — gitignored, never
-committed. `.env.local` (also gitignored) points at it and is already filled in with real
-values. Do not print, copy, or commit the key contents.
-
-Because rules are deny-all, **all database access must go through server-side code** using
-the Admin SDK. There is no client-side Firebase SDK in this project, and adding one would
-require deliberately opening rules — discuss before doing that.
+The `VITE_FIREBASE_*` values in `storefront/.env.local` are **public by design** — they are
+compiled into the browser bundle. That is normal for Firebase web config; security comes from
+the database rules.
 
 ---
 
-## 4. Running it
+## 5. Commands
 
 ```bash
-npm run dev          # dev server
-npm run build        # production build
-npm run typecheck    # tsc --noEmit
-npm run lint         # eslint
-npm run emulators    # local RTDB emulator on :9000
-npm run deploy:rules # deploy database.rules.json — overwrites LIVE rules
+npm install                 # root - installs storefront + shared workspaces
+npm run dev                 # storefront dev server
+npm run build               # storefront production build
+npm run typecheck
+npm run deploy:rules        # deploys database.rules.json to LIVE
+npm run deploy:functions    # needs Blaze plan
+npm run emulators           # local database + functions
 ```
 
-> **Port note:** port 3000 is occupied by another process on this machine, so Next
-> falls back to **http://localhost:3001**. Check the dev server output for the actual port.
+Functions dependencies install separately, once: change into `functions/` and run
+`npm install`.
 
-Smoke check: `curl http://localhost:3001/api/health` → both `databaseUrlConfigured` and
-`serviceAccountConfigured` should be `true`.
+> **Port note:** port 3000 is occupied by another process on this machine. Vite defaults to
+> **5173** — check the dev server output for the actual port.
 
 ---
 
-## 5. Conventions to follow
+## 6. Conventions
 
-- **No `Co-Authored-By` trailers in commits.** The user explicitly does not want Claude
-  appearing as a co-author on GitHub. Write commit messages without them.
-- Anything touching `firebase-admin` must `import "server-only"` — it must never reach a
-  client bundle. `next.config.ts` also lists it in `serverExternalPackages`.
-- Secrets stay out of git. `.gitignore` already blocks `.env*` (except `.env.example`),
-  `*firebase-adminsdk*.json`, `*serviceAccountKey.json`, `secrets/`, `credentials/`.
-- Repo is **public** — assume anything committed is world-readable.
-- Path alias `@/*` maps to `src/*`.
-
----
-
-## 6. Proposed data model (not built — confirm before implementing)
-
-A starting shape for the Realtime Database. Nothing here is written yet.
-
-```
-products/{productId}
-  name, slug, description, category, price
-  images: [url]
-  sizes: { S: {stock}, M: {stock}, L: {stock} }
-  active, createdAt
-categories/{categoryId}
-  name, slug, sortOrder
-orders/{orderId}
-  orderNumber, status, createdAt
-  customer: { fullName, email, phone, address, city, postalCode? }
-  items: [{ productId, name, size, qty, unitPrice }]
-  subtotal, deliveryCharge, total     # all computed SERVER-SIDE
-  isGuest, userId?
-reviews/{productId}/{reviewId}
-  rating, comment, displayName, createdAt
-  orderId, verifiedPurchase, hidden
-settings/
-  deliveryCharge, ...
-```
-
-Notes: RTDB has no queries across nested keys, so denormalise for listing and filtering.
-Order totals must be recomputed server-side at confirmation (§17), and stock re-checked at
-the same moment (§11).
+- **No `Co-Authored-By` trailers in commits.** The user does not want Claude appearing as a
+  co-author on GitHub.
+- **The Admin SDK must never appear in `storefront/`.** If something needs privileged access,
+  it belongs in `functions/`.
+- **Every new `orderByChild` needs a matching `.indexOn`** in `database.rules.json`, added in
+  the same change. Missing indexes are the main cause of slow RTDB apps.
+- **List views read `productSummaries`, never `products`.**
+- **Build a shared component before writing markup twice** (§18). Extend `Button` with a
+  variant rather than styling a one-off button somewhere else.
+- No hardcoded colours in components — use the tokens in `storefront/src/index.css`.
+- Repo is **public**: assume anything committed is world-readable.
+- Path aliases: `@/*` maps to `storefront/src/*`, `@shared/*` maps to `shared/*`.
 
 ---
 
-## 7. Suggested build order
+## 7. Data model
 
-Each step should end in something runnable and visible.
+Defined in [`shared/types.ts`](shared/types.ts) — read it before writing queries. Shape:
 
-1. **Foundation + catalog** ← *start here*
-2. Product details page with size selection and stock states
-3. Cart (with size + quantity)
-4. Checkout with full validation (§17) and server-side total calculation
+```
+products/{id}            full detail: description, all images, per-size stock
+productSummaries/{id}    small list projection: name, price, thumb, inStock, rating
+categories/{slug}
+orders/{id}              server-written only; customer PII; reviewToken for guest reviews
+reviews/{productId}/{id}
+settings/public          deliveryCharge etc, readable by checkout
+settings/private         admin only
+admins/{uid}             grants admin write access
+```
+
+The `products` / `productSummaries` split is the core performance decision (§19): grids read
+summaries with card-sized images; full records load only on the detail page.
+
+---
+
+## 8. Build order
+
+1. **Catalog foundation** — start here
+2. Product details page — gallery, size selection, stock states (§4, §11)
+3. Cart — size, quantity, totals (§6)
+4. Checkout + `placeOrder` Cloud Function, full §17 validation *(needs Blaze plan)*
 5. Order success page with the delivery animation (§12)
-6. Landing page (hero, featured, categories, testimonials, footer) (§2)
+6. Landing page — hero, featured, categories, testimonials, footer (§2)
 7. Search, filters, sorting (§13, §14)
-8. Auth + reviews (§16)
-9. Admin dashboard — *spec still pending from the client*
+8. Auth + reviews, including the guest review flow (§16)
+9. *Admin dashboard — Developer B, not Developer A*
 
-### First task in detail
+### First task in detail — catalog foundation
 
-**Foundation + catalog.** Establish the data model and prove it end to end with real data:
+Goal: real products rendering from the real database, proving the whole stack works.
 
-- Agree the RTDB schema in section 6 above.
-- Write a seed script that populates a handful of realistic products (shirts, hoodies) with
-  per-size stock and placeholder images.
-- Build server-side data access in `src/lib/firebase/` for listing products and fetching one
-  by slug.
-- Build the shared UI shell — header, footer, brand palette, typography — and the Products
-  page rendering real data from the database.
+1. **Confirm the schema** in `shared/types.ts` — agree it with Developer B before seeding,
+   since changing it later breaks his dashboard.
+2. **Write a seed script** (Node + Admin SDK, run locally using the key in `secrets/`) that
+   populates a handful of realistic shirts and hoodies with per-size stock, categories, and
+   `settings/public`. Write `products` **and** `productSummaries` together — that dual write
+   is exactly what Developer B's dashboard will have to do. Placeholder images are fine, but
+   store both `thumb` and `full`.
+3. **Verify `storefront/src/lib/queries.ts` against real data.** It is written but has never
+   run. Confirm the indexes work and that no query downloads more than it needs.
+4. **Build the products grid** — a reusable `ProductCard`, a responsive grid, loading
+   skeletons, lazy-loaded images with reserved dimensions, and empty and error states.
 
-This proves the whole stack works with real data and gives every later step something to
-build on.
+Done when the products page renders real database data on mobile and desktop, with no
+duplicated markup and no unindexed query.
 
 ---
 
-## 8. Open questions for the user
+## 9. Open questions — ask before inventing
 
-- **Logo and brand identity** — the spec asks for a custom logo (§1). No colours,
-  typography, or logo direction have been chosen. Ask before inventing a brand look.
-- **Product images** — no real product photography exists. Placeholders for now?
-- **Admin dashboard spec** — explicitly deferred by the client (§8). Only the requirement
-  that confirmed orders are stored and visible is known.
-- **Auth provider** — sign-in is needed for reviews (§16), but no method has been chosen
-  (email/password, Google, etc.). Note that rules are deny-all and there is no client
-  Firebase SDK, so this needs a deliberate decision.
-- **Delivery charge rules** — flat rate, or per city? Admin-configurable is all that's
-  specified.
+- **Brand identity and logo.** §1 requires a custom logo; no colours, typography, or
+  direction have been agreed. The palette in `index.css` is a placeholder. **Ask.**
+- **Product images.** No real photography exists. Placeholders for now?
+- **Blaze plan.** Not enabled. Blocks build step 4.
+- **Auth provider** for reviews (§16) — email/password, Google, or phone? Undecided.
+- **Delivery charges** (§10) — flat rate or per city?
+- **Admin dashboard spec** (§8) — still pending from the client.

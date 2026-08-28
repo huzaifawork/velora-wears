@@ -1,129 +1,93 @@
 # Velora Wears
 
-E-commerce / clothing brand app for **Velora Wears**, backed by **Firebase Realtime Database**.
+E-commerce storefront for **Velora Wears**, a fashion and clothing brand, backed by the
+**Firebase Realtime Database**.
 
-> **Status: project scaffold only.** No product features are implemented yet.
-> Feature work begins once `requirements.md` is added to the repo root.
+> **Status: scaffold only.** No product features are implemented yet.
+> Start from [`context.md`](context.md), then read [`Requirements.md`](Requirements.md).
 
 ## Stack
 
-| Layer     | Choice                                          |
-| --------- | ----------------------------------------------- |
-| Framework | Next.js (App Router) + TypeScript               |
-| Styling   | Tailwind CSS                                    |
-| Data      | Firebase **Realtime Database**                  |
-| Server    | Firebase **Admin SDK** (server-side only)       |
-| Package manager | npm                                       |
+| Layer | Choice |
+| --- | --- |
+| Storefront | React 19 + Vite 7 + TypeScript |
+| Styling | Tailwind CSS v4 |
+| Routing | React Router |
+| Data | Firebase **Realtime Database** |
+| Trusted writes | Firebase **Cloud Functions** (Admin SDK) |
+| Package manager | npm (workspaces) |
 
-## Firebase & credentials
-
-This project talks to the Realtime Database through the Firebase **Admin SDK**, which runs
-**server-side only** (route handlers, server actions, server components). The Admin SDK is
-listed in `serverExternalPackages` and every module that touches it imports `server-only`,
-so it can never be pulled into a client bundle.
-
-### Service account key
-
-The Admin SDK needs a service account JSON key.
-
-- **Place the key file locally yourself.** It is not part of this repository.
-- **The path is configurable via environment variable** — the file location is your choice.
-- **It is never committed.** `.gitignore` blocks `*serviceAccountKey.json`,
-  `*firebase-adminsdk*.json`, `*service-account*.json`, and the `secrets/` and
-  `credentials/` directories.
-
-Recommended layout:
+## Repository layout
 
 ```
-secrets/velora-wears-firebase-adminsdk.json   # gitignored
+storefront/   React + Vite storefront
+admin/        Admin dashboard - owned by the second developer
+functions/    Cloud Functions - trusted server-side code
+shared/       Shared TypeScript types - the data contract
 ```
 
-Then point at it in `.env.local`:
+`storefront` and `shared` are npm workspaces. `functions/` installs its own dependencies
+separately, because Firebase deploys that folder on its own.
 
-```bash
-FIREBASE_SERVICE_ACCOUNT_PATH=./secrets/velora-wears-firebase-adminsdk.json
-```
+## Architecture
 
-`GOOGLE_APPLICATION_CREDENTIALS` is honoured as a fallback if you prefer the Google-standard
-variable. If the key is ever exposed, revoke it in
-**Firebase Console → Project settings → Service accounts** and issue a new one.
+The storefront is a browser SPA, so it **cannot** hold the Admin SDK service account key —
+that would give any visitor full control of the database. So:
+
+- The browser **reads** the public catalog directly with the Firebase client SDK.
+- Anything touching money, stock, or customer data — placing an order, submitting a review —
+  goes through **Cloud Functions** running trusted server-side code.
+- Database rules deny all direct client writes.
+
+## Credentials
+
+**Admin SDK service account key.** Required only for local scripts and the emulator;
+deployed functions use the runtime service account.
+
+- Place the key file locally yourself — it is not in this repository.
+- Its path is configurable via `FIREBASE_SERVICE_ACCOUNT_PATH`.
+- It is **never committed**. `.gitignore` blocks `*serviceAccountKey.json`,
+  `*firebase-adminsdk*.json`, `*service-account*.json`, `secrets/`, and `credentials/`.
+
+If a key is ever exposed, revoke it in **Firebase Console → Project settings → Service
+accounts** and issue a new one.
+
+**Storefront web config.** The `VITE_FIREBASE_*` values are compiled into the browser bundle
+and are **public by design** — that is how the Firebase web SDK works. They are not secrets;
+security comes from the database rules.
 
 ## Getting started
 
 ```bash
-# 1. Install dependencies
-npm install
+npm install                       # storefront + shared workspaces
 
-# 2. Create your local env file
-cp .env.example .env.local     # then fill in real values
+cp storefront/.env.example storefront/.env.local
+# fill in with: firebase apps:sdkconfig WEB --project velora-wears
 
-# 3. Drop your service account JSON at the path set in .env.local
-
-# 4. Link the Firebase project (once, with the Firebase CLI)
-firebase login
-firebase use --add             # select the "Velora Wears" project
-
-# 5. Run
-npm run dev                    # http://localhost:3000
+npm run dev                       # Vite dev server, default port 5173
 ```
 
-Sanity check that the server sees its configuration:
-
-```bash
-curl http://localhost:3000/api/health
-```
-
-## Environment variables
-
-See [`.env.example`](.env.example) for the full template. Real values live in `.env.local`,
-which is gitignored.
-
-| Variable | Purpose |
-| -------- | ------- |
-| `FIREBASE_DATABASE_URL` | Realtime Database instance URL |
-| `FIREBASE_PROJECT_ID` | Firebase project ID (optional; inferred from the key) |
-| `FIREBASE_SERVICE_ACCOUNT_PATH` | Local path to the Admin SDK service account JSON |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Fallback path for the same key |
-| `FIREBASE_DATABASE_EMULATOR_HOST` | Point at the local emulator instead of live data |
+For the order flow, install functions dependencies once by running `npm install` inside
+`functions/`.
 
 ## Scripts
 
 | Command | Description |
-| ------- | ----------- |
-| `npm run dev` | Start the dev server |
+| --- | --- |
+| `npm run dev` | Storefront dev server |
 | `npm run build` | Production build |
-| `npm run start` | Serve the production build |
-| `npm run lint` | ESLint |
+| `npm run preview` | Serve the production build |
 | `npm run typecheck` | TypeScript, no emit |
-| `npm run emulators` | Realtime Database emulator on port 9000 |
-| `npm run deploy:rules` | Deploy `database.rules.json` |
+| `npm run emulators` | Local database + functions emulators |
+| `npm run deploy:rules` | Deploy `database.rules.json` — **overwrites live rules** |
+| `npm run deploy:functions` | Deploy Cloud Functions — **requires the Blaze plan** |
 
-## Project structure
+## Team
 
-```
-src/
-├── app/
-│   ├── api/health/route.ts   # setup smoke check
-│   ├── layout.tsx
-│   ├── page.tsx
-│   └── globals.css
-├── components/               # UI components (empty)
-└── lib/
-    ├── env.ts                # server-side env access
-    └── firebase/
-        ├── admin.ts          # Admin SDK singleton
-        └── db.ts             # Realtime Database helpers
-database.rules.json           # RTDB security rules (deny-all by default)
-firebase.json                 # Firebase CLI config (rules + emulator)
-```
+Two developers share this repository and one database:
 
-### Database rules
+- **Developer A** — storefront, Cloud Functions, order flow.
+- **Developer B** — admin dashboard (see [`admin/README.md`](admin/README.md)).
 
-`database.rules.json` ships **deny-all** (`.read: false`, `.write: false`). The Admin SDK
-bypasses rules, so server-side access keeps working; direct client access stays closed until
-rules are written deliberately alongside real features.
-
-## Next step
-
-Add `requirements.md` to the repo root. Feature development starts after that, on your
-confirmation.
+[`shared/types.ts`](shared/types.ts) is the **single source of truth** for stored data.
+Changing a type there is a breaking change for the other developer — agree it first.

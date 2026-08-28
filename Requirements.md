@@ -679,3 +679,144 @@ Every rule above must be enforced again on the server before an order is saved:
 - Customer personal data (email, phone, address) must never be publicly readable, and must
   not be exposed through reviews or any public page.
 - Sign-in must use secure, standard authentication with proper session handling.
+
+---
+
+## 18. Technical Stack and Architecture
+
+### Frontend
+
+The storefront must be built with **React + Vite** (TypeScript). This is a firm
+requirement, not a preference.
+
+### Database
+
+The project uses the **Firebase Realtime Database**.
+
+> **Clarification:** Firestore was mentioned informally in discussion, but the project is
+> confirmed on Realtime Database — that is the instance that is enabled, configured, and
+> live (`velora-wears-default-rtdb`, region `asia-southeast1`). Both the storefront and the
+> admin dashboard read and write the **same** Realtime Database. Any proposal to move to
+> Firestore must be agreed by both developers, because it changes every query on both sides.
+
+### Why there is server-side code
+
+The storefront is a browser-only single-page application, so it **cannot** hold the Firebase
+Admin SDK service account key — shipping that key to the browser would give any visitor full
+control of the database. Therefore:
+
+- The browser reads the public catalog directly using the Firebase **client** SDK, which is
+  fast and cacheable.
+- Anything involving money, stock, or customer data — placing an order, submitting a review
+  — goes through **Cloud Functions**, which run trusted server-side code. This is what makes
+  the server-side validation in section 17 possible.
+- Database rules deny all direct client writes.
+
+### Repository layout
+
+The storefront and the admin dashboard live in the **same repository**, in separate folders,
+sharing one documented data contract.
+
+```
+storefront/   React + Vite storefront
+admin/        Admin dashboard (second developer)
+functions/    Cloud Functions - trusted server-side code
+shared/       Shared TypeScript types - the data contract
+```
+
+### Component reuse — no duplicated code
+
+The UI must be built from **reusable components**. Writing the same markup or logic again in
+a different file is not acceptable.
+
+- Shared UI elements — buttons, inputs, product cards, badges, modals, ratings — must each
+  exist **once**, in a shared component, and be reused with props everywhere they appear.
+- Layout concerns such as page width and gutters live in one layout component, not repeated
+  per page.
+- Colours, spacing, and typography come from shared design tokens. Components must not
+  hardcode raw colour values.
+- Repeated data-fetching or formatting logic belongs in a shared hook or utility, not copied
+  between pages.
+- Before writing a new component, check whether an existing one can take a prop instead.
+
+---
+
+## 19. Performance and Query Optimisation
+
+The website must feel **fast**. Both developers are responsible for this, because the
+storefront's speed depends directly on how the admin dashboard writes data.
+
+### Query optimisation
+
+- **Every query must be indexed.** Any field used for ordering or filtering needs a matching
+  `.indexOn` entry in the database rules. Without it, Firebase downloads the entire node and
+  sorts it in the browser — the most common cause of a slow Realtime Database app.
+- **Never read an unbounded list.** Every query must be limited and paginated.
+- **Separate list data from detail data.** List views (products grid, search results,
+  category pages) must read a small denormalised summary record, not the full product. Full
+  descriptions and full-size image references are fetched only when a customer opens a
+  single product.
+- **Denormalise for reads.** The Realtime Database cannot filter and sort on two different
+  fields in one query. Where a combined filter and sort is needed, store a precomputed field
+  for it rather than downloading extra data and filtering in the browser.
+- **Precompute derived values at write time** — stock status, average rating, review count,
+  search text — so the storefront never has to compute them across many records.
+- **Cache reads on the client** so moving between pages does not refetch unchanged data.
+
+### Image optimisation
+
+Images are the largest thing on a clothing site and matter more than anything else here.
+
+- Each product image must be stored in **at least two variants**: a small `thumb` for cards
+  and grids, and a `full` version for the product detail gallery. Product listings must
+  never load full-resolution images.
+- Images must be compressed, and served in a modern format (such as WebP) where possible.
+- Images below the fold must be **lazy loaded**; the hero and above-the-fold images should
+  load eagerly.
+- Image dimensions must be known so space is reserved and the page does not shift while
+  loading.
+- The product detail gallery should load the first image immediately and the remaining
+  thumbnails afterwards.
+
+### Application performance
+
+- Route-level code splitting, so the first page load does not download the whole app.
+- Vendor code split from application code so cached bundles survive updates.
+- Debounced or explicit-trigger search (section 13 already requires search on Enter or
+  button, not per keystroke).
+- Skeleton or loading states instead of blank screens.
+
+---
+
+## 20. Team, Ownership, and Responsibilities
+
+Two developers work on this project, sharing one repository and one database.
+
+| Area | Owner |
+| --- | --- |
+| Storefront (React + Vite) — sections 1-7, 9-19 | Developer A |
+| **Admin Dashboard — section 8** | **Developer B (Huzaifa's friend)** |
+| Cloud Functions / order placement | Developer A |
+| Database rules and indexes | Both, agreed jointly |
+| `shared/types.ts` data contract | Both, agreed jointly |
+
+**The Admin Dashboard will be built by the second developer.** The storefront developer is
+not responsible for building it. The detailed admin dashboard specification is still to be
+provided (section 8).
+
+### The shared contract
+
+Because the two applications share one database, the boundary between them must be explicit:
+
+- `shared/types.ts` is the **single source of truth** for the shape of all stored data.
+  Neither developer may change a stored field unilaterally — a change there is a breaking
+  change for the other side.
+- Whoever writes a new query must add the matching `.indexOn` entry to the database rules in
+  the same change.
+- **The admin dashboard must keep the denormalised summary records in sync** whenever a
+  product is created or edited. The storefront's listing, search, and category pages read
+  those summaries, so a stale summary shows customers wrong prices or wrong stock.
+- **The admin dashboard must write both image variants** (`thumb` and `full`) when uploading
+  product images, per section 19.
+- Admin write access is granted through Firebase Auth: the admin's user ID must be listed
+  under `admins/{uid}` in the database.

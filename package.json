@@ -2,33 +2,20 @@
   "name": "velora-wears",
   "version": "0.1.0",
   "private": true,
-  "description": "Velora Wears - e-commerce clothing brand app backed by Firebase Realtime Database.",
+  "description": "Velora Wears - e-commerce clothing store. Storefront (React + Vite) and admin dashboard share one Firebase Realtime Database.",
+  "workspaces": [
+    "storefront",
+    "shared"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "typecheck": "tsc --noEmit",
-    "emulators": "firebase emulators:start --only database",
-    "deploy:rules": "firebase deploy --only database"
-  },
-  "dependencies": {
-    "firebase-admin": "^13.6.0",
-    "next": "^15.5.4",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "server-only": "^0.0.1"
-  },
-  "devDependencies": {
-    "@eslint/eslintrc": "^3.3.1",
-    "@tailwindcss/postcss": "^4.1.13",
-    "@types/node": "^22.18.1",
-    "@types/react": "^19.1.13",
-    "@types/react-dom": "^19.1.9",
-    "eslint": "^9.35.0",
-    "eslint-config-next": "^15.5.4",
-    "tailwindcss": "^4.1.13",
-    "typescript": "^5.9.2"
+    "dev": "npm run dev --workspace storefront",
+    "build": "npm run build --workspace storefront",
+    "preview": "npm run preview --workspace storefront",
+    "lint": "npm run lint --workspace storefront",
+    "typecheck": "npm run typecheck --workspace storefront",
+    "emulators": "firebase emulators:start --only database,functions",
+    "deploy:rules": "firebase deploy --only database",
+    "deploy:functions": "firebase deploy --only functions"
   },
   "engines": {
     "node": ">=20.9.0"
