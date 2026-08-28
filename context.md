@@ -3,7 +3,11 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-28. Setup and scaffold complete. **No product features are built yet.**
+Last updated: 2026-08-28. Scaffold complete. **Requirements section 1 (brand identity) is
+built.** Everything from section 2 onward is still to do.
+
+> **Working agreement:** we build in `Requirements.md` **section order**, one section at a
+> time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
 
 ---
 
@@ -72,14 +76,18 @@ Storefront builds clean; functions typecheck clean.
 | Cloud Functions | Scaffolded, typechecks; `placeOrder` **throws "unimplemented"** |
 | Database rules | Deployed — catalog readable, all client writes denied |
 | Data contract | `shared/types.ts` written |
+| Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
 | Product features | **None.** No catalog, cart, checkout, auth, reviews, admin |
-| Design | **No logo, no brand palette agreed.** Tokens in `index.css` are provisional |
+| Landing page | **Not built (section 2 — next).** Home is a brand holding page |
 | Seed data | **Database is empty.** Nothing to render yet |
+| Lint | `npm run lint` **fails** — `storefront/eslint.config.js` does not exist |
 
 ### Layout
 
 ```
 storefront/          React + Vite (Developer A)
+  public/                  favicon.svg, logo-mark.svg - standalone brand assets
+  src/components/brand/    Logo.tsx - the ONLY definition of the logo
   src/components/ui/       reusable primitives - Button exists as the pattern
   src/components/layout/   Container, Header, Footer
   src/features/            EMPTY - product/cart/checkout/reviews go here
@@ -152,6 +160,10 @@ Functions dependencies install separately, once: change into `functions/` and ru
 - **Build a shared component before writing markup twice** (§18). Extend `Button` with a
   variant rather than styling a one-off button somewhere else.
 - No hardcoded colours in components — use the tokens in `storefront/src/index.css`.
+- **Never redraw the logo.** Import `Logo` / `LogoMark` from
+  `storefront/src/components/brand/Logo.tsx` and pick a variant.
+- For a link that should look like a button, use `buttonClasses()` from `ui/Button.tsx`
+  rather than restyling an anchor.
 - Repo is **public**: assume anything committed is world-readable.
 - Path aliases: `@/*` maps to `storefront/src/*`, `@shared/*` maps to `shared/*`.
 
@@ -179,43 +191,98 @@ summaries with card-sized images; full records load only on the detail page.
 
 ## 8. Build order
 
-1. **Catalog foundation** — start here
-2. Product details page — gallery, size selection, stock states (§4, §11)
-3. Cart — size, quantity, totals (§6)
-4. Checkout + `placeOrder` Cloud Function, full §17 validation *(needs Blaze plan)*
-5. Order success page with the delivery animation (§12)
-6. Landing page — hero, featured, categories, testimonials, footer (§2)
-7. Search, filters, sorting (§13, §14)
-8. Auth + reviews, including the guest review flow (§16)
-9. *Admin dashboard — Developer B, not Developer A*
+We follow **`Requirements.md` section order**. Huzaifa reviews each section before the next
+one starts.
 
-### First task in detail — catalog foundation
+| # | Requirements section | State |
+| --- | --- | --- |
+| 1 | Brand overview — logo, palette, typography | **Done** |
+| 2 | Landing page — hero, featured, categories, testimonials, footer | **Next** |
+| 3 | Products page — grid, cards | to do |
+| 4 | Product details — gallery, size selection | to do |
+| 5 | Categories | to do |
+| 6 | Shopping cart | to do |
+| 7 | Checkout — guest + signed in | to do |
+| 8 | *Admin dashboard — **Developer B**, not us* | not ours |
+| 9 | Payment — COD only | to do |
+| 10 | Delivery charges | to do |
+| 11 | Stock and availability | to do |
+| 12 | Order success animation | to do |
+| 13 | Search | to do |
+| 14 | Filters and sorting | to do |
+| 15 | Mobile responsiveness | ongoing, every section |
+| 16 | Reviews and ratings | to do |
+| 17 | Validation and security | to do |
+| 18 | Stack and component reuse | ongoing, every section |
+| 19 | Performance | ongoing, every section |
 
-Goal: real products rendering from the real database, proving the whole stack works.
+### What section 1 delivered
 
-1. **Confirm the schema** in `shared/types.ts` — agree it with Developer B before seeding,
-   since changing it later breaks his dashboard.
-2. **Write a seed script** (Node + Admin SDK, run locally using the key in `secrets/`) that
-   populates a handful of realistic shirts and hoodies with per-size stock, categories, and
-   `settings/public`. Write `products` **and** `productSummaries` together — that dual write
-   is exactly what Developer B's dashboard will have to do. Placeholder images are fine, but
-   store both `thumb` and `full`.
-3. **Verify `storefront/src/lib/queries.ts` against real data.** It is written but has never
-   run. Confirm the indexes work and that no query downloads more than it needs.
-4. **Build the products grid** — a reusable `ProductCard`, a responsive grid, loading
-   skeletons, lazy-loaded images with reserved dimensions, and empty and error states.
+- **Logo** — `storefront/src/components/brand/Logo.tsx`. A tapered `V` monogram inside a
+  stamped ring, split down its axis: the left arm is `currentColor` so the mark works on
+  light *and* dark surfaces, the right arm is fixed antique gold. Variants: `full`
+  (default), `mark`, `stacked`. Verified legible down to 16px favicon size.
+  Standalone copies for the browser and for sharing live in `storefront/public/`.
+  **Reuse this component — never redraw the logo inline.**
+- **Palette** — deep plum ink `#241d33` with antique gold `#b8925a` on a warm cream canvas.
+  Status colours (`success`, `warning`, `danger`) are already defined, ready for the stock
+  badges in section 11 and form validation in section 17.
+- **Typography** — Playfair Display for headings (set once on `h1/h2/h3`), Inter for UI.
+  Loaded from Google Fonts in `storefront/index.html`.
+- **`Button` refactor** — now also exports `buttonClasses()`, so a `Link` can be styled
+  identically without duplicating the styles. Use it for link-buttons.
 
-Done when the products page renders real database data on mobile and desktop, with no
-duplicated markup and no unindexed query.
+### The next task in detail — section 2, the landing page
 
----
+The landing page needs a Featured Products section and a Categories section, so **the
+database has to have data first**. Agreed with Huzaifa: write a seed script.
+
+1. **Seed script** (Node + Admin SDK, run locally with the key in `secrets/`) that writes a
+   handful of realistic shirts and hoodies with per-size stock, plus categories and
+   `settings/public`. It must write `products` **and** `productSummaries` together — that
+   dual write is exactly what Developer B's dashboard will have to do. Placeholder images
+   are fine, but store both `thumb` and `full`.
+   *Note: `firebase-admin` is not currently a root dependency — add it as a devDependency.*
+2. **Verify `storefront/src/lib/queries.ts` against real data.** It has never actually run.
+   **Known bug to fix:** `getSettings()` reads `settings`, but the rules only expose
+   `settings/public` — that read will be denied. Confirm every index works.
+3. **Build the landing page** from reusable components. `ProductCard` built here is the same
+   one the products page uses in section 3 — build it once, properly.
 
 ## 9. Open questions — ask before inventing
 
-- **Brand identity and logo.** §1 requires a custom logo; no colours, typography, or
-  direction have been agreed. The palette in `index.css` is a placeholder. **Ask.**
-- **Product images.** No real photography exists. Placeholders for now?
-- **Blaze plan.** Not enabled. Blocks build step 4.
-- **Auth provider** for reviews (§16) — email/password, Google, or phone? Undecided.
-- **Delivery charges** (§10) — flat rate or per city?
-- **Admin dashboard spec** (§8) — still pending from the client.
+- ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
+  built and in use. Huzaifa can still ask for changes; edit the tokens in `index.css` and
+  `Logo.tsx`, never override colours in a component.
+- **Product images.** No real photography exists. Seeding with placeholders for now, agreed
+  with Huzaifa — these must be replaced before the client sees a finished site.
+- **Blaze plan.** Not enabled. Blocks checkout (section 7) and the `placeOrder` function.
+- **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
+- **Delivery charges** (section 10) — flat rate or per city? Undecided.
+- **Admin dashboard spec** (section 8) — still pending from the client.
+
+---
+
+## 10. Deployment
+
+The client is shown the site via **Vercel** (Huzaifa deploys manually from the GitHub repo).
+Firebase Hosting config still exists in `firebase.json` but is not the deployment path.
+
+`vercel.json` at the repo root already sets the build for this workspace layout:
+
+| Setting | Value |
+| --- | --- |
+| Root Directory | repo root (**not** `storefront/`) |
+| Build command | `npm run build` |
+| Output directory | `storefront/dist` |
+| Rewrites | all routes to `/index.html` — required, this is an SPA |
+
+> **The one thing that will break the deploy.** `storefront/.env.local` is gitignored, so
+> Vercel does not have the Firebase config. All seven `VITE_FIREBASE_*` variables must be
+> added in the Vercel project settings, for Production **and** Preview. Vite inlines them at
+> **build** time, so they must exist *before* the build runs, and the project must be
+> redeployed after they are added.
+>
+> Right now a missing config would not be noticed — nothing imports `firebase.ts` yet, so it
+> is tree-shaken out of the bundle. From section 2 onward the site will fail at runtime with
+> "Firebase config missing" if the variables are absent.
