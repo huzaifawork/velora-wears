@@ -1,0 +1,20 @@
+/**
+ * Shared formatting helpers. Prices are formatted in exactly one place, so a
+ * change to how money is displayed never has to be hunted down across pages
+ * (requirements section 18).
+ *
+ * Money is stored as a whole number of rupees — there are no paisa amounts in
+ * this catalog, and rounding never enters the picture.
+ */
+
+const rupees = new Intl.NumberFormat("en-PK", { maximumFractionDigits: 0 });
+
+/** `4290` -> `Rs 4,290`. */
+export function formatPrice(amount: number): string {
+  return `Rs ${rupees.format(amount)}`;
+}
+
+/** `4.75` -> `4.8`. Ratings are shown to one decimal place everywhere. */
+export function formatRating(rating: number): string {
+  return rating.toFixed(1);
+}
