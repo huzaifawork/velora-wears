@@ -92,7 +92,8 @@ Storefront builds clean; functions typecheck clean.
 | Data contract | `shared/types.ts` written |
 | Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
 | Landing page | **Done (section 2).** Hero, categories, featured grid, promos, story, reviews, Instagram strip, CTA, footer |
-| Demo catalog | 12 products, 3 categories, 6 reviews, settings — all typed against `shared/types.ts` |
+| Demo catalog | 12 products, 3 categories, settings — all typed against `shared/types.ts` |
+| Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
 | Product features | **None yet.** No products page, cart, checkout, auth, reviews, admin |
 | Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
@@ -298,7 +299,28 @@ data-loading hook: the **key must contain every input**, since it is what trigge
 **Demo catalog:** 12 products across shirts / hoodies / essentials, deliberately covering
 every stock state — one product entirely sold out (Kohl Poplin Shirt), two on low stock, and
 several with a single size sold out — so section 11's badges have real data to render.
-Six reviews from Pakistani customers feed the testimonials, typed as real `Review` records.
+
+**Mock reviews (36 of them).** Every product carries two to four reviews from Pakistani
+customers, written as real `Review` records: tied to an order id, display name only, no email
+or phone anywhere near them. They are deliberately not all five stars, and **one is seeded
+`hidden: true`** as spam an admin removed, so every read path proves it filters hidden reviews
+rather than assuming it.
+
+They drive three things:
+
+1. **the landing testimonials** — `listTestimonials()` takes the *best* review of each
+   product, not the newest overall, so the strip shows a spread of the collection rather than
+   three reviews of the same hoodie;
+2. **`ratingAvg` / `ratingCount` on every product summary**, which are now **derived from the
+   reviews** rather than hand-typed. That is the same precomputation the admin dashboard must
+   do at write time whenever a review is created, edited, hidden or deleted (section 19) — the
+   storefront must never average reviews at read time;
+3. **`listReviews(productId, limit)`**, wired through both sources and ready for the product
+   detail page. The Realtime Database implementation reads `reviews/{productId}` only, ordered
+   by the indexed `createdAt` with `limitToLast` — never the whole `reviews` node.
+
+Section 16's review *UI* — the form, the guest review token flow, editing and removal — is
+**not** built. Only the data and the read path are.
 
 **Demo images** are generated flat-lay illustrations, committed under `public/products`,
 `public/banners`, `public/categories`: WebP, `thumb` (600x800) + `full` (1100x1467), 430 KB
@@ -330,11 +352,19 @@ price and category on each card.
 4. Pagination: `listProducts` is limited to 24. A "load more" needs a real cursor; RTDB
    pagination is `startAfter` on the ordering key, not an offset.
 
-**When Blaze is bought and the switch happens**, the checklist is: write the seed script
-(Admin SDK, dual-writes `products` + `productSummaries`, idempotent, with a `--clear` flag),
-flip `VITE_DATA_SOURCE` to `firebase` locally and on Vercel, verify every index, decide where
-landing-page testimonials come from (see below), then delete `demoData.ts`, `demoSource.ts`
-and the demo images.
+**When Blaze is bought and the switch happens**, the checklist is:
+
+1. write the seed script (Admin SDK, dual-writes `products` + `productSummaries`, idempotent,
+   with a `--clear` flag);
+2. decide what happens to the **36 mock reviews**. They are demo content, not real customer
+   feedback, so they must NOT be seeded into the live database as if they were genuine — the
+   honest options are to ship with no reviews until real customers leave them, or to ask the
+   client for real feedback from their Instagram orders and seed that. Either way the
+   testimonials strip hides itself when there is nothing to show;
+3. agree the featured-reviews node with Developer B (see the note below), because
+   `listTestimonials()` returns nothing on the database path until it exists;
+4. flip `VITE_DATA_SOURCE` to `firebase` locally and on Vercel, verify every index;
+5. delete `demoData.ts`, `demoSource.ts` and the demo images.
 
 > **Known gap, by design:** `firebaseSource.listTestimonials()` returns an empty array, so the
 > testimonials section hides itself when the flag flips. Reviews live at
