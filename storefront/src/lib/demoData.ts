@@ -5,8 +5,8 @@ import type {
   Review,
   Settings,
   Size,
-  SizeStock,
 } from "@shared/types";
+import { FALLBACK_LOW_STOCK_THRESHOLD, stockLevel, totalStock } from "@shared/stock";
 
 /**
  * THROWAWAY demo catalog (Requirements section 18, "Data source").
@@ -31,14 +31,9 @@ const day = 86_400_000;
 export const demoSettings: Settings = {
   deliveryCharge: 250,
   freeDeliveryThreshold: 5000,
-  lowStockThreshold: 4,
+  lowStockThreshold: FALLBACK_LOW_STOCK_THRESHOLD,
   storeAnnouncement: "Free delivery on orders over Rs 5,000 — cash on delivery, nationwide.",
 };
-
-/** A product's total remaining units across every size. */
-function totalStock(sizes: Record<Size, SizeStock>): number {
-  return (Object.keys(sizes) as Size[]).reduce((sum, size) => sum + sizes[size].stock, 0);
-}
 
 interface Seed {
   slug: string;
@@ -701,6 +696,14 @@ for (const product of demoProducts) {
 export const demoSummaries: ProductSummary[] = demoProducts.map((product) => {
   const remaining = totalStock(product.sizes);
   const rating = ratingByProduct.get(product.id) ?? { avg: 0, count: 0 };
+  /**
+   * Section 11: the SAME rule the `product_summaries` VIEW applies, imported
+   * rather than restated. This used to read `<= threshold + 1`, so with the
+   * shipped threshold of 4 a piece with 5 left was "Low stock" here and "In
+   * stock" against the database — the badge changed meaning when
+   * `VITE_DATA_SOURCE` flipped, and nothing would have caught it.
+   */
+  const level = stockLevel(remaining, demoSettings.lowStockThreshold);
   return {
     id: product.id,
     name: product.name,
@@ -708,8 +711,9 @@ export const demoSummaries: ProductSummary[] = demoProducts.map((product) => {
     price: product.price,
     categorySlug: product.categorySlug,
     thumb: product.images[0].thumb,
-    inStock: remaining > 0,
-    lowStock: remaining > 0 && remaining <= demoSettings.lowStockThreshold + 1,
+    inStock: level !== "out-of-stock",
+    lowStock: level === "low-stock",
+    totalStock: remaining,
     ratingAvg: rating.avg,
     ratingCount: rating.count,
     active: true,

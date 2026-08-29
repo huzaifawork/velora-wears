@@ -57,6 +57,7 @@ interface SummaryRow {
   thumb: string;
   in_stock: boolean;
   low_stock: boolean;
+  total_stock: number;
   rating_avg: number | string;
   rating_count: number;
   active: boolean;
@@ -137,6 +138,9 @@ function toSummary(row: SummaryRow): ProductSummary {
     thumb: row.thumb,
     inStock: row.in_stock,
     lowStock: row.low_stock,
+    // The view has always computed this; it was simply never selected, so no
+    // list surface could answer section 11's "available product quantity".
+    totalStock: Number(row.total_stock),
     // Postgres returns numeric as a string to avoid precision loss in JSON.
     ratingAvg: Number(row.rating_avg),
     ratingCount: Number(row.rating_count),
@@ -208,7 +212,7 @@ function toReview(row: ReviewRow): Review {
 }
 
 const SUMMARY_COLUMNS =
-  "id, slug, name, price, category_slug, thumb, in_stock, low_stock, rating_avg, rating_count, active, created_at, search_text";
+  "id, slug, name, price, category_slug, thumb, in_stock, low_stock, total_stock, rating_avg, rating_count, active, created_at, search_text";
 
 /** Postgres treats `%` and `_` as wildcards inside `like`; a search term must not. */
 function escapeLike(term: string): string {
