@@ -6,6 +6,7 @@ import { Rating } from "@/components/ui/Rating";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StockBadge } from "@/features/products/StockBadge";
 import { formatPrice, prettifySlug } from "@/lib/format";
+import { productPath } from "@/lib/routes";
 
 /**
  * THE product card. Built here for the landing page's featured strip and reused
@@ -40,7 +41,7 @@ export function ProductCard({
   return (
     <article className="group">
       <Link
-        to={`/products/${product.slug}`}
+        to={productPath(product.slug)}
         className="block focus-visible:outline-none"
         aria-label={`${product.name} — ${formatPrice(product.price)}`}
       >

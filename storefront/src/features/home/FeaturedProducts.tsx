@@ -5,6 +5,7 @@ import { Container } from "@/components/layout/Container";
 import { buttonClasses } from "@/components/ui/Button";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { ProductGrid } from "@/features/products/ProductGrid";
+import { PRODUCTS } from "@/lib/routes";
 
 /**
  * The featured products strip (requirements section 2). It is deliberately just
@@ -28,7 +29,7 @@ export function FeaturedProducts({
           title="This season's most-worn pieces"
           description="A short edit of what is selling and what we would put on this week."
           action={
-            <Link to="/products" className={buttonClasses({ variant: "secondary" })}>
+            <Link to={PRODUCTS} className={buttonClasses({ variant: "secondary" })}>
               View all products
             </Link>
           }

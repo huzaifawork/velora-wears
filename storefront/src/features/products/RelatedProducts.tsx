@@ -5,6 +5,7 @@ import { Container } from "@/components/layout/Container";
 import { buttonClasses } from "@/components/ui/Button";
 import { SectionHeading } from "@/components/ui/SectionHeading";
 import { ProductGrid } from "@/features/products/ProductGrid";
+import { categoryPath } from "@/lib/routes";
 
 /**
  * "More from this category" under a product (requirements sections 4 and 5 —
@@ -44,7 +45,7 @@ export function RelatedProducts({
           title={`More from ${categoryName}`}
           action={
             <Link
-              to={`/products?category=${categorySlug}`}
+              to={categoryPath(categorySlug)}
               className={buttonClasses({ variant: "secondary", size: "sm" })}
             >
               View the category

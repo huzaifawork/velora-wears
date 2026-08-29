@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { Settings } from "@shared/types";
 import { Container } from "@/components/layout/Container";
 import { buttonClasses } from "@/components/ui/Button";
+import { PRODUCTS, categoryPath } from "@/lib/routes";
 import { Image } from "@/components/ui/Image";
 import { Marquee } from "@/components/ui/Marquee";
 import { Rating } from "@/components/ui/Rating";
@@ -65,11 +66,11 @@ export function Hero({ settings }: { settings: Settings | null | undefined }) {
           </p>
 
           <div className="mt-10 flex flex-wrap items-center gap-3">
-            <Link to="/products" className={buttonClasses()}>
+            <Link to={PRODUCTS} className={buttonClasses()}>
               Shop the collection
             </Link>
             <Link
-              to="/products?category=hoodies"
+              to={categoryPath("hoodies")}
               className={buttonClasses({ variant: "secondary" })}
             >
               Winter hoodies

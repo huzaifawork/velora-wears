@@ -2,6 +2,9 @@ import { Link } from "react-router-dom";
 
 import { Logo } from "@/components/brand/Logo";
 import { Container } from "@/components/layout/Container";
+import { useAsync } from "@/hooks/useAsync";
+import { getCategories } from "@/lib/queries";
+import { CATEGORIES, PRODUCTS, categoryPath } from "@/lib/routes";
 
 /**
  * Site footer (requirements section 2 — "a modern footer containing relevant
@@ -12,12 +15,11 @@ import { Container } from "@/components/layout/Container";
  * and support email before the client sees the finished site.
  */
 
-const shopLinks = [
-  { to: "/products", label: "All products" },
-  { to: "/products?category=shirts", label: "Shirts" },
-  { to: "/products?category=hoodies", label: "Hoodies" },
-  { to: "/products?category=essentials", label: "Essentials" },
-];
+/**
+ * How many categories the footer column lists before it gets long. "Browse
+ * categories" below it always reaches the rest (requirements section 5).
+ */
+const FOOTER_CATEGORIES = 4;
 
 const care = [
   "Cash on delivery, nationwide",
@@ -45,6 +47,20 @@ const socials = [
 ];
 
 export function Footer() {
+  // Built from the data for the same reason the header is: a category the admin
+  // adds must appear here, and one they retire must stop being linked
+  // (requirements sections 5 and 20). Cached by the query layer, so the footer
+  // shares the read with whatever page is above it.
+  const { data: categories } = useAsync(() => getCategories(), "categories");
+
+  const shopLinks = [
+    { to: PRODUCTS, label: "All products" },
+    ...(categories ?? [])
+      .slice(0, FOOTER_CATEGORIES)
+      .map((category) => ({ to: categoryPath(category.slug), label: category.name })),
+    { to: CATEGORIES, label: "Browse categories" },
+  ];
+
   return (
     <footer className="border-t border-line bg-canvas-alt">
       <Container className="grid gap-12 py-16 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">

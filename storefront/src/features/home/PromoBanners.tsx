@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 
 import { Container } from "@/components/layout/Container";
 import { buttonClasses } from "@/components/ui/Button";
+import { categoryPath } from "@/lib/routes";
 import { Image } from "@/components/ui/Image";
 
 /**
@@ -21,7 +22,7 @@ const banners = [
     eyebrow: "The shirting edit",
     title: "Linen and oxford, cut for real weather",
     body: "Breathable shirts that survive a Karachi afternoon and still look right at dinner.",
-    to: "/products?category=shirts",
+    to: categoryPath("shirts"),
     cta: "Shop shirts",
   },
   {
@@ -30,7 +31,7 @@ const banners = [
     eyebrow: "Winter drop",
     title: "400 GSM fleece, in from the cold",
     body: "Heavyweight hoodies with a hood that stands up and a fit that layers.",
-    to: "/products?category=hoodies",
+    to: categoryPath("hoodies"),
     cta: "Shop hoodies",
   },
 ];

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { Settings } from "@shared/types";
 import { Container } from "@/components/layout/Container";
 import { buttonClasses } from "@/components/ui/Button";
+import { PRODUCTS, categoryPath } from "@/lib/routes";
 import { formatPrice } from "@/lib/format";
 
 /**
@@ -28,11 +29,11 @@ export function CtaBand({ settings }: { settings: Settings | null | undefined })
             : "Browse the full collection, pick your size, and pay in cash at your door."}
         </p>
         <div className="mt-2 flex flex-wrap justify-center gap-3">
-          <Link to="/products" className={buttonClasses({ size: "lg" })}>
+          <Link to={PRODUCTS} className={buttonClasses({ size: "lg" })}>
             Start shopping
           </Link>
           <Link
-            to="/products?category=essentials"
+            to={categoryPath("essentials")}
             className={buttonClasses({ variant: "secondary", size: "lg" })}
           >
             Browse essentials

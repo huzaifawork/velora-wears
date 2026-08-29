@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Container } from "@/components/layout/Container";
 import { Logo } from "@/components/brand/Logo";
 import { buttonClasses } from "@/components/ui/Button";
+import { CATEGORIES, HOME, PRODUCTS } from "@/lib/routes";
 
 /**
  * Catch-all page.
@@ -28,10 +29,13 @@ export function NotFoundPage() {
         to browse, piece by piece.
       </p>
       <div className="mt-9 flex flex-wrap justify-center gap-3">
-        <Link to="/products" className={buttonClasses({ size: "lg" })}>
+        <Link to={PRODUCTS} className={buttonClasses({ size: "lg" })}>
           Shop the collection
         </Link>
-        <Link to="/" className={buttonClasses({ variant: "secondary", size: "lg" })}>
+        <Link to={CATEGORIES} className={buttonClasses({ variant: "secondary", size: "lg" })}>
+          Browse categories
+        </Link>
+        <Link to={HOME} className={buttonClasses({ variant: "ghost", size: "lg" })}>
           Back to home
         </Link>
       </div>

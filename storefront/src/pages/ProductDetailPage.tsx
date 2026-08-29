@@ -24,6 +24,7 @@ import {
   listReviews,
 } from "@/lib/queries";
 import { SIZES } from "@/lib/sizes";
+import { CATEGORIES, HOME, PRODUCTS, categoryPath } from "@/lib/routes";
 
 /**
  * The product detail page (requirements section 4) — name, price, description,
@@ -116,8 +117,9 @@ export function ProductDetailPage() {
     <>
       <Breadcrumbs
         items={[
-          { label: "Home", to: "/" },
-          { label: categoryName, to: `/products?category=${product.categorySlug}` },
+          { label: "Home", to: HOME },
+          { label: "Categories", to: CATEGORIES },
+          { label: categoryName, to: categoryPath(product.categorySlug) },
           { label: product.name },
         ]}
       />
@@ -133,7 +135,7 @@ export function ProductDetailPage() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <Link
-                  to={`/products?category=${product.categorySlug}`}
+                  to={categoryPath(product.categorySlug)}
                   className="text-[0.625rem] tracking-eyebrow text-accent uppercase transition hover:text-ink"
                 >
                   {categoryName}
@@ -266,7 +268,7 @@ function ProductMissing({ failed }: { failed: boolean }) {
           : "It may have been retired, or the link may be out of date. The rest of the collection is right here."}
       </p>
       <div className="mt-9 flex flex-wrap justify-center gap-3">
-        <Link to="/products" className={buttonClasses({ size: "lg" })}>
+        <Link to={PRODUCTS} className={buttonClasses({ size: "lg" })}>
           Shop the collection
         </Link>
         <Link to="/" className={buttonClasses({ variant: "secondary", size: "lg" })}>
