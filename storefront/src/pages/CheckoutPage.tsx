@@ -132,7 +132,11 @@ export function CheckoutPage() {
     }));
 
     try {
-      const result = await placeOrder({ items, customer }, accessToken);
+      const result = await placeOrder({ items, customer }, accessToken, {
+        subtotal: cart.subtotal,
+        deliveryCharge: cart.deliveryCharge,
+        total: cart.total,
+      });
 
       saveReceipt({
         orderId: result.orderId,
@@ -334,23 +338,26 @@ function FailureNotice({ error }: { error: PlaceOrderError }) {
 }
 
 /**
- * The storefront is still reading the throwaway demo catalog, whose product ids
- * do not exist in the database, so the `place-order` function has nothing to
- * sell and every order will be refused. That is a sequencing fact — the admin
- * dashboard creates the real products (section 8) and the data source flips —
- * and it is far better said out loud than discovered as an unexplained error
- * after the form has been filled in.
+ * The storefront is still reading the throwaway demo catalog, whose product
+ * ids do not exist in the database, so the real `place-order` function would
+ * refuse every order (it has nothing to sell). `placeOrder` (`lib/
+ * placeOrder.ts`) works around that by simulating a successful order locally
+ * instead of calling it — the form, its validation and the confirmation page
+ * are all the genuine article, only the write at the end is a local stand-in.
+ * That is worth saying out loud rather than leaving a customer to assume a
+ * "DEMO-" order number is real.
  *
  * This whole component disappears when `VITE_DATA_SOURCE` becomes `supabase`.
  */
 function DemoNotice() {
   return (
     <div className={`${notice} border-warning/40 bg-warning/5 text-warning`}>
-      <p className="font-medium">Preview catalog — orders cannot be completed yet.</p>
+      <p className="font-medium">Preview catalog — this order is a demo.</p>
       <p className="mt-2">
-        The pieces on this site are placeholders while the admin dashboard is being built, so they
-        do not exist in the store's database and an order placed here will be refused. Everything
-        else on this page is the real checkout: the form, its rules and the order it sends.
+        The pieces on this site are placeholders while the admin dashboard is being built, so
+        this order is not written to the store's real database — it will not appear in order
+        history or be shipped. Everything else on this page is the real checkout: the form, its
+        rules, and the order confirmation you will see.
       </p>
     </div>
   );

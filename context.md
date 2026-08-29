@@ -50,10 +50,13 @@ ownership) is a responsibilities document, not code — confirmed honest, nothin
 > end to end inside a rolled-back transaction — stock decremented correctly, the order carried
 > `payment_method: 'cod'`, and the database was left empty afterwards.
 
-**Checkout cannot be completed end to end yet, and that is a sequencing fact, not a bug.**
-The storefront still reads the demo catalog, whose product ids do not exist in the database,
-so `place_order()` refuses every order. The checkout page says so on screen. It resolves when
-the admin dashboard creates real products and `VITE_DATA_SOURCE` flips to `supabase`.
+**Checkout completes end to end now, including in demo mode — see the 2026-08-30 write-up
+below.** The storefront still reads the demo catalog, whose product ids do not exist in the
+real database, so a REAL order still cannot be written until the admin dashboard creates real
+products and `VITE_DATA_SOURCE` flips to `supabase`. What changed is that `lib/placeOrder.ts`
+no longer requires that to happen before a customer (or Huzaifa, demoing the site) can walk the
+whole flow and land on a genuine confirmation page — it simulates the order locally while in
+demo mode, clearly marked `DEMO-` so it can never be mistaken for a real one.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -1407,8 +1410,11 @@ statically, defeating the lazy-load it exists to enable.
 
 1. **Order history**, at `/account` — `lib/myOrders.ts`, a new module rather than a
    `CatalogSource` method, because unlike the catalog, an order has no demo-mode equivalent:
-   checkout always writes through the real Edge Function regardless of `VITE_DATA_SOURCE` (see
-   `lib/placeOrder.ts`), so reading it back always goes straight to Supabase too. **Security is
+   at the time this was written, checkout always wrote through the real Edge Function
+   regardless of `VITE_DATA_SOURCE`. **That changed on 2026-08-30** — `lib/placeOrder.ts` now
+   simulates an order locally in demo mode (see that write-up) — but `lib/myOrders.ts` itself
+   is unaffected: it still only ever reads Supabase, so a demo order (which is never written
+   there) correctly never appears in order history. **Security is
    the RLS policy, not this file** — it runs `select * from orders` with no `user_id` filter at
    all, because the policy already scopes it to `auth.uid()`; a guest or another customer's
    session gets `[]`, never an error and never someone else's order. Verified live: a fresh
@@ -2022,6 +2028,61 @@ screenshotting the home page, `/products` and the footer to confirm the render i
 
 No schema, Edge Function, or query change. Build, typecheck and lint stayed clean throughout.
 
+### Checkout works end to end now, 2026-08-30 — a local demo simulation
+
+Huzaifa reported checkout was not placing an order and asked for it fixed "whether db or
+localstorage" — his own words, and the deciding factor in which of two fixes to reach for.
+
+**The two options, and why the database one was not it.** The reason checkout could not
+complete was never a bug — it is the sequencing fact this file has documented since the
+Supabase migration: the storefront reads a throwaway demo catalog, whose product ids do not
+exist in Postgres, so `place_order()` correctly refuses every order (there is genuinely nothing
+in the database to sell). Fixing that at the database layer would mean writing real-looking
+products into the live `products` table — which is **Huzaifa's own standing instruction,
+repeated multiple times in this file**: "NEVER seed mock data into the live database... the
+schema is deployed and deliberately empty." Overriding that to make a demo work would have
+traded one deliberate rule for a convenience, and it is not this developer's rule to override
+unilaterally even with today's request in hand — he offered "localstorage" as the explicit
+alternative, and it is the one that does not touch that rule at all.
+
+**So the fix lives entirely in the browser, and the real backend is untouched.**
+`lib/placeOrder.ts` now checks `isLiveSource()` (`lib/queries.ts`) before doing anything else:
+in demo mode it never reaches the network, and instead builds a `PlaceOrderResult` locally —
+using the exact `subtotal`/`deliveryCharge`/`total` `useCartContents` already computed and was
+already showing the customer in the order summary, not re-derived a second way. The result is
+handed to `saveReceipt` exactly as a real one would be, so `/order/confirmed` — which has never
+read anything but the `sessionStorage` receipt, real orders included — cannot tell the
+difference and needed no changes at all.
+
+**What a demo order deliberately is NOT, so nobody mistakes one for real:**
+
+- **Not written to Supabase.** Nothing crosses the network. The database stays exactly as
+  empty as every prior write-up in this file promised it would.
+- **Not decremented from demo stock.** `demoData.ts`'s stock numbers are static; a demo
+  purchase does not reduce what the next visitor sees available. Worth revisiting only if that
+  specific realism is ever asked for — it would need a localStorage overlay `demoSource` reads
+  from, which is a real feature, not a small addition.
+- **Not visible in a signed-in customer's order history.** `lib/myOrders.ts` reads only
+  Supabase (see the correction added to the accounts write-up above) — a demo order exists
+  solely in the tab that placed it.
+- **Marked unmistakably.** The order number is `DEMO-VW-YYMMDD-XXXXX` — the real format
+  (`VW-YYMMDD-XXXXX`, from `place_order()`) with a `DEMO-` prefix that cannot appear on a real
+  order. `CheckoutPage`'s `DemoNotice` was reworded from "orders cannot be completed... will be
+  refused" (no longer true) to say plainly that the order that is about to be placed is a demo
+  that will not be written to the real store — said before the fact, not discovered afterward.
+
+**One pre-existing, unrelated limitation, not made worse by this:** the confirmation page's
+review composer (section 16) would still fail if actually submitted from a demo order, because
+`submit-review` looks the order up in a database it was never written to. This was already true
+before today — a demo order's product ids do not exist in Postgres either way — so this fix
+does not change that surface at all, only whether the order screen is reachable in the first
+place.
+
+**Verified by actually placing one**, not just by reading the new code: a headless Playwright
+browser added a real product to the bag, filled the checkout form, submitted it, and confirmed
+it landed on `/order/confirmed` with an order number in the `DEMO-VW-` shape, the correct line
+item, price and total, and zero console errors throughout. Build, typecheck and lint are clean.
+
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
@@ -2112,13 +2173,13 @@ No schema, Edge Function, or query change. Build, typecheck and lint stayed clea
   the database at the shipped threshold of 4. Any future stock-related surface (the admin
   dashboard's low-stock alerts included) should read `stockLevel()` rather than reimplementing
   the comparison — that is exactly the mistake this file exists to stop repeating.
-- **The happy path of checkout cannot be tested end to end yet**, because the storefront is
-  still on demo data whose product ids do not exist in the database, so `place_order()`
-  refuses every order. That is a sequencing fact, not a bug — it resolves when the admin
-  dashboard creates real products. **The checkout page says so on screen**, in a notice that
-  disappears on its own when `VITE_DATA_SOURCE` becomes `supabase`. What HAS been exercised
-  is everything up to and including the request: the form, its rules, the payload, and every
-  error the server can return.
+- ~~The happy path of checkout cannot be tested end to end yet~~ — **it can, since 2026-08-30,
+  through a local demo simulation** — see that write-up. **A REAL order still cannot be
+  written**, because the storefront is still on demo data whose product ids do not exist in the
+  database, so `place_order()` would still refuse every one — that part is still a sequencing
+  fact, not a bug, and still resolves only when the admin dashboard creates real products and
+  `VITE_DATA_SOURCE` flips to `supabase`. **The checkout page still says so on screen**, in a
+  notice reworded to describe the demo order rather than claim orders are refused outright.
 - ~~RATE LIMITING ON ORDER PLACEMENT AND REVIEW SUBMISSION IS NOT BUILT~~ **Built in section
   17, 2026-08-29, and verified by actually tripping each limit against the live project** — 8
   per 15 minutes on `place-order`, 15 per 15 minutes on `submit-review`, 20 per 15 minutes on
