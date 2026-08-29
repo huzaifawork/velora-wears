@@ -691,26 +691,38 @@ requirement, not a preference.
 
 ### Database
 
-The project uses the **Firebase Realtime Database**.
+The project uses **Supabase** — Postgres, with Supabase Realtime and Edge Functions.
 
-> **Clarification:** Firestore was mentioned informally in discussion, but the project is
-> confirmed on Realtime Database — that is the instance that is enabled, configured, and
-> live (`velora-wears-default-rtdb`, region `asia-southeast1`). Both the storefront and the
-> admin dashboard read and write the **same** Realtime Database. Any proposal to move to
-> Firestore must be agreed by both developers, because it changes every query on both sides.
+> **Superseded 2026-08-29.** This project was previously on the Firebase Realtime Database.
+> The Firebase project has since been **deleted** and the work migrated to Supabase. This
+> subsection replaces the earlier Firebase decision; anything elsewhere in this document
+> that still implies Firebase should be read as Supabase.
+>
+> **On "realtime":** Supabase Realtime is not a separate database. Supabase *is* Postgres,
+> and Realtime is a service that tails Postgres's write-ahead log and streams row changes
+> to subscribed clients over a WebSocket. So the live catalog behaviour is built from
+> ordinary tables, and every table in this project is published to Realtime.
+
+The live project is `VeloraWears` (region `ap-south-1`, Mumbai — the closest Supabase region
+to Pakistan). Both the storefront and the admin dashboard read and write the **same**
+database. The schema, its row level security policies, and the `place_order` function are
+version-controlled under `supabase/migrations/`; a change there is a change for both
+developers and must be agreed between them.
 
 ### Why there is server-side code
 
-The storefront is a browser-only single-page application, so it **cannot** hold the Firebase
-Admin SDK service account key — shipping that key to the browser would give any visitor full
-control of the database. Therefore:
+The storefront is a browser-only single-page application, so it **cannot** hold the Supabase
+**service role key** — that key bypasses row level security entirely, and shipping it to the
+browser would give any visitor full control of the database. Therefore:
 
-- The browser reads the public catalog directly using the Firebase **client** SDK, which is
-  fast and cacheable.
+- The browser reads the public catalog directly with the **anon key**, which is public by
+  design and constrained by row level security. This is fast and cacheable.
 - Anything involving money, stock, or customer data — placing an order, submitting a review
-  — goes through **Cloud Functions**, which run trusted server-side code. This is what makes
-  the server-side validation in section 17 possible.
-- Database rules deny all direct client writes.
+  — goes through a **Supabase Edge Function**, which runs trusted server-side code and holds
+  the service role key. This is what makes the server-side validation in section 17
+  possible.
+- Row level security denies all direct client writes. The `orders` table has no insert
+  policy for anonymous users at all.
 
 ### Repository layout
 
@@ -720,7 +732,7 @@ sharing one documented data contract.
 ```
 storefront/   React + Vite storefront
 admin/        Admin dashboard (second developer)
-functions/    Cloud Functions - trusted server-side code
+supabase/     Database migrations, RLS policies, and Edge Functions
 shared/       Shared TypeScript types - the data contract
 ```
 
@@ -743,9 +755,10 @@ a different file is not acceptable.
 
 > **Status: temporary. Added 2026-08-28. Remove this subsection when it no longer applies.**
 
-The client has not purchased the Firebase Blaze plan yet. Until the storefront has been
-reviewed and Blaze is enabled, the catalog is served from **demo data held in the frontend**
-rather than from the Realtime Database.
+Until the admin dashboard (section 8) exists to create real products, the catalog is served
+from **demo data held in the frontend** rather than from the database. The database schema is
+deployed and live, but is deliberately **empty**: placeholder products are never written to
+it.
 
 This is a staging decision only. It does **not** change the architecture above, and it is
 bound by two rules that keep it from becoming technical debt:
@@ -755,11 +768,11 @@ bound by two rules that keep it from becoming technical debt:
    `shared/types.ts` contract. Pages and components import from `queries.ts` and must never
    import the demo data directly — so they cannot tell the difference, and none of them need
    editing when the switch happens.
-2. **Switching to the Realtime Database is a one-file change**, controlled by a single flag.
-   The Realtime Database implementation stays in place and is not deleted.
+2. **Switching to the live database is a one-flag change** (`VITE_DATA_SOURCE=supabase`).
+   The Supabase implementation stays in place and is not deleted.
 
-Demo product images are committed to the repository and served as static assets. They are
-not uploaded to Firebase Storage, which is unavailable without Blaze.
+Demo product images are committed to the repository and served as static assets rather than
+uploaded to Supabase Storage.
 
 Both the demo data and the demo images are **throwaway**. They are removed once the admin
 dashboard (section 8) can create real products, and the storefront then reads live data as
@@ -774,20 +787,19 @@ storefront's speed depends directly on how the admin dashboard writes data.
 
 ### Query optimisation
 
-- **Every query must be indexed.** Any field used for ordering or filtering needs a matching
-  `.indexOn` entry in the database rules. Without it, Firebase downloads the entire node and
-  sorts it in the browser — the most common cause of a slow Realtime Database app.
+- **Every query must be indexed.** Any column used for filtering or ordering needs an index
+  in the migration that introduces the query. Without one, Postgres scans the whole table.
 - **Never read an unbounded list.** Every query must be limited and paginated.
 - **Separate list data from detail data.** List views (products grid, search results,
-  category pages) must read a small denormalised summary record, not the full product. Full
+  category pages) read the small `product_summaries` projection, not the full product. Full
   descriptions and full-size image references are fetched only when a customer opens a
   single product.
-- **Denormalise for reads.** The Realtime Database cannot filter and sort on two different
-  fields in one query. Where a combined filter and sort is needed, store a precomputed field
-  for it rather than downloading extra data and filtering in the browser.
-- **Precompute derived values at write time** — stock status, average rating, review count,
-  search text — so the storefront never has to compute them across many records.
-- **Cache reads on the client** so moving between pages does not refetch unchanged data.
+- **Derive, do not duplicate.** `product_summaries` is a database VIEW: stock status, average
+  rating and review count are computed from the underlying tables. Nothing has to keep it in
+  sync, so it cannot go stale. Only promote it to a materialised view if measurement shows
+  it is needed.
+- **Cache reads on the client** so moving between pages does not refetch unchanged data, and
+  let Supabase Realtime invalidate that cache when the data actually changes.
 
 ### Image optimisation
 
@@ -834,15 +846,16 @@ provided (section 8).
 
 Because the two applications share one database, the boundary between them must be explicit:
 
-- `shared/types.ts` is the **single source of truth** for the shape of all stored data.
-  Neither developer may change a stored field unilaterally — a change there is a breaking
-  change for the other side.
-- Whoever writes a new query must add the matching `.indexOn` entry to the database rules in
-  the same change.
-- **The admin dashboard must keep the denormalised summary records in sync** whenever a
-  product is created or edited. The storefront's listing, search, and category pages read
-  those summaries, so a stale summary shows customers wrong prices or wrong stock.
-- **The admin dashboard must write both image variants** (`thumb` and `full`) when uploading
-  product images, per section 19.
-- Admin write access is granted through Firebase Auth: the admin's user ID must be listed
-  under `admins/{uid}` in the database.
+- `shared/types.ts` is the **single source of truth** for the shape of data as the
+  applications use it, and `supabase/migrations/` is the source of truth for the database
+  itself. Neither developer may change either unilaterally — a change is a breaking change
+  for the other side.
+- Whoever writes a new query must add the matching index in the same migration.
+- **Summaries no longer need to be kept in sync.** `product_summaries` is a VIEW computed
+  from `products`, `product_sizes` and `reviews`, so the admin dashboard writes products and
+  the summary follows automatically. This was a real hazard under the previous database and
+  is now impossible.
+- **The admin dashboard must write both image variants** (`thumb_url` and `full_url`) when
+  uploading product images, per section 19.
+- Admin write access is granted through Supabase Auth: the admin's user id must exist in the
+  `admins` table. Row level security checks it via the `is_admin()` function.

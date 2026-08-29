@@ -7,9 +7,13 @@ Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-6, 13 and
 built** — brand, landing, products, product details, categories, the cart, search, and
 filters and sorting.
 
-**Everything that can be built without the Blaze plan is now done.** What is left all needs
-Cloud Functions: section 7 (checkout), section 12 (the order animation) and section 16's
-review form. Section 8 is Developer B's. See "Open questions" for the exact list.
+**MIGRATED TO SUPABASE on 2026-08-29.** The Firebase project has been deleted by its owner
+and every trace of Firebase is out of this repository. The stack is now Supabase — Postgres,
+Supabase Realtime, and Edge Functions. Read section 2 and section 4 before touching data code.
+
+**Nothing is blocked any more.** Edge Functions are on the Supabase free tier, so the Blaze
+paywall that blocked checkout is gone. Section 7 (checkout), section 12 and section 16 are
+all now buildable. Section 8 is Developer B's.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -35,8 +39,9 @@ An e-commerce storefront for **Velora Wears**, a Pakistani fashion brand. Two de
 ### Constraints that shape everything
 
 - **React + Vite is mandatory** (§18). Not Next.js — the original scaffold was migrated.
-- **Realtime Database, not Firestore** (§18). Firestore was mentioned in conversation; the
-  confirmed decision is RTDB, which is what is live and configured.
+- **Supabase (Postgres), not Firebase** (§18). Migrated 2026-08-29; the Firebase project is
+  deleted. Supabase Realtime is not a second database — Supabase *is* Postgres, and Realtime
+  streams row changes from it. Every table is published to Realtime.
 - **Guest checkout is mandatory** — orders without signing in (§7).
 - **Cash on Delivery only** in v1 (§9).
 - **Reviews are tied to a purchase, not an account** — signed-in buyers *and* guests with a
@@ -51,53 +56,61 @@ An e-commerce storefront for **Velora Wears**, a Pakistani fashion brand. Two de
 
 ## 2. Architecture, and why
 
-The storefront is a browser SPA, so it **cannot** hold the Admin SDK service account key —
-that would hand full database control to any visitor. Hence the split:
+The storefront is a browser SPA, so it **cannot** hold the Supabase **service role key** —
+that key bypasses row level security and would hand full database control to any visitor.
+Hence the split:
 
 ```
 Browser (React + Vite)
    |
-   +-- Firebase CLIENT SDK --read--> Realtime Database
-   |     public catalog only; rules allow read on
-   |     products, productSummaries, categories,
-   |     settings/public, reviews
+   +-- supabase-js, ANON key --read--> Postgres (via PostgREST)
+   |     public catalog only; row level security allows select on
+   |     products (active only), product_sizes, product_images,
+   |     categories, settings, reviews (not hidden)
    |
-   +-- Cloud Functions (callable) --write--> Realtime Database
-         trusted server code, Admin SDK
-         recomputes totals, re-checks stock, writes orders
+   +-- supabase-js Realtime  <--WebSocket-- Realtime server
+   |     row changes streamed from Postgres's write-ahead log.
+   |     RLS is re-checked per subscriber, so anon never sees an order.
+   |
+   +-- Edge Function (place-order) --write--> Postgres
+         Deno, SERVICE ROLE key, bypasses RLS
+         calls place_order() which recomputes totals,
+         re-checks stock and writes the order in ONE transaction
 ```
 
-Client writes are denied everywhere. The admin dashboard writes via Firebase Auth, with the
-admin's UID listed under `admins/{uid}`.
+Client writes are denied everywhere: `orders` has no insert policy for anon at all. The
+admin dashboard authenticates with Supabase Auth, and the user's id must exist in the
+`admins` table — `is_admin()` is what every admin policy calls.
 
-> **What the free (Spark) plan does and does not block.** The client has not bought Blaze
-> yet. Verified on 2026-08-28 by probing the live project:
+> **Verified against the live project on 2026-08-29**, with the anon key:
 >
-> - **Realtime Database writes via the Admin SDK work.** A write + read-back + delete probe
->   succeeded on Spark, so **seeding demo data needs no billing**. Sections 2-6 (landing,
->   products, product details, categories, cart) can all be built and demoed in full.
-> - **Cloud Storage is NOT provisioned** — `velora-wears.firebasestorage.app` returns 404,
->   because new Firebase projects require Blaze for Storage. So **product images must not be
->   uploaded to Firebase Storage.** See the image decision in section 9.
-> - **Cloud Functions cannot deploy** without Blaze. This is the one hard stop: it blocks
->   `placeOrder`, and therefore checkout — `Requirements.md` section 7.
+> - reading the catalog works; `orders` and `admins` both return `[]`;
+> - inserting an order is refused with `42501 violates row-level security policy`;
+> - updating a product price affects zero rows.
+>
+> `place_order` was also exercised end to end inside a transaction that was rolled back:
+> the price came from the database (a deliberately falsified price in the payload was
+> ignored), the admin-configured delivery charge was applied, and the per-size stock was
+> decremented by exactly the quantity ordered.
 
 ---
 
 ## 3. Current state
 
-Storefront builds clean; functions typecheck clean.
+Storefront builds, typechecks and lints clean.
 
 | Area | State |
 | --- | --- |
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
 | Routing | react-router-dom, `/`, `/products`, `/products/:slug`, `/categories` and `/cart`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
-| Firebase client | Wired, web app registered, config in `storefront/.env.local` |
+| Supabase client | `lib/supabase.ts`, anon key in `storefront/.env.local` and on Vercel |
 | Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
-| Data source | `VITE_DATA_SOURCE=demo`. Switches to `firebase` when Blaze is bought |
-| Cloud Functions | Scaffolded, typechecks; `placeOrder` **throws "unimplemented"** |
-| Database rules | Deployed — catalog readable, all client writes denied |
-| Data contract | `shared/types.ts` written |
+| Data source | `VITE_DATA_SOURCE=demo`. Switches to `supabase` when the admin dashboard can create real products |
+| Database schema | **Deployed and verified** — 10 tables + the `product_summaries` VIEW, in `supabase/migrations/` |
+| Row level security | **Enabled on all 10 tables and verified with the anon key** — catalog readable, orders and admins invisible, every client write refused |
+| Realtime | **All 8 data tables published.** `useCatalogRealtime` drops the read cache on any change |
+| Edge Function | `place-order` **deployed and implemented** — validates, then calls `place_order()` |
+| Data contract | `shared/types.ts` (app shape) + `supabase/migrations/` (database shape) |
 | Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
 | Landing page | **Done (section 2).** Hero, categories, featured grid, promos, story, reviews, Instagram strip, CTA, footer |
 | Products page | **Done (sections 3, 13, 14).** `/products` — the catalog, a category, search results, filters and sorting, all as URL state |
@@ -109,8 +122,8 @@ Storefront builds clean; functions typecheck clean.
 | Demo catalog | 12 products, 3 categories, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
-| Product features | Listing, detail, category browsing, the bag, search, filters and sorting. No checkout, auth, review UI, admin |
-| Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
+| Product features | Listing, detail, category browsing, the bag, search, filters and sorting. No checkout UI, auth, review UI, admin |
+| Seed data | **Database is empty — intentionally, and it stays that way.** Mock data is NEVER written to the live database. The catalog comes from `demoData.ts` in the frontend until the admin dashboard exists |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
 ### Layout
@@ -138,9 +151,10 @@ storefront/          React + Vite (Developer A)
   src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews
   src/pages/               HomePage, ProductsPage, ProductDetailPage, CategoriesPage,
                            CartPage, NotFoundPage
-  src/lib/firebase.ts      client SDK init
+  src/lib/supabase.ts      client init - anon key only, NEVER the service role key
   src/lib/queries.ts       read layer + cache + THE SOURCE SWITCH
-  src/lib/sources/         CatalogSource (the interface), firebaseSource, demoSource
+  src/lib/sources/         CatalogSource (the interface), supabaseSource, demoSource
+  src/hooks/useCatalogRealtime.ts  the ONE Realtime subscription for the whole tab
   src/lib/demoData.ts      throwaway demo catalog - never import from a component
   src/lib/format.ts        formatPrice / formatRating / formatDate / prettifySlug
   src/lib/sizes.ts         SIZES + SIZE_LABELS - the order sizes are shown in
@@ -149,35 +163,74 @@ storefront/          React + Vite (Developer A)
   src/lib/cartStore.ts     the bag as an external store over localStorage
   src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
-functions/           Cloud Functions, Admin SDK, own node_modules (NOT a workspace)
+supabase/
+  migrations/        THE DATABASE. Schema, RLS policies, place_order(). Deployed.
+  functions/
+    place-order/     Edge Function (Deno) - validation + the call into place_order()
+  config.toml        CLI config
 shared/types.ts      DATA CONTRACT - shared with Developer B
-database.rules.json  deployed
 ```
 
-npm workspaces cover `storefront` and `shared` only. `functions/` installs separately
-(run `npm install` inside that folder) — this is deliberate, because Firebase deploys that
-folder on its own and hoisted dependencies break it.
+npm workspaces cover `storefront` and `shared` only. `supabase/functions/` is Deno, not
+Node — it has no `package.json`, imports straight from `jsr:`/`npm:` URLs, and is deployed
+by the Supabase CLI. Do not try to make it a workspace.
 
 ---
 
-## 4. Firebase facts
+## 4. Supabase facts
 
 | | |
 | --- | --- |
-| Project ID | `velora-wears` |
-| RTDB instance | `velora-wears-default-rtdb`, region `asia-southeast1` |
-| Database URL | `https://velora-wears-default-rtdb.asia-southeast1.firebasedatabase.app` |
-| Web app ID | `1:290582204238:web:e6e3b2b3caad444d7a581f` |
-| CLI account | `mhuzaifatariq7@gmail.com` |
-| Functions region | `asia-southeast1` (set in `functions/src/index.ts`) |
+| Project name | `VeloraWears` |
+| Project ref | `owbnbzutqslihhnzdnyo` |
+| Region | `ap-south-1` (Mumbai) — the closest Supabase region to Pakistan |
+| API URL | `https://owbnbzutqslihhnzdnyo.supabase.co` |
+| Organisation | `Velora-Wears` (`sijdvqmehpvnkidonfcf`) |
+| Postgres | 17 |
+| Account | `mhuzaifatariq7@gmail.com` |
+| Dashboard | <https://supabase.com/dashboard/project/owbnbzutqslihhnzdnyo> |
 
-**Credentials.** The Admin SDK key is at
-`secrets/velora-wears-firebase-adminsdk-fbsvc-5f0b34bfb9.json` — gitignored, never commit,
-never print. It is only for local scripts; deployed functions use the runtime service account.
+> **There is a second, unrelated project on this account — `glow-plus-prod` in the
+> `glow-plus` org. Never touch it.** Always pass `--project-ref owbnbzutqslihhnzdnyo`.
 
-The `VITE_FIREBASE_*` values in `storefront/.env.local` are **public by design** — they are
-compiled into the browser bundle. That is normal for Firebase web config; security comes from
-the database rules.
+### Credentials — how to get them, because none of them are in this repo
+
+**The repository is PUBLIC. No key, token or password may ever be committed here.**
+
+| What | Where to get it | Used for |
+| --- | --- | --- |
+| `SUPABASE_ACCESS_TOKEN` (`sbp_…`) | <https://supabase.com/dashboard/account/tokens> | the CLI and Management API |
+| anon key | Dashboard → Project Settings → API | the browser; already in `storefront/.env.local` and on Vercel |
+| service role key | Dashboard → Project Settings → API | **never needed locally** — Edge Functions get it injected |
+| DB password | set when the project was created | `supabase db push` |
+
+**Ask Huzaifa for the access token at the start of a session that needs it**, and export it
+rather than pasting it into a command that gets logged:
+
+```bash
+export SUPABASE_ACCESS_TOKEN=sbp_...        # ask; never commit
+```
+
+The anon key in `storefront/.env.local` is **public by design** — it is compiled into the
+browser bundle. Security comes from row level security, not from hiding it. The service role
+key is the opposite: it bypasses RLS entirely and must never appear in `storefront/`.
+
+### Running SQL without the CLI or Docker
+
+Docker is deliberately **not** used on this project — there is no local stack, we work
+against the live project. The Management API runs arbitrary SQL, which is how the schema was
+applied and verified:
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"select count(*) from products"}' \
+  "https://api.supabase.com/v1/projects/owbnbzutqslihhnzdnyo/database/query"
+```
+
+For a large file, build the JSON body with Python (`json.dumps`) into a temp file and pass
+`--data @file` — a heredoc will mangle the quoting.
 
 ---
 
@@ -188,18 +241,45 @@ npm install                 # root - installs storefront + shared workspaces
 npm run dev                 # storefront dev server
 npm run build               # storefront production build
 npm run typecheck
-npm run deploy:rules        # deploys database.rules.json to LIVE
-npm run deploy:functions    # needs Blaze plan
-npm run emulators           # local database + functions
+npm run lint
 ```
+
+### Supabase CLI (via npx — it is not a dependency)
+
+Everything below needs `SUPABASE_ACCESS_TOKEN` exported first. Always name the project ref;
+there is another project on this account.
+
+```bash
+export SUPABASE_ACCESS_TOKEN=sbp_...        # ask Huzaifa
+
+# Deploy the Edge Function. --use-api avoids Docker; --no-verify-jwt is REQUIRED
+# because guest checkout must work without a session (Requirements section 7).
+npx supabase functions deploy place-order \
+  --project-ref owbnbzutqslihhnzdnyo --use-api --no-verify-jwt
+
+# Generate database types from the live schema
+npx supabase gen types typescript --project-id owbnbzutqslihhnzdnyo > shared/database.types.ts
+
+# Migrations: apply via the Management API (see section 4). `supabase db push`
+# needs the database password and a linked project.
+```
+
+### Vercel CLI
+
+```bash
+npx vercel env ls                                   # list configured variables
+npx vercel env add NAME production --type config    # value is read from stdin
+npx vercel env rm NAME production --yes
+```
+
+`--type config` is required for `VITE_` variables: the CLI refuses them otherwise, because
+the prefix publishes the value to every visitor. That is correct here — Supabase's URL and
+anon key are public by design.
 
 Deploying is `git push origin main` — Vercel builds it. See section 10.
 
-Functions dependencies install separately, once: change into `functions/` and run
-`npm install`.
-
 > **Port note:** port 3000 is occupied by another process on this machine. Vite defaults to
-> **5173** — check the dev server output for the actual port.
+> **5173** and walks upward — check the dev server output for the actual port.
 
 ---
 
@@ -208,10 +288,13 @@ Functions dependencies install separately, once: change into `functions/` and ru
 - **No `Co-Authored-By` trailers in commits.** The user does not want Claude appearing as a
   co-author on GitHub.
 - **The Admin SDK must never appear in `storefront/`.** If something needs privileged access,
-  it belongs in `functions/`.
-- **Every new `orderByChild` needs a matching `.indexOn`** in `database.rules.json`, added in
-  the same change. Missing indexes are the main cause of slow RTDB apps.
-- **List views read `productSummaries`, never `products`.**
+  it belongs in a Supabase Edge Function.
+- **The service role key must never appear in `storefront/`.** It bypasses row level
+  security. ESLint bans the Firebase packages outright; the service key is banned by review.
+- **Every new filter or sort column needs an index**, added in the same migration.
+- **List views read the `product_summaries` VIEW, never `products`.**
+- **Schema changes are migrations**, committed under `supabase/migrations/`. Never edit the
+  database through the dashboard UI — the next person will not know it happened.
 - **Never write an internal URL by hand.** Import `categoryPath` / `productPath` from
   `lib/routes.ts`. Six surfaces link to a category; they must agree on one URL.
 - **The bag never stores a price, a name or an image** — only ids, size and quantity.
@@ -219,7 +302,9 @@ Functions dependencies install separately, once: change into `functions/` and ru
   end up disagreeing with the server, which recomputes every total (§17).
 - **Never import `lib/demoData.ts` from a component or page.** Go through
   `lib/queries.ts` — that indirection is what makes switching to the database a
-  one-file change instead of a rewrite.
+  one-flag change instead of a rewrite.
+- **Never seed mock data into the live database.** Placeholder products live in the
+  frontend. The database is for real data the admin dashboard creates.
 - **Build a shared component before writing markup twice** (§18). Extend `Button` with a
   variant rather than styling a one-off button somewhere else.
 - No hardcoded colours in components — use the tokens in `storefront/src/index.css`.
@@ -227,28 +312,61 @@ Functions dependencies install separately, once: change into `functions/` and ru
   `storefront/src/components/brand/Logo.tsx` and pick a variant.
 - For a link that should look like a button, use `buttonClasses()` from `ui/Button.tsx`
   rather than restyling an anchor.
-- Repo is **public**: assume anything committed is world-readable.
+- Repo is **public**: assume anything committed is world-readable. **No access token, key
+  or password goes in any committed file — including this one.** See section 4 for where
+  each credential actually lives.
 - Path aliases: `@/*` maps to `storefront/src/*`, `@shared/*` maps to `shared/*`.
 
 ---
 
 ## 7. Data model
 
-Defined in [`shared/types.ts`](shared/types.ts) — read it before writing queries. Shape:
+Two sources of truth, and they are not the same thing:
+
+- **`supabase/migrations/`** — the DATABASE. Tables, columns, constraints, indexes, row
+  level security, and `place_order()`. This is what actually exists.
+- **[`shared/types.ts`](shared/types.ts)** — the shape the two APPLICATIONS pass around.
+  Read it before writing queries.
 
 ```
-products/{id}            full detail: description, all images, per-size stock
-productSummaries/{id}    small list projection: name, price, thumb, inStock, rating
-categories/{slug}
-orders/{id}              server-written only; customer PII; reviewToken for guest reviews
-reviews/{productId}/{id}
-settings/public          deliveryCharge etc, readable by checkout
-settings/private         admin only
-admins/{uid}             grants admin write access
+categories          slug PK, name, sort_order, thumb, description
+products            id, slug, name, description, price, category_slug FK,
+                    active, search_text (GENERATED, trigram indexed)
+product_sizes       (product_id, size) PK, stock        <- per-size stock, section 11
+product_images      product_id, position, thumb_url, full_url, width, height
+reviews             product_id, order_id, rating, comment, display_name,
+                    verified_purchase, hidden           <- unique (order_id, product_id)
+orders              customer PII, subtotal/delivery/total, review_token  SERVER-WRITTEN ONLY
+order_items         snapshot of name/slug/thumb/size/qty/unit_price at order time
+settings            ONE row: delivery_charge, free_delivery_threshold, low_stock_threshold
+settings_private    admin only
+admins              user_id FK auth.users            <- is_admin() reads this
+
+product_summaries   *** A VIEW ***
 ```
 
-The `products` / `productSummaries` split is the core performance decision (§19): grids read
-summaries with card-sized images; full records load only on the detail page.
+### The one thing to understand before writing any data code
+
+**`product_summaries` is a VIEW, not a table.** Under Firebase it was a hand-maintained copy
+that the admin dashboard had to rewrite on every product edit, and a missed write showed
+customers the wrong price. Postgres computes it instead:
+
+- `in_stock` / `low_stock` / `total_stock` — summed from `product_sizes`
+- `rating_avg` / `rating_count` — averaged from visible `reviews`
+- `thumb` — the first `product_images` row by position
+
+So **there is nothing to keep in sync, and it cannot go stale.** The whole class of bug is
+gone, and the obligation that used to be on Developer B is gone with it.
+
+The view is declared `security_invoker = on`, which makes it run with the caller's
+permissions so RLS on the underlying tables applies. Without that a view silently runs as
+its owner and becomes a way around RLS. **Do not remove it.**
+
+### snake_case vs camelCase
+
+Postgres columns are `snake_case`; `shared/types.ts` is `camelCase`, and timestamps are epoch
+milliseconds there but ISO strings in Postgres. The mapping happens in ONE place —
+`lib/sources/supabaseSource.ts`, at the boundary. Nothing above that file knows.
 
 ---
 
@@ -265,7 +383,7 @@ one starts.
 | 4 | Product details — gallery, size selection | **Done** |
 | 5 | Categories | **Done** |
 | 6 | Shopping cart | **Done** |
-| 7 | Checkout — guest + signed in | **Next** — blocked on Blaze |
+| 7 | Checkout — guest + signed in | **Next** — no longer blocked; the Edge Function is live |
 | 8 | *Admin dashboard — **Developer B**, not us* | not ours |
 | 9 | Payment — COD only | to do |
 | 10 | Delivery charges | to do |
@@ -278,6 +396,13 @@ one starts.
 | 17 | Validation and security | to do |
 | 18 | Stack and component reuse | ongoing, every section |
 | 19 | Performance | ongoing, every section |
+
+> **The section write-ups below are a HISTORICAL LOG.** Sections 1-6, 13 and 14 were built
+> against Firebase, and the notes still name `firebaseSource`, `database.rules.json`,
+> `.indexOn`, `productSummaries` as a node, and the Blaze plan. **The reasoning is still
+> worth reading — the design decisions carried over — but the file and API names did not.**
+> The code was ported to Supabase on 2026-08-29; sections 2, 4 and 7 above describe what is
+> actually there now. Nothing below is a live instruction.
 
 ### What section 1 delivered
 
@@ -718,12 +843,56 @@ reading full products for a grid — which §19 forbids — or adding a denormal
 shared contract, which is Developer B's to agree. Search suggestions and typo tolerance are
 not possible on RTDB prefix matching and would need a search service.
 
-### The next task — section 7, checkout (BLOCKED on Blaze)
+### What the Supabase migration delivered (2026-08-29)
 
-**Everything that does not need Blaze is now finished.** Sections 1-6, 13 and 14 are built
-and shipped. What remains needs the `placeOrder` Cloud Function — `functions/src/index.ts`
-still throws `unimplemented`, and Cloud Functions will not deploy on Spark. This is the hard
-stop noted in section 2, and there is no longer any storefront work to do around it.
+The Firebase project was deleted by its owner, so the whole stack moved to Supabase in one
+go. Nothing was lost: the database had deliberately always been empty, and the catalog lives
+in the frontend.
+
+**Deleted outright:** `functions/` (Firebase Cloud Functions), `firebase.json`, `.firebaserc`,
+`database.rules.json`, `secrets/` (the dead service-account key — never committed, checked),
+`storefront/src/lib/firebase.ts`, `storefront/src/lib/sources/firebaseSource.ts`, the
+`firebase` npm dependency, and all seven `VITE_FIREBASE_*` variables on Vercel.
+
+**Added and VERIFIED against the live project:**
+
+- `supabase/migrations/` — 10 tables, the `product_summaries` VIEW, row level security on
+  every table, all 8 data tables published to Realtime, and `place_order()`.
+- `supabase/functions/place-order/` — the Edge Function, deployed. Field validation
+  (§17: Pakistani mobile format, optional postal code, whitespace-only rejected) lives here;
+  the money and the stock live in SQL.
+- `storefront/src/lib/supabase.ts`, `lib/sources/supabaseSource.ts`,
+  `hooks/useCatalogRealtime.ts`.
+
+**Three things got genuinely better, not just ported:**
+
+1. **`product_summaries` is a VIEW.** The admin dashboard no longer has to keep a
+   denormalised copy in sync, so the stale-summary bug is impossible. That obligation is
+   removed from Developer B's brief.
+2. **Search is substring, not prefix.** Postgres `ilike` over a trigram index means "shirt"
+   finds "Oxford Shirt". The Realtime Database could only match the start of a name — the
+   limitation flagged for the client after section 13 is simply gone.
+3. **Testimonials work.** `firebaseSource.listTestimonials()` had to return `[]` because
+   reviews were stored per product with no flat node to read from. It is one indexed query
+   here. The "agree a featured-reviews node with Developer B" task is dead.
+
+**One real bug, caught by testing:** `place_order` used `gen_random_bytes()` for the order
+number. That is in the `pgcrypto` extension, which is not installed on a stock Supabase
+database, so every order failed with "function does not exist". It now uses the built-in
+`gen_random_uuid()`. This is exactly why the function was exercised end to end rather than
+assumed to work.
+
+**What was verified, and how:** the anon key can read the catalog and gets `[]` from `orders`
+and `admins`; inserting an order is refused with `42501`; updating a price affects zero rows.
+`place_order` was run inside a transaction that was rolled back — a deliberately falsified
+price in the payload was ignored in favour of the database's, delivery came from settings,
+and per-size stock decremented by exactly the quantity ordered. **The database was left
+empty.**
+
+### The next task — section 7, checkout
+
+**No longer blocked.** Supabase Edge Functions are on the free tier, and `place-order` is
+already deployed and working. What is missing is only the UI.
 
 What section 7 asks for: guest checkout with **no mandatory authentication**, the field list
 in §7 as clarified by §17 (postal code is OPTIONAL), validation that blocks confirmation
@@ -732,75 +901,55 @@ dashboard.
 
 What already exists:
 
-1. **The bag is ready to hand over.** A stored `CartItem` is deliberately a superset of
+1. **The Edge Function is done.** `POST /functions/v1/place-order` with
+   `{ items: [{productId, size, qty}], customer: {...} }`. It returns
+   `{ orderId, orderNumber, reviewToken, total }`, or `{ error: { code, message, fields? } }`.
+   The `fields` object is keyed by form field name, ready to drive inline errors.
+   Error codes: `VALIDATION`, `INVALID_ITEMS`, `OUT_OF_STOCK`, `PRODUCT_UNAVAILABLE`,
+   `EMPTY_CART`, `ORDER_FAILED`.
+2. **The bag is ready to hand over.** A stored `CartItem` is a superset of
    `PlaceOrderInput["items"]` — drop `slug` and it is the payload. `buildCart` already knows
    which lines are orderable.
-2. `OrderCustomer`, `PlaceOrderInput` and `PlaceOrderResult` are already in
-   `shared/types.ts`, and `orders/` is already server-write-only in the rules.
 3. `CHECKOUT` is already in `lib/routes.ts` and already linked from the bag.
 
 Before writing anything:
 
-- **Ask Huzaifa whether Blaze has been bought.** If it has not, the only remaining option is
-  to build the checkout FORM and its validation against a `placeOrder` that still throws, so
-  the flow is ready the day billing is enabled — the order cannot actually be placed, and
-  section 12's success animation has no real order to show. Say that plainly rather than
-  shipping a checkout that looks finished and is not.
-- **Validation belongs in one place.** §17 requires the same rules on the client and again on
-  the server. Put them in `shared/` so `functions/` and the storefront cannot drift — that is
-  a shared-contract addition, so agree it with Developer B.
-- **The bag is ready to hand over unchanged.** Drop `slug` from a `CartItem` and it is
-  `PlaceOrderInput["items"]`. Do not invent a second shape for it.
-
-*(Section 6's brief is above, under "What section 6 delivered".)*
-
-**When Blaze is bought and the switch happens**, the checklist is:
-
-1. write the seed script (Admin SDK, dual-writes `products` + `productSummaries`, idempotent,
-   with a `--clear` flag);
-2. decide what happens to the **36 mock reviews**. They are demo content, not real customer
-   feedback, so they must NOT be seeded into the live database as if they were genuine — the
-   honest options are to ship with no reviews until real customers leave them, or to ask the
-   client for real feedback from their Instagram orders and seed that. Either way the
-   testimonials strip hides itself when there is nothing to show;
-3. agree the featured-reviews node with Developer B (see the note below), because
-   `listTestimonials()` returns nothing on the database path until it exists;
-4. flip `VITE_DATA_SOURCE` to `firebase` locally and on Vercel, verify every index;
-5. delete `demoData.ts`, `demoSource.ts` and the demo images.
-
-> **Known gap, by design:** `firebaseSource.listTestimonials()` returns an empty array, so the
-> testimonials section hides itself when the flag flips. Reviews live at
-> `reviews/{productId}/{id}` with no flat node to read the newest few from, and reading every
-> product's reviews is exactly what section 19 forbids. Section 16 resolves it with a
-> denormalised, admin-maintained featured-reviews node — agree that node with Developer B
-> before building it, because it is a shared-contract change.
+- **Client validation must mirror the Edge Function's rules exactly**, or a customer will
+  pass the form and be rejected by the server. The server's rules are the authority and are
+  in `supabase/functions/place-order/index.ts` — consider lifting the shared regexes into
+  `shared/` so the two cannot drift.
+- **The catalog is still demo data.** `VITE_DATA_SOURCE=demo`, so product ids are
+  `demo-01`-style strings that do not exist in the database. A real order therefore cannot
+  be placed end to end until the admin dashboard has created real products. Build the form
+  and wire the call; say plainly that the happy path is untestable until then.
+- **Section 12's success animation** needs a real order, so it is in the same position.
 
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
   built and in use. Huzaifa can still ask for changes; edit the tokens in `index.css` and
   `Logo.tsx`, never override colours in a component.
-- **Product images — decided and built.** No real photography exists, and Firebase Storage
-  is unavailable without Blaze. Demo images are **generated flat-lay illustrations committed
-  to the repo** under `storefront/public/{products,banners,categories}` and served by
+- **Product images — decided and built.** No real photography exists. Demo images are
+  **generated flat-lay illustrations committed to the repo** under `storefront/public/{products,banners,categories}` and served by
   Vercel's CDN: free, fast, no billing, deleted in one commit when real photography arrives.
   Both `thumb` and `full` variants, WebP, known dimensions. **Ask the client for real
   photography — these must be replaced before sign-off.**
 - **Placeholder contact details, still to be replaced.** The footer's Instagram, WhatsApp and
   Facebook links, `hello@velorawears.pk`, `+92 000 0000000`, and the `@velorawears` handle in
   the Instagram strip are invented. Get the brand's real accounts from the client.
-- **Blaze plan.** Not enabled, and the client has not bought it yet. Blocks *only* Cloud
-  Functions — so checkout (section 7) and `placeOrder`. Everything up to and including the
-  cart can be finished without it. Seeding does **not** need it.
-- **Demo data is temporary, and lives in the frontend for now** (`lib/demoData.ts`), not in
-  the database — Huzaifa's staging decision while the client has not bought Blaze. It is
-  deleted once the admin dashboard can create real products. The seed script that replaces
-  it must be idempotent and ship a `--clear` flag, so the handover is one command.
-- **Landing-page testimonials after the switch** — the demo path serves six reviews; the
-  Realtime Database path returns none until section 16 defines a featured-reviews node.
-  Agree that node with Developer B before section 16 starts.
-- **The database is deliberately empty and stays that way for now.** Do not seed it without
-  asking — the storefront is not reading from it yet.
+- ~~Blaze plan~~ — **gone with Firebase.** Supabase Edge Functions are on the free tier, so
+  nothing is paywalled. There is no billing blocker on this project any more.
+- **Demo data is temporary, and lives in the frontend** (`lib/demoData.ts`), not in the
+  database. It is deleted once the admin dashboard can create real products, at which point
+  `VITE_DATA_SOURCE` flips to `supabase`.
+- **NEVER seed mock data into the live database.** Huzaifa's explicit instruction, and the
+  right call: placeholder products and invented customer reviews do not belong in a
+  production database. The schema is deployed and deliberately **empty**. It was seeded once
+  during the migration purely to verify row level security, then cleared — verified back to
+  zero rows.
+- ~~Landing-page testimonials after the switch~~ — **resolved by the migration.**
+  `supabaseSource.listTestimonials()` is one indexed query. The featured-reviews node that
+  Firebase would have needed is not required.
 - ~~Category URL shape~~ — **resolved in section 5.** `/products?category=<slug>` is the one
   canonical category URL, `/categories` is the index, and `lib/routes.ts` is the only place
   either is written. There is no `/category/:slug` route, and there should not be one.
@@ -816,14 +965,16 @@ Before writing anything:
   and clearing site data empties it. That is a consequence of having no server, not an
   oversight — say so if the client asks. A saved bag needs auth, which §7 explicitly does
   not require.
-- **Blaze is now THE blocker, and there is no work left around it.** Sections 1-6, 13 and 14
-  are done and shipped without it. Everything remaining — section 7 (checkout), section 12
-  (the order animation) and section 16's review form — needs Cloud Functions. Section 8 is
-  Developer B's. **Ask the client to enable billing.**
-- **Search is prefix-only, on both data sources.** `startAt`/`endAt` is the whole of what the
-  Realtime Database can do, so "oxford" finds the Oxford Shirt but "shirt" does not. If the
-  client expects mid-word search, that is a search service (Algolia, Typesense) or a
-  denormalised token index the admin writes — a real decision, not a small fix. **Raise it
+- **Nothing is blocked.** Sections 1-6, 13 and 14 are done and shipped; section 7 (checkout)
+  is next and its server side is already deployed. Section 8 is Developer B's.
+- **The happy path of checkout cannot be tested end to end yet**, because the storefront is
+  still on demo data whose product ids do not exist in the database. That is a sequencing
+  fact, not a bug — it resolves when the admin dashboard creates real products.
+- ~~Search is prefix-only~~ — **fixed by the migration.** Postgres `ilike` over a trigram
+  index does substring matching, so "shirt" now finds "Oxford Shirt". The demo source still
+  matches on prefix only, so search feels narrower in demo mode than it will in production;
+  that difference disappears when the flag flips. *(Superseded note kept below for context.)*
+- ~~Prefix-only search was a limitation to raise with the client.~~ **Raise it
   with the client before they notice it themselves.**
 - **No price-range or size filter.** Size stock is on `products/{id}.sizes`, not on the
   summary, so filtering by it needs a denormalised field agreed with Developer B rather than
@@ -839,15 +990,17 @@ Before writing anything:
 **Live URL (this is the link the client gets):** <https://velora-wears.vercel.app>
 
 Deployed on **Vercel**, under the `huzaifas-projects-eabfae35` scope, project `velora-wears`.
-The GitHub repo is connected, so **every push to `main` deploys automatically**. Firebase
-Hosting config still exists in `firebase.json` but is not the deployment path.
+The GitHub repo is connected, so **every push to `main` deploys automatically**.
+
+The database and the Edge Function are deployed SEPARATELY, to Supabase — pushing to `main`
+does not touch them. See section 5 for those commands.
 
 Each requirements section ships when it is pushed, always to the same URL, so the client's
 link never changes.
 
 ```bash
 git push origin main           # THIS is the deploy - Vercel builds the commit
-vercel env ls                  # confirm the 7 VITE_FIREBASE_* vars, 3 environments each
+npx vercel env ls              # confirm the 3 VITE_* vars, 3 environments each
 ```
 
 `vercel deploy --prod --yes` exists and works, but after a push it is redundant — it uploads
@@ -865,19 +1018,25 @@ to ship something that is deliberately not on `main`.
 
 ### Environment variables — already configured, do not re-add
 
-`VITE_DATA_SOURCE` is set to `demo` for **Production, Preview and Development**. Flipping the
-storefront to the Realtime Database means changing it there and redeploying — Vite inlines it
-at build time.
+Three variables, each set for **Production, Preview and Development** (9 rows). Updated
+2026-08-29: the seven `VITE_FIREBASE_*` variables were removed and these added.
 
-All seven `VITE_FIREBASE_*` variables are set for **Production, Preview and Development**
-(21 rows). `storefront/.env.local` is gitignored, so Vercel could not have got them from the
-repo.
+| Variable | Value |
+| --- | --- |
+| `VITE_SUPABASE_URL` | `https://owbnbzutqslihhnzdnyo.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | the anon key — public by design |
+| `VITE_DATA_SOURCE` | `demo` |
 
-Two of them — `VITE_FIREBASE_API_KEY` and `VITE_FIREBASE_DATABASE_URL` — need
-`vercel env add <NAME> <env> --type config`. The CLI refuses them without an explicit type,
-because a `VITE_` prefix publishes the value to every visitor. **`config` is correct here**:
-Firebase web config is public by design and must be inlined into the browser bundle for the
-client SDK to work at all. The security boundary is `database.rules.json`, not secrecy. Do
-not "fix" this by making them secrets — it would break the client SDK.
+Flipping the storefront to the live database means changing `VITE_DATA_SOURCE` to `supabase`
+there and redeploying.
+
+`VITE_` variables need `npx vercel env add <NAME> <env> --type config`. The CLI refuses them
+without an explicit type, because the prefix publishes the value to every visitor. **`config`
+is correct here**: the Supabase URL and anon key are public by design and must be inlined
+into the bundle for the client to work at all. The security boundary is row level security,
+not secrecy. Do not "fix" this by making them secrets — it would break the client.
+
+**The service role key is NOT here and must never be.** Edge Functions get it from the
+platform.
 
 > Vite inlines these at **build** time, so changing one requires a redeploy to take effect.
