@@ -52,7 +52,8 @@ interface NavItem {
   exactPath?: string;
 }
 
-const linkClasses = "text-xs font-medium tracking-eyebrow uppercase transition hover:text-accent";
+const linkClasses =
+  "shrink-0 text-xs font-medium tracking-eyebrow whitespace-nowrap uppercase transition hover:text-accent";
 
 export function Header() {
   const [open, setOpen] = useState(false);
@@ -119,7 +120,7 @@ export function Header() {
         </p>
       )}
 
-      <Container className="flex h-20 items-center justify-between gap-6">
+      <Container wide className="flex h-20 items-center justify-between gap-6">
         <Link
           to="/"
           onClick={() => setOpen(false)}
@@ -138,7 +139,11 @@ export function Header() {
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-9 lg:flex" aria-label="Primary">
+        {/* `xl`, not `lg`: six labels — two of them two words — need more room
+            than 1024px gives even after the width and gap fixes above
+            (client feedback, 2026-08-29). Below 1280px the hamburger menu
+            covers it instead, same as it always has below `lg`. */}
+        <nav className="hidden items-center gap-7 xl:flex" aria-label="Primary">
           {links.map((link) => {
             const active = isActive(link);
             return (
@@ -195,7 +200,7 @@ export function Header() {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-controls="mobile-nav"
-            className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-full text-ink transition hover:bg-canvas-alt lg:hidden"
+            className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-full text-ink transition hover:bg-canvas-alt xl:hidden"
           >
             <span className="sr-only">{open ? "Close menu" : "Open menu"}</span>
             <svg
@@ -229,7 +234,7 @@ export function Header() {
         <nav
           id="mobile-nav"
           aria-label="Primary"
-          className="border-t border-line bg-canvas lg:hidden"
+          className="border-t border-line bg-canvas xl:hidden"
         >
           <Container className="flex flex-col py-2">
             {links.map((link) => {

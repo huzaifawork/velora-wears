@@ -1927,6 +1927,39 @@ console errors, horizontal overflow at 320/375/768/1440px, the dropdown actually
 receiving keyboard focus, the scroll position across a filter toggle — not just read as CSS and
 assumed to look right.
 
+### Client changes, 2026-08-29 (fourth round — header wrap, theme options)
+
+Two more items from the same feedback pass: the desktop nav was wrapping "Shop all" and "Winter
+Collection" onto two lines, and the theme write-up above made a call rather than actually
+presenting the options Huzaifa had asked for the round before.
+
+1. **Bug: nav labels wrapping.** `linkClasses` had no `whitespace-nowrap`, so a `Link` — a flex
+   item that can shrink below its content width like any other by default — wrapped its text at
+   the space in a two-word label instead of the single-word ones, which have nowhere to wrap.
+   Fixed with `whitespace-nowrap shrink-0` on every nav link. That alone would have pushed the
+   now-unshrinkable row past its box at the `lg` (1024px) breakpoint where it first turns on, so
+   two more changes went with it: `Container` gained an opt-in `wide` prop (`max-w-7xl` instead
+   of `max-w-6xl`) used only by the header, and the nav's own breakpoint moved from `lg` to `xl`
+   (1280px) — below that the hamburger menu covers it, same reasoning section 15 already used
+   to justify hiding it below `lg` in the first place, just extended now that there are six nav
+   items instead of fewer. **Verified at every width from 768 to 1920px**: zero wrapped labels,
+   zero horizontal overflow, and the nav/hamburger swap lands exactly at 1280px with nothing
+   in between.
+2. **Theme options, actually presented this time.** Round three picked a direction on its own
+   judgement after Huzaifa had explicitly asked to see choices; round four built
+   `Velora Canvas Study`, a published Artifact comparing four canvas directions side by side —
+   the live one (Warm Stone) plus three alternatives (Soft Blush, Muted Greige, Rich Parchment)
+   — each rendered as the same miniature header/hero/product-row mockup so the comparison is
+   real rather than described in words. Ink, the plum brand colour and the gold accent are
+   unchanged across all four; only `--color-canvas`/`-alt`/`-deep` and the glow tint vary. **Not
+   yet acted on** — waiting on Huzaifa/the client to pick a letter (or confirm A, already live).
+   If a different one is chosen, only the three canvas hex values and `--glow-accent`/
+   `--glow-brand` in `index.css`'s `@theme` block need to change; everything built on top of
+   them (the ambient body gradient, the header, cards) reads the tokens and needs no edits of
+   its own.
+
+No schema, Edge Function, or query change. Build, typecheck and lint stayed clean throughout.
+
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
@@ -1937,6 +1970,11 @@ assumed to look right.
   Vercel's CDN: free, fast, no billing, deleted in one commit when real photography arrives.
   Both `thumb` and `full` variants, WebP, known dimensions. **Ask the client for real
   photography — these must be replaced before sign-off.**
+- **Waiting on a canvas/theme pick.** Four background directions are laid out side by side in
+  the published Artifact "Velora Canvas Study" (see the "fourth round" write-up above) — A
+  (Warm Stone, live now), B (Soft Blush), C (Muted Greige), D (Rich Parchment). Ink, brand and
+  accent are unchanged across all four. Swap `--color-canvas`/`-alt`/`-deep` and the two
+  `--glow-*` values in `index.css` if a different one is chosen; nothing else needs editing.
 - ~~Placeholder contact details~~ — **mostly resolved, 2026-08-29.** The footer's Instagram,
   TikTok, Facebook and WhatsApp links, the WhatsApp number, and the location are the brand's
   real ones now (see the "Client changes, second round" write-up above). **The support email
