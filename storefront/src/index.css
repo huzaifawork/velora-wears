@@ -20,17 +20,17 @@
   --color-ink-muted: #9b949f;
 
   /* --- Canvas: page and card surfaces -----------------------------------
-     Chosen from four options laid out side by side in the published
-     "Velora Canvas Study" Artifact (2026-08-29) — option C, Muted Greige:
-     cooler and quieter than the warm-tan default that shipped first, more
-     grey than gold in the mix, letting the plum and gold accent carry the
-     warmth instead of the ground itself. The `--glow-*` wash below and the
-     `body` rule that uses it are unchanged — they work over any of the
-     four options, since they are built from the accent/brand colours, not
-     the canvas tiers. */
-  --color-canvas: #f7f5f1;
-  --color-canvas-alt: #ece7de;
-  --color-canvas-deep: #ddd5c7;
+     Chosen from the seven options laid out side by side in the published
+     "Velora Canvas Study" Artifact (2026-08-29) — option E, Cedar Smoke:
+     the first of the "darker, not too dark" batch added after C shipped.
+     Smoky and grey-warm, deeper and moodier than C without leaning as hard
+     into one hue as the other new options did. The `--glow-*` wash below
+     and the `body` rule that uses it are unchanged — they work over any of
+     the seven options, since they are built from the accent/brand colours,
+     not the canvas tiers. */
+  --color-canvas: #e7e1d8;
+  --color-canvas-alt: #d3c7b4;
+  --color-canvas-deep: #b8a688;
 
   /* The hero's two blurred brand-colour blobs, reused as a fixed, sitewide
      ambient wash (see `body` below) rather than a decoration only the
