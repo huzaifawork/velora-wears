@@ -136,7 +136,7 @@ export function ProductsPage() {
       ? category.description
       : categorySlug
         ? "Every piece in this edit. Open any one for its fabric, fit and available sizes."
-        : "Shirts, hoodies and everyday essentials, made in small runs. Open any piece for its fabric, fit and available sizes.";
+        : "Oversized shirts, winter layers, trousers, shoes and everyday essentials, made in small runs. Open any piece for its fabric, fit and available sizes.";
 
   return (
     <>

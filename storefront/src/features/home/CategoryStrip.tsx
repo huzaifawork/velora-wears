@@ -40,8 +40,8 @@ export function CategoryStrip({
       <Container>
         <SectionHeading
           eyebrow="Shop by category"
-          title="Three things you wear constantly"
-          description="Shirts you can wear to work, hoodies for the cold months, and the plain essentials that quietly do the most work in a wardrobe."
+          title="Everything you actually wear"
+          description="Oversized shirts for the working week, a winter collection for the cold months, and the trousers, shoes and plain essentials that go under and around them."
           action={
             <Link
               to={CATEGORIES}

@@ -38,7 +38,7 @@ export function BrandIntro() {
               <span className="text-canvas/70">
                 Velora Wears started with a simple frustration: buying a plain shirt or a decent
                 hoodie online here usually means guessing at the fabric and hoping about the fit.
-                We make a small, tightly edited collection instead — shirts, hoodies and
+                We make a small, tightly edited collection instead — shirts, winter layers and
                 essentials we actually wear ourselves, shipped nationwide and paid for in cash at
                 your door.
               </span>

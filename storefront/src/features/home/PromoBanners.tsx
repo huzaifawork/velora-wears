@@ -31,8 +31,8 @@ const banners = [
     eyebrow: "Winter drop",
     title: "400 GSM fleece, in from the cold",
     body: "Heavyweight hoodies with a hood that stands up and a fit that layers.",
-    to: categoryPath("hoodies"),
-    cta: "Shop hoodies",
+    to: categoryPath("winter-collection"),
+    cta: "Shop winter",
   },
 ];
 

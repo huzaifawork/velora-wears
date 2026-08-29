@@ -119,7 +119,7 @@ Storefront builds, typechecks and lints clean.
 | Shopping cart | **Done (section 6).** `/cart`, a mini-bag drawer, quantity and removal, live re-pricing against the catalog. **localStorage — there is no server** |
 | Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
 | Filters and sorting | **Done (section 14).** Category chips, in-stock filter, four sorts, Load more |
-| Demo catalog | 12 products, 3 categories, settings — all typed against `shared/types.ts` |
+| Demo catalog | **19 products, 5 categories**, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
 | Product features | Listing, detail, category browsing, the bag, search, filters and sorting. No checkout UI, auth, review UI, admin |
@@ -889,6 +889,35 @@ price in the payload was ignored in favour of the database's, delivery came from
 and per-size stock decremented by exactly the quantity ordered. **The database was left
 empty.**
 
+### Client changes, 2026-08-29
+
+Requested by the client after the Supabase migration, and applied to the demo catalog:
+
+1. **Hoodies is now "Winter Collection"** — slug `hoodies` becomes `winter-collection`, and
+   the category tile was renamed with it. Every hardcoded link was repointed (the Hero CTA
+   and a promo banner both named the slug directly). Copy across the landing page, the
+   categories index and the footer no longer says "hoodies".
+2. **Two new categories, Shoes and Trousers, sitting before Essentials.** The order is now
+   Shirts, Winter Collection, Shoes, Trousers, Essentials. Seven placeholder products were
+   written for them — four trousers, three shoes — with generated flat-lay artwork in the
+   existing style, so no category renders empty.
+3. **The shirts are oversized drop-shoulder shirts**, so the fit replaces the fabric word in
+   every shirt name and the descriptions say so. The client chose this over keeping the
+   fabric, having been shown that it makes the five names nearly identical — the
+   distinguishing first word (Meridian, Noor, Kohl, Sahil, Marble) is what tells them apart.
+
+**The artwork was drawn, looked at, and redrawn.** The first shoe illustration read as a
+wedge rather than footwear, and the second attempt (a stacked pair) merged into one blob.
+The one that shipped draws the sneaker on its own canvas at its true proportions — about
+2.6 times wider than tall, with the collar dip and tongue notch that make it read as a shoe
+— and then rotates it onto the frame, which is what fills a portrait tile without distorting
+the silhouette. **If you regenerate this art, look at the output before committing it.**
+
+Verified with 19 assertions: category order and slugs, no category left empty, all 19
+products in a real category, every referenced image file present on disk, all five shirt
+names carrying the new fit and none still carrying a fabric word, and search still finding
+both an old and a new product by name.
+
 ### The next task — section 7, checkout
 
 **No longer blocked.** Supabase Edge Functions are on the free tier, and `place-order` is
@@ -959,6 +988,12 @@ Before writing anything:
 - **Category artwork.** The `/categories` index and the category page headers reuse the same
   generated demo tiles as the landing bento. Real category photography is part of the same
   ask as the product photography above.
+- **The shirt SLUGS still carry the fabric word** (`meridian-oxford-shirt`) while the names
+  now say "Oversized Drop Shoulder". That is deliberate: a slug is a stable identifier and
+  renaming a product should not break its URL. Change it only if the client asks.
+- **The trousers and shoes are invented.** The client asked for the categories; the seven
+  products in them are placeholder copy and generated artwork, like the rest of the demo
+  catalog. Confirm the real range with him before sign-off.
 - ~~Where the cart lives~~ — **resolved in section 6.** `localStorage`, via an external
   store, holding identity only. Not a decision to revisit without a write path.
 - **The bag is per-device and per-browser.** It does not follow a customer to their phone,

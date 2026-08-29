@@ -68,7 +68,7 @@ export function Footer() {
           <Logo variant="stacked" className="items-start! text-ink" />
           <p className="mt-6 max-w-xs text-sm leading-relaxed text-ink-soft">
             Premium everyday fashion, made in Pakistan and delivered to your door. Shirts,
-            hoodies and the essentials in between.
+            winter layers, trousers, shoes and the essentials in between.
           </p>
           <ul className="mt-6 flex gap-3">
             {socials.map((social) => (

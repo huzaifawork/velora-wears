@@ -56,32 +56,32 @@ interface Seed {
 const seeds: Seed[] = [
   {
     slug: "meridian-oxford-shirt",
-    name: "Meridian Oxford Shirt",
+    name: "Meridian Oversized Drop Shoulder Shirt",
     price: 4290,
     categorySlug: "shirts",
-    alt: "Meridian Oxford Shirt in ecru, laid flat",
+    alt: "Meridian Oversized Drop Shoulder Shirt in ecru, laid flat",
     description:
-      "An everyday oxford cut clean through the body, in a mid-weight cotton that holds its shape after a wash. Mother-of-pearl buttons, a single chest pocket, and a collar with enough structure to wear open or closed.",
+      "An oversized drop-shoulder cut in a mid-weight oxford cotton that holds its shape after a wash. The shoulder seam sits low on the arm for a relaxed line through the body. Mother-of-pearl buttons, a single chest pocket, and a collar with enough structure to wear open or closed.",
     sizes: { S: 12, M: 8, L: 5 },
     addedOn: 26,
   },
   {
     slug: "noor-linen-shirt",
-    name: "Noor Linen Shirt",
+    name: "Noor Oversized Drop Shoulder Shirt",
     price: 4890,
     categorySlug: "shirts",
-    alt: "Noor Linen Shirt in warm sand, laid flat",
+    alt: "Noor Oversized Drop Shoulder Shirt in warm sand, laid flat",
     description:
-      "Pure linen, washed soft before it reaches you, so it drapes from the first wear rather than the tenth. Built for Karachi humidity and long afternoons — breathable, light, and unbothered by creasing.",
+      "An oversized drop-shoulder cut in pure linen, washed soft before it reaches you, so it drapes from the first wear rather than the tenth. Built for Karachi humidity and long afternoons — breathable, light, and unbothered by creasing.",
     sizes: { S: 3, M: 9, L: 0 },
     addedOn: 24,
   },
   {
     slug: "kohl-poplin-shirt",
-    name: "Kohl Poplin Shirt",
+    name: "Kohl Oversized Drop Shoulder Shirt",
     price: 3990,
     categorySlug: "shirts",
-    alt: "Kohl Poplin Shirt in deep charcoal, laid flat",
+    alt: "Kohl Oversized Drop Shoulder Shirt in deep charcoal, laid flat",
     description:
       "A crisp poplin in a near-black charcoal — the shirt that works for a dinner, an interview, and the office on the same week. Slim through the sleeve, straight at the hem, finished with a hidden button stand.",
     sizes: { S: 0, M: 0, L: 0 },
@@ -89,23 +89,23 @@ const seeds: Seed[] = [
   },
   {
     slug: "sahil-camp-collar-shirt",
-    name: "Sahil Camp-Collar Shirt",
+    name: "Sahil Oversized Drop Shoulder Shirt",
     price: 4590,
     categorySlug: "shirts",
-    alt: "Sahil Camp-Collar Shirt in sage green, laid flat",
+    alt: "Sahil Oversized Drop Shoulder Shirt in sage green, laid flat",
     description:
-      "An open camp collar in a soft sage viscose blend, cut relaxed through the chest. Short sleeves, a boxy hem you can wear untucked, and a colour that sits well against every skin tone.",
+      "An open camp collar in a soft sage viscose blend, cut oversized with a dropped shoulder through the chest. Short sleeves, a boxy hem you can wear untucked, and a colour that sits well against every skin tone.",
     sizes: { S: 6, M: 2, L: 7 },
     addedOn: 18,
   },
   {
     slug: "marble-twill-overshirt",
-    name: "Marble Twill Overshirt",
+    name: "Marble Oversized Drop Shoulder Overshirt",
     price: 5690,
     categorySlug: "shirts",
-    alt: "Marble Twill Overshirt in stone grey, laid flat",
+    alt: "Marble Oversized Drop Shoulder Overshirt in stone grey, laid flat",
     description:
-      "Half shirt, half light jacket. Heavy cotton twill, two chest pockets, and a squared shoulder that layers over a tee in October and under a coat in January.",
+      "Half shirt, half light jacket. Heavy cotton twill, two chest pockets, and an oversized dropped shoulder that layers over a tee in October and under a coat in January.",
     sizes: { S: 4, M: 5, L: 11 },
     addedOn: 15,
   },
@@ -113,7 +113,7 @@ const seeds: Seed[] = [
     slug: "anwar-heavyweight-hoodie",
     name: "Anwar Heavyweight Hoodie",
     price: 6490,
-    categorySlug: "hoodies",
+    categorySlug: "winter-collection",
     alt: "Anwar Heavyweight Hoodie in deep plum, laid flat",
     description:
       "400 GSM brushed fleece with a double-layer hood that actually stands up. Ribbed cuffs and hem, a deep kangaroo pocket, and flat drawcords that do not fray. The one you will reach for all winter.",
@@ -124,7 +124,7 @@ const seeds: Seed[] = [
     slug: "dune-zip-hoodie",
     name: "Dune Zip Hoodie",
     price: 6990,
-    categorySlug: "hoodies",
+    categorySlug: "winter-collection",
     alt: "Dune Zip Hoodie in warm sand, laid flat",
     description:
       "A full-zip in a warm sand fleece, with a YKK zip and split kangaroo pockets. Cut slightly cropped so it sits at the waist, not below it.",
@@ -135,7 +135,7 @@ const seeds: Seed[] = [
     slug: "ravi-cropped-hoodie",
     name: "Ravi Cropped Hoodie",
     price: 5890,
-    categorySlug: "hoodies",
+    categorySlug: "winter-collection",
     alt: "Ravi Cropped Hoodie in clay, laid flat",
     description:
       "Boxy, cropped, and dyed a warm clay that softens with every wash. Loop-back cotton inside, so it breathes far better than a brushed fleece in mid-season weather.",
@@ -146,7 +146,7 @@ const seeds: Seed[] = [
     slug: "sable-essential-hoodie",
     name: "Sable Essential Hoodie",
     price: 5490,
-    categorySlug: "hoodies",
+    categorySlug: "winter-collection",
     alt: "Sable Essential Hoodie in black, laid flat",
     description:
       "The plain one, done properly. A true black that stays black, a regular fit with room to layer, and reinforced seams at every stress point.",
@@ -185,6 +185,87 @@ const seeds: Seed[] = [
       "A classic crew in an oat-toned loop-back cotton, with ribbed cuffs and a clean, unbranded chest. Quietly the most worn thing in the collection.",
     sizes: { S: 5, M: 8, L: 4 },
     addedOn: 9,
+  },
+
+  // --- Trousers -----------------------------------------------------------
+  {
+    slug: "amir-wide-leg-trouser",
+    name: "Amir Wide-Leg Trouser",
+    price: 5290,
+    categorySlug: "trousers",
+    alt: "Amir Wide-Leg Trouser in deep plum, laid flat",
+    description:
+      "A wide leg that falls straight from the knee, in a mid-weight cotton twill with a little body to it. Sits at the natural waist, with belt loops, slant pockets and an unfussy plain hem.",
+    sizes: { S: 7, M: 9, L: 6 },
+    addedOn: 30,
+  },
+  {
+    slug: "slate-pleated-trouser",
+    name: "Slate Pleated Trouser",
+    price: 5890,
+    categorySlug: "trousers",
+    alt: "Slate Pleated Trouser in graphite, laid flat",
+    description:
+      "A single forward pleat gives room through the hip and lets the leg hang clean. Graphite, pressed crease, and a fabric with just enough weight to keep its line through a long day.",
+    sizes: { S: 4, M: 6, L: 3 },
+    addedOn: 28,
+  },
+  {
+    slug: "yusuf-tapered-trouser",
+    name: "Yusuf Tapered Trouser",
+    price: 4690,
+    categorySlug: "trousers",
+    alt: "Yusuf Tapered Trouser in tobacco, laid flat",
+    description:
+      "Roomy through the thigh and tapered from the knee down, in a warm tobacco cotton. The one to wear with everything in the essentials edit.",
+    sizes: { S: 9, M: 11, L: 8 },
+    addedOn: 23,
+  },
+  {
+    slug: "basalt-cargo-trouser",
+    name: "Basalt Cargo Trouser",
+    price: 6190,
+    categorySlug: "trousers",
+    alt: "Basalt Cargo Trouser in olive, laid flat",
+    description:
+      "Two flap pockets set low on the leg, in a washed olive ripstop that softens with wear. Cut straight, not baggy, so it reads considered rather than utility.",
+    sizes: { S: 2, M: 3, L: 0 },
+    addedOn: 20,
+  },
+
+  // --- Shoes --------------------------------------------------------------
+  {
+    slug: "rahi-low-top-sneaker",
+    name: "Rahi Low-Top Sneaker",
+    price: 8990,
+    categorySlug: "shoes",
+    alt: "Rahi Low-Top Sneaker in off-white, side profile",
+    description:
+      "A clean off-white low-top on a slim cupsole, with a padded collar and a leather-look upper that wipes down. Made to sit under a wide trouser without shouting.",
+    sizes: { S: 6, M: 8, L: 5 },
+    addedOn: 29,
+  },
+  {
+    slug: "onyx-court-sneaker",
+    name: "Onyx Court Sneaker",
+    price: 9490,
+    categorySlug: "shoes",
+    alt: "Onyx Court Sneaker in black, side profile",
+    description:
+      "A court silhouette in near-black, with a tonal panel and a gum-free white sole for contrast. The pair that works with the winter collection and with a shirt.",
+    sizes: { S: 3, M: 4, L: 2 },
+    addedOn: 25,
+  },
+  {
+    slug: "talha-runner",
+    name: "Talha Runner",
+    price: 7490,
+    categorySlug: "shoes",
+    alt: "Talha Runner in tobacco and cream, side profile",
+    description:
+      "A soft runner in tobacco suede-look panels on a cream midsole, cushioned enough for a full day of walking and quiet enough to wear with everything else here.",
+    sizes: { S: 10, M: 12, L: 7 },
+    addedOn: 17,
   },
 ];
 
@@ -644,22 +725,40 @@ export const demoCategories: Category[] = [
     sortOrder: 1,
     thumb: "/categories/shirts.webp",
     description:
-      "Poplin, oxford and slub cotton, cut a little relaxed. The shirts that go to work on a Monday and out to dinner on a Friday.",
+      "Oversized drop-shoulder shirts in poplin, oxford and slub cotton. The shoulder seam sits low for a relaxed line — wear them open over a tee or buttoned on their own.",
     productCount: demoSummaries.filter((p) => p.categorySlug === "shirts").length,
   },
   {
-    slug: "hoodies",
-    name: "Hoodies",
+    slug: "winter-collection",
+    name: "Winter Collection",
     sortOrder: 2,
-    thumb: "/categories/hoodies.webp",
+    thumb: "/categories/winter-collection.webp",
     description:
       "Heavyweight brushed fleece for Lahore and Islamabad winters, in the muted colours that go with everything already in the wardrobe.",
-    productCount: demoSummaries.filter((p) => p.categorySlug === "hoodies").length,
+    productCount: demoSummaries.filter((p) => p.categorySlug === "winter-collection").length,
+  },
+  {
+    slug: "shoes",
+    name: "Shoes",
+    sortOrder: 3,
+    thumb: "/categories/shoes.webp",
+    description:
+      "Low-tops and runners on slim soles, in colours that sit under a wide trouser without competing with it.",
+    productCount: demoSummaries.filter((p) => p.categorySlug === "shoes").length,
+  },
+  {
+    slug: "trousers",
+    name: "Trousers",
+    sortOrder: 4,
+    thumb: "/categories/trousers.webp",
+    description:
+      "Wide legs, single pleats and a tapered cut, in cotton twill and washed ripstop. Cut to hang cleanly rather than cling.",
+    productCount: demoSummaries.filter((p) => p.categorySlug === "trousers").length,
   },
   {
     slug: "essentials",
     name: "Essentials",
-    sortOrder: 3,
+    sortOrder: 5,
     thumb: "/categories/essentials.webp",
     description:
       "Plain tees, knits and the quiet layers underneath. The pieces that get worn twice a week and are replaced, not retired.",

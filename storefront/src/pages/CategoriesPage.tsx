@@ -39,7 +39,7 @@ export function CategoriesPage() {
       <PageHeader
         eyebrow="Browse"
         title="Shop by category"
-        description="The collection is built around three things people actually wear: shirts for the working week, hoodies for the cold months, and the plain essentials underneath both. Pick one and browse it on its own."
+        description="The collection is built around what people actually wear: oversized shirts for the working week, a winter collection for the cold months, and the trousers, shoes and essentials that go with them. Pick one and browse it on its own."
       >
         <p className="mt-8">
           <Link to={PRODUCTS} className={buttonClasses({ variant: "secondary", size: "sm" })}>

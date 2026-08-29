@@ -12,7 +12,7 @@ import { formatPrice } from "@/lib/format";
 /**
  * Landing hero (requirements section 2): the brand statement, a short
  * introduction to what Velora Wears sells, and the two calls to action that
- * matter — shop everything, or jump straight into hoodies.
+ * matter — shop everything, or jump straight into the winter collection.
  *
  * The composition is the editorial split used by most premium fashion labels:
  * type on the left, one large product image on the right with the social proof
@@ -59,7 +59,7 @@ export function Hero({ settings }: { settings: Settings | null | undefined }) {
           </h1>
 
           <p className="mt-7 max-w-xl text-base leading-relaxed text-pretty text-ink-soft sm:text-lg">
-            Velora Wears is a Pakistani label making modern shirts, hoodies and everyday
+            Velora Wears is a Pakistani label making oversized shirts, winter layers, trousers,
             essentials — honest fabrics, a fit cut properly rather than copied, and prices meant
             for clothes you wear every week. Ordered today, delivered to your door, paid in cash
             when it arrives.
@@ -70,10 +70,10 @@ export function Hero({ settings }: { settings: Settings | null | undefined }) {
               Shop the collection
             </Link>
             <Link
-              to={categoryPath("hoodies")}
+              to={categoryPath("winter-collection")}
               className={buttonClasses({ variant: "secondary" })}
             >
-              Winter hoodies
+              Winter collection
             </Link>
           </div>
 
