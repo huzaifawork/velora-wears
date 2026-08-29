@@ -14,19 +14,22 @@ import {
 } from "@/lib/sources/CatalogSource";
 
 /**
- * The TEMPORARY read layer — serves `lib/demoData.ts` while the client has not
- * bought the Blaze plan (requirements section 18, "Data source").
+ * The TEMPORARY read layer — serves `lib/demoData.ts` until the admin dashboard
+ * exists to create real products (requirements section 18, "Data source").
+ * The live database is deliberately EMPTY; mock data is never written to it.
  *
  * It deliberately imitates the Realtime Database rather than being convenient:
  *
  *  - every function is async, so no caller can accidentally depend on data
  *    being available synchronously;
  *  - filtering and ordering go through the SAME `applyFilters` and
- *    `sortSummaries` helpers `firebaseSource` uses, so the two cannot disagree
+ *    `sortSummaries` helpers `supabaseSource` uses, so the two cannot disagree
  *    about what a search or a sort means;
- *  - search is therefore a PREFIX match on `searchText`, because that is all a
- *    Realtime Database `startAt`/`endAt` query can do — matching mid-string
- *    here would quietly break the day the flag flips.
+ *  - search is a PREFIX match on `searchText`. Postgres does full SUBSTRING
+ *    matching, so search is genuinely NARROWER here than in production — the
+ *    one place the two sources deliberately differ. Widening it would be
+ *    harmless, but the demo catalog is 12 products and prefix matching keeps
+ *    this file honest about being a stand-in rather than a second engine.
  *
  * The one thing it does not imitate is the over-fetch window: there is no
  * server round trip to bound, so it filters the whole demo catalog and trims.

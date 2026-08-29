@@ -4,9 +4,10 @@ import { SIZES } from "@/lib/sizes";
 /**
  * The bag (requirements section 6) — storage, validation and arithmetic.
  *
- * THE CART HAS NO SERVER. Every client write to the Realtime Database is denied
- * by design, and Cloud Functions need the Blaze plan, so the bag lives in
- * `localStorage` on the visitor's own device until `placeOrder` exists.
+ * THE CART HAS NO SERVER. Every client write to the database is denied by row
+ * level security, and a bag is per-visitor state that nothing else needs, so it
+ * lives in `localStorage` on the visitor's own device. It is handed to the
+ * `place-order` Edge Function only at checkout.
  *
  * That shapes the two rules this module exists to enforce:
  *
@@ -24,7 +25,7 @@ import { SIZES } from "@/lib/sizes";
  *
  * The stored line is deliberately a superset of the `items` in
  * `PlaceOrderInput`, so checkout in section 7 can hand it almost straight to
- * the Cloud Function.
+ * the `place-order` Edge Function — drop `slug` and it is the payload.
  */
 
 /** One line in the bag: a product in a size. Identity only — never a price. */
@@ -40,8 +41,9 @@ const STORAGE_KEY = "velora.cart.v1";
 
 /**
  * Caps. A bag is a shopping list, not a bulk order channel, and these are the
- * client half of the reject-oversized-input rule — the server applies them
- * again when `placeOrder` is built (section 17).
+ * client half of the reject-oversized-input rule (section 17). The server
+ * applies the SAME two limits independently, in the place-order Edge Function
+ * and in `place_order()` — if you change one here, change them there too.
  */
 export const MAX_QTY_PER_LINE = 10;
 export const MAX_LINES = 20;

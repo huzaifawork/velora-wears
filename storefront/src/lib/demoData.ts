@@ -11,7 +11,7 @@ import type {
 /**
  * THROWAWAY demo catalog (Requirements section 18, "Data source").
  *
- * The client has not bought the Blaze plan yet, so the storefront is reviewed
+ * The admin dashboard does not exist yet, so the storefront is reviewed
  * against this instead of the Realtime Database. Everything here is typed
  * against `shared/types.ts`, so the shapes cannot drift from what the admin
  * dashboard will eventually write — if this file compiles, the real records

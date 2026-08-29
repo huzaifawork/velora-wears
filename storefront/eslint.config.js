@@ -12,10 +12,10 @@ import tseslint from "typescript-eslint";
  * section 18):
  *
  *  1. Components and pages must never import `lib/demoData` — they go through
- *     `lib/queries.ts`, which is what keeps the switch to the Realtime Database
- *     a one-file change.
- *  2. The Firebase Admin SDK must never appear in the storefront. Privileged
- *     work belongs in Cloud Functions.
+ *     `lib/queries.ts`, which is what keeps the switch to the live database a
+ *     one-file change.
+ *  2. Nothing that bypasses row level security may appear in the storefront.
+ *     Privileged work belongs in a Supabase Edge Function.
  */
 export default tseslint.config(
   { ignores: ["dist", "node_modules"] },
@@ -48,9 +48,9 @@ export default tseslint.config(
                 "Import from @/lib/queries instead. Only lib/sources/demoSource.ts may read demoData directly.",
             },
             {
-              group: ["firebase-admin", "firebase-admin/*"],
+              group: ["firebase", "firebase/*", "firebase-admin", "firebase-admin/*"],
               message:
-                "The Admin SDK must never ship to the browser. Put privileged code in functions/.",
+                "Firebase has been removed from this project. Use @/lib/supabase.",
             },
           ],
         },

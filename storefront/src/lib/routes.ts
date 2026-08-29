@@ -22,9 +22,9 @@ export const CATEGORIES = "/categories";
 export const CART = "/cart";
 
 /**
- * Checkout (requirements section 7). NOT BUILT — it needs the `placeOrder`
- * Cloud Function, and Cloud Functions need the Blaze plan. The route resolves
- * to the catch-all page, which says so, rather than to a dead link.
+ * Checkout (requirements section 7). The SERVER side is built and deployed —
+ * the `place-order` Edge Function — but the checkout UI is not, so this still
+ * resolves to the catch-all page, which says so, rather than to a dead link.
  */
 export const CHECKOUT = "/checkout";
 

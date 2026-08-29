@@ -3,10 +3,10 @@ import type { Category, Product, ProductSummary, Review, Settings } from "@share
 /**
  * The catalog read contract.
  *
- * Two implementations satisfy it — `firebaseSource` (the Realtime Database, the
- * real thing) and `demoSource` (the throwaway frontend catalog we review
- * against until the client buys Blaze). `lib/queries.ts` picks one at runtime
- * from `VITE_DATA_SOURCE` and nothing above it can tell the difference.
+ * Two implementations satisfy it — `supabaseSource` (Postgres, the real thing)
+ * and `demoSource` (the throwaway frontend catalog we review against until the
+ * admin dashboard can create real products). `lib/queries.ts` picks one at
+ * runtime from `VITE_DATA_SOURCE` and nothing above it can tell the difference.
  *
  * Keeping this interface here — rather than letting each implementation define
  * its own shape — is what guarantees the two stay signature-compatible: adding
@@ -36,7 +36,7 @@ export const DEFAULT_SORT: SortOption = "newest";
  */
 export interface ListProductsOptions {
   categorySlug?: string;
-  /** Free text (requirements section 13). Prefix-matched — see the note below. */
+  /** Free text (requirements section 13). Substring on Postgres; prefix in demo mode. */
   search?: string;
   /** Hide what cannot be bought (requirements sections 11 and 14). */
   inStockOnly?: boolean;
@@ -56,9 +56,9 @@ export interface ResolvedListOptions {
 export interface CatalogSource {
   /**
    * The one list read. Handles browsing, category filtering, search, the
-   * in-stock filter and sorting, because the Realtime Database can only order
-   * by ONE field per query and so the combination has to be resolved in one
-   * place (see `firebaseSource` for which half runs on the server).
+   * in-stock filter and sorting. Postgres applies all of it in one statement;
+   * the demo source reproduces the same rules in memory through the shared
+   * `applyFilters` and `sortSummaries` helpers below, so the two cannot drift.
    */
   listProducts(options: ResolvedListOptions): Promise<ProductSummary[]>;
   getProductBySlug(slug: string): Promise<Product | null>;
@@ -108,13 +108,17 @@ export function sortSummaries(rows: ProductSummary[], sort: SortOption): Product
 }
 
 /**
- * The filters that CANNOT be expressed as a Realtime Database query alongside
- * whatever the server already ordered by, applied identically on both sources.
+ * The filter rules, in one place, so the demo source cannot drift from what the
+ * database does.
  *
- * `searchText` is the denormalised lowercase "name + category" the admin writes
- * at write time, and matching is PREFIX-ONLY, because `startAt`/`endAt` is all
- * the database can do — matching mid-string here would quietly break the day
- * the flag flips to the real source.
+ * `supabaseSource` does NOT call this — Postgres applies every filter in the
+ * query itself, which is the whole advantage of a relational database here.
+ * This is the demo source's implementation of the same rules, kept beside the
+ * interface they belong to rather than hidden inside one implementation.
+ *
+ * `searchText` is the denormalised lowercase "name + category". Matching here is
+ * PREFIX-only while Postgres does substring, which makes demo search narrower
+ * than production — the one deliberate difference between the two sources.
  */
 export function applyFilters(
   rows: ProductSummary[],

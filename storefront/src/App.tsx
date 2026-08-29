@@ -4,6 +4,7 @@ import { Route, Routes } from "react-router-dom";
 import { Container } from "@/components/layout/Container";
 import { CartDrawer } from "@/features/cart/CartDrawer";
 import { CartProvider } from "@/features/cart/CartProvider";
+import { useCatalogRealtime } from "@/hooks/useCatalogRealtime";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { ScrollToTop } from "@/components/layout/ScrollToTop";
@@ -44,6 +45,15 @@ function RouteFallback() {
 }
 
 export default function App() {
+  /**
+   * One Supabase Realtime subscription for the whole tab. When the catalog
+   * changes in the database — an admin edits a price, someone buys the last
+   * Medium — the read cache is dropped and the mounted pages re-read, so stock
+   * badges, prices and the bag's total correct themselves without a refresh.
+   * In demo mode it does nothing and the SDK is never downloaded.
+   */
+  useCatalogRealtime();
+
   return (
     /* The bag is the one piece of global client state in the app, and it
        wraps everything because the header badge, the drawer and the cart

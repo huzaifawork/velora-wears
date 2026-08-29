@@ -16,12 +16,12 @@ export { DEFAULT_SORT, SORT_OPTIONS } from "@/lib/sources/CatalogSource";
  * It does two things: it caches responses, and it picks where the data comes
  * from. Which source is live is decided once, here, by `VITE_DATA_SOURCE`:
  *
- *   demo      lib/sources/demoSource      frontend demo catalog (current)
- *   firebase  lib/sources/firebaseSource  Realtime Database (once Blaze is on)
+ *   demo      lib/sources/demoSource      frontend demo catalog
+ *   supabase  lib/sources/supabaseSource  the live Postgres database
  *
  * Both satisfy the same `CatalogSource` interface, so switching is a one-line
  * change in the environment and nothing above this file is touched. The source
- * module is imported dynamically, which also keeps the Firebase SDK out of the
+ * module is imported dynamically, which also keeps the Supabase SDK out of the
  * bundle entirely while we are in demo mode (requirements section 19).
  *
  * Never import `lib/demoData.ts` from a component. Import from here.
@@ -29,23 +29,34 @@ export { DEFAULT_SORT, SORT_OPTIONS } from "@/lib/sources/CatalogSource";
 
 const DATA_SOURCE = import.meta.env.VITE_DATA_SOURCE ?? "demo";
 
+/**
+ * True when the storefront is reading the real database rather than the demo
+ * catalog. Realtime asks, because there is nothing to subscribe to in demo mode.
+ */
+export function isLiveSource(): boolean {
+  return DATA_SOURCE === "supabase";
+}
+
 let sourcePromise: Promise<CatalogSource> | undefined;
 
 function source(): Promise<CatalogSource> {
   if (!sourcePromise) {
-    sourcePromise =
-      DATA_SOURCE === "firebase"
-        ? import("@/lib/sources/firebaseSource").then((m) => m.firebaseSource)
-        : import("@/lib/sources/demoSource").then((m) => m.demoSource);
+    sourcePromise = isLiveSource()
+      ? import("@/lib/sources/supabaseSource").then((m) => m.supabaseSource)
+      : import("@/lib/sources/demoSource").then((m) => m.demoSource);
   }
   return sourcePromise;
 }
 
 /**
- * Response cache. RTDB's `get()` does not cache the way a realtime listener
- * does, so moving between pages would otherwise refetch unchanged data
- * (requirements section 19). In-flight promises are cached too, so two
+ * Response cache. A PostgREST request is a plain HTTP call with no client-side
+ * cache of its own, so moving between pages would otherwise refetch unchanged
+ * data (requirements section 19). In-flight promises are cached too, so two
  * components mounting at once share a single read.
+ *
+ * Supabase Realtime is what keeps this honest: when the catalog changes in the
+ * database, `useCatalogRealtime` drops the cache and the mounted pages re-read,
+ * so a cached price can never be shown after it has been edited.
  */
 const cache = new Map<string, { at: number; value: Promise<unknown> }>();
 const TTL_MS = 60_000;

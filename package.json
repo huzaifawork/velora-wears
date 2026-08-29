@@ -2,7 +2,7 @@
   "name": "velora-wears",
   "version": "0.1.0",
   "private": true,
-  "description": "Velora Wears - e-commerce clothing store. Storefront (React + Vite) and admin dashboard share one Firebase Realtime Database.",
+  "description": "Velora Wears - e-commerce clothing store. Storefront (React + Vite) and admin dashboard share one Supabase Postgres database.",
   "workspaces": [
     "storefront",
     "shared"
@@ -13,9 +13,10 @@
     "preview": "npm run preview --workspace storefront",
     "lint": "npm run lint --workspace storefront",
     "typecheck": "npm run typecheck --workspace storefront",
-    "emulators": "firebase emulators:start --only database,functions",
-    "deploy:rules": "firebase deploy --only database",
-    "deploy:functions": "firebase deploy --only functions"
+    "db:push": "supabase db push",
+    "db:types": "supabase gen types typescript --linked > shared/database.types.ts",
+    "functions:deploy": "supabase functions deploy place-order",
+    "supabase:link": "supabase link"
   },
   "engines": {
     "node": ">=20.9.0"
