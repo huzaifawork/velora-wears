@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Link, useLocation, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Logo } from "@/components/brand/Logo";
 import { Container } from "@/components/layout/Container";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CartButton } from "@/features/cart/CartButton";
+import { SearchBar } from "@/features/products/SearchBar";
 import { useAsync } from "@/hooks/useAsync";
 import { getCategories, getSettings } from "@/lib/queries";
-import { CATEGORIES, PRODUCTS, categoryPath } from "@/lib/routes";
+import { CATEGORIES, PRODUCTS, categoryPath, searchPath } from "@/lib/routes";
 
 /**
  * Site header. Carries the brand logo on every page (requirements section 1)
@@ -21,7 +22,12 @@ import { CATEGORIES, PRODUCTS, categoryPath } from "@/lib/routes";
  * node is small and cached by the query layer, so this costs one read for the
  * whole session — the same read the page below is already making.
  *
- * Search and the cart control arrive with requirements sections 13 and 6.
+ * Search (requirements section 13) is a toggled row rather than a field in the
+ * bar itself: the bar already carries the logo, five links and the bag, and a
+ * permanently open input would squeeze the navigation on a laptop. The row is
+ * the same `SearchBar` the products page uses, and submitting it navigates to
+ * the products page with `?q=` — search results are a STATE of that page, not a
+ * page of their own, which is what lets them be filtered and sorted.
  */
 
 /**
@@ -44,6 +50,8 @@ const linkClasses = "text-xs font-medium tracking-eyebrow uppercase transition h
 
 export function Header() {
   const [open, setOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const pathname = useLocation().pathname;
   const isProducts = pathname === PRODUCTS;
@@ -82,6 +90,16 @@ export function Header() {
     link.exactPath
       ? pathname === link.exactPath
       : isProducts && link.category === currentCategory;
+
+  /** Submitting from the header always lands on a fresh search, never inside
+   *  whatever category the visitor happened to be looking at. */
+  const runSearch = (term: string) => {
+    setSearchOpen(false);
+    setOpen(false);
+    navigate(term ? searchPath(term) : PRODUCTS);
+  };
+
+  const currentSearch = isProducts ? (params.get("q")?.trim() ?? "") : "";
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-canvas/85 backdrop-blur-md">
@@ -122,6 +140,34 @@ export function Header() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setSearchOpen((v) => !v)}
+            aria-expanded={searchOpen}
+            aria-controls="header-search"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full text-ink transition hover:bg-canvas-alt"
+          >
+            <span className="sr-only">{searchOpen ? "Close search" : "Search products"}</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            >
+              {searchOpen ? (
+                <path d="M6 6l12 12M18 6L6 18" />
+              ) : (
+                <>
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="M16 16l4 4" />
+                </>
+              )}
+            </svg>
+          </button>
+
           <CartButton />
 
           <button
@@ -150,6 +196,14 @@ export function Header() {
           </button>
         </div>
       </Container>
+
+      {searchOpen && (
+        <div id="header-search" className="border-t border-line bg-canvas-alt">
+          <Container className="py-4">
+            <SearchBar value={currentSearch} onSearch={runSearch} />
+          </Container>
+        </div>
+      )}
 
       {open && (
         <nav
