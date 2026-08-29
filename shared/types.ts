@@ -7,6 +7,10 @@
  * it between both sides before editing.
  */
 
+import type { PaymentMethod } from "./payment";
+
+export type { PaymentMethod };
+
 export type Size = "S" | "M" | "L";
 
 export type OrderStatus =
@@ -129,6 +133,13 @@ export interface Order {
   subtotal: number;
   deliveryCharge: number;
   total: number;
+  /**
+   * HOW the order is paid (requirements section 9). Written by the server, not
+   * sent by the browser — see `shared/payment.ts`. Optional on this type only
+   * because orders written before the column existed do not carry it; read it
+   * through `paymentMethodOf()`, which resolves that to cash on delivery.
+   */
+  paymentMethod?: PaymentMethod;
   isGuest: boolean;
   userId?: string;
   /** Grants review access to a guest who has no account. */
@@ -171,4 +182,6 @@ export interface PlaceOrderResult {
   orderNumber: string;
   reviewToken: string;
   total: number;
+  /** What the store recorded the order as being paid by (section 9). */
+  paymentMethod: PaymentMethod;
 }
