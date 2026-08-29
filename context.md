@@ -3,9 +3,9 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-7, 9, 10, 13 and 14
-are built** — brand, landing, products, product details, categories, the cart, checkout,
-payment, delivery charges, search, and filters and sorting.
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-11, 13 and 14 are
+built** — brand, landing, products, product details, categories, the cart, checkout, payment,
+delivery charges, stock and availability, search, and filters and sorting.
 
 **MIGRATED TO SUPABASE on 2026-08-29.** The Firebase project has been deleted by its owner
 and every trace of Firebase is out of this repository. The stack is now Supabase — Postgres,
@@ -13,14 +13,14 @@ Supabase Realtime, and Edge Functions. Read section 2 and section 4 before touch
 
 **Nothing is blocked any more.** Edge Functions are on the Supabase free tier, so the Blaze
 paywall that blocked checkout is gone. Section 10 (delivery charges) was delivered inside
-section 7, and **section 9 (payment) was reviewed as its own section and finished**; sections
-11, 12 and 16 are next. Section 8 is Developer B's.
+section 7, section 9 (payment) was reviewed and finished on its own, and **section 11 (stock
+and availability) is now done too**; sections 12 and 16 are next. Section 8 is Developer B's.
 
-> **One migration is written but NOT yet applied to the live database.**
-> `supabase/migrations/20260829000003_payment_method.sql` adds the `payment_method` column
-> and restates `place_order()`. Applying it needs `SUPABASE_ACCESS_TOKEN` — see section 4.
-> Until it is applied the storefront still works (a response without the method reads as
-> cash on delivery), but the column the admin dashboard needs does not exist yet.
+> **The `payment_method` migration IS APPLIED.** `supabase/migrations/20260829000003_payment_method.sql`
+> was applied to the live project on 2026-08-29 via the Management API and verified: the
+> column, the enum and the restated `place_order()` are live, and `place_order` was exercised
+> end to end inside a rolled-back transaction — stock decremented correctly, the order carried
+> `payment_method: 'cod'`, and the database was left empty afterwards.
 
 **Checkout cannot be completed end to end yet, and that is a sequencing fact, not a bug.**
 The storefront still reads the demo catalog, whose product ids do not exist in the database,
@@ -182,7 +182,7 @@ storefront/          React + Vite (Developer A)
 admin/               Developer B's dashboard - placeholder + contract notes
 supabase/
   migrations/        THE DATABASE. Schema, RLS policies, place_order().
-                     0001+0002 deployed; 0003 (payment_method) NOT YET APPLIED.
+                     0001, 0002 and 0003 all deployed and verified.
                      0003 holds the live place_order() - 0002 is superseded history.
   functions/
     place-order/     Edge Function (Deno) - validation + the call into place_order()
@@ -190,6 +190,7 @@ supabase/
 shared/types.ts      DATA CONTRACT - shared with Developer B
 shared/checkout.ts   CHECKOUT RULES - mirrors the Edge Function's validation exactly
 shared/payment.ts    PAYMENT METHODS (section 9) - the enum and the words for it
+shared/stock.ts       STOCK RULES (section 11) - what "low" means, once
 ```
 
 npm workspaces cover `storefront` and `shared` only. `supabase/functions/` is Deno, not
@@ -409,7 +410,7 @@ one starts.
 | 8 | *Admin dashboard — **Developer B**, not us* | not ours |
 | 9 | Payment — COD only | **Done.** Stated on the form and the confirmation, and now RECORDED on the order — `payment_method` in Postgres, `shared/payment.ts` in the applications |
 | 10 | Delivery charges | **Done in section 7** — admin-configured, shown in the bag, at checkout and on the confirmation; the SERVER applies it |
-| 11 | Stock and availability | mostly done — badges, per-size gating, and checkout blocked on an unfulfillable bag. **Next** |
+| 11 | Stock and availability | **Done.** One shared rule for "low" (`shared/stock.ts`), the badge now shows the count when it matters, and the product page states which sizes are actually available instead of a hardcoded three |
 | 12 | Order success animation | to do |
 | 13 | Search | **Done** |
 | 14 | Filters and sorting | **Done** |
@@ -1135,15 +1136,95 @@ added in the future if required", which is not a requirement, and building a car
 has asked for would mean a provider, a webhook, and a paid-order state machine. The column and
 the enum are the whole preparation that is worth doing now.
 
-### The next task — section 11, stock and availability
+### What section 11 delivered
 
-Most of it is already standing: `StockBadge`, per-size gating on the product page, the bag's
-three problem states, and checkout refusing an unfulfillable bag. What is left is a review of
-the whole surface against §11 — the badge thresholds, whether the available quantity should
-be shown anywhere else, and the out-of-stock states on the grid and in search.
+Stock and availability, requirements section 11's four asks: stock is tracked (it already
+was, per size), availability is displayed, a badge names the state, and an unavailable
+product or size cannot be purchased. The last three were already standing from sections 4 and
+6 — reviewing this as its own section found that the middle one, "which badge for which
+count", **had three different answers depending on which surface you looked at.**
 
-Then section 12 (the order animation) and section 16 (reviews). **Both need a real order**,
-so both sit behind the same demo-catalog fact as the happy path of checkout.
+**The bug: "low stock" meant three different things.**
+
+```
+product_summaries VIEW (Postgres)   low = total > 0 and total <= threshold
+lib/demoData.ts                     low = total > 0 and total <= threshold + 1
+SizeSelector                        "only N left" when stock <= threshold
+```
+
+At the shipped threshold of 4, a piece with **5 left was "Low stock" in demo mode and "In
+stock" against the database.** The badge changed meaning the moment `VITE_DATA_SOURCE`
+flipped from `demo` to `supabase` — the one thing a badge must never do — and nothing would
+have caught it, because both readings are individually plausible and the drift was between
+files that never sit side by side in a diff.
+
+**`shared/stock.ts` is the fix, and it is the same shape as `shared/checkout.ts` and
+`shared/payment.ts`: one rule, everything else reads it.**
+
+```
+stockLevel(quantity, threshold)   "out-of-stock" | "low-stock" | "in-stock" — the ONE test
+STOCK_LEVEL_LABEL                 the badge word for each level
+totalStock(sizes)                 units across every size — what a list badge counts
+stockInSize(sizes, size)          units in ONE size — what the size selector gates on
+availableSizes(sizes)             which sizes can actually be bought right now
+joinNames(names)                  "Small and Large" / "Small, Medium and Large"
+FALLBACK_LOW_STOCK_THRESHOLD = 4  what to use before settings load — same number the VIEW falls back to
+SIZES, SIZE_LABELS                moved here from `lib/sizes.ts`, which now just re-exports them
+```
+
+The SQL view is the one copy that cannot import it — Postgres cannot run TypeScript — so it
+is the fourth thing that has to independently agree, the same way the Edge Function carries
+the checkout rules inline. It already agreed by coincidence (`<= threshold`, fallback `4`);
+the drift check described below now holds it to that on purpose rather than by luck. `demoData.ts`
+imports the module directly, so the demo catalog cannot re-introduce its own definition.
+
+**Three real gaps closed, not just the drift:**
+
+1. **The badge could not answer section 11's "available product quantity" ask.**
+   `product_summaries` had always computed `total_stock` — it was simply never *selected* by
+   `supabaseSource.ts`, so nothing above that file could see it. It is now on `ProductSummary`
+   (optional, so an older cached summary still renders), and `StockBadge` shows the count
+   next to the word **only when stock is actually low** — a full shelf does not need a
+   number, a shopper deciding whether to grab the last few does.
+2. **The product page told every visitor "Small, Medium and Large" regardless of what was
+   actually in stock.** That line was static copy, not data — a piece missing its Medium said
+   so nowhere near the size selector two lines above it, which is exactly the gap section 11's
+   "the user should be clearly informed" is there to catch. It now reads
+   `availableSizes` + `joinNames`, or "None left — every size is sold out."
+3. **A stale local `FALLBACK_LOW_STOCK = 4` in `ProductDetailPage.tsx`** duplicated the number
+   this section made a shared constant for. Deleted in favour of the import — the kind of
+   second copy that section 11 exists to stop happening again.
+
+**No database or rules change was needed.** `product_summaries.total_stock` and the view's
+low-stock arithmetic were already correct and already deployed; this section only started
+reading the column and stopped restating its rule elsewhere. The grid, search and the in-stock
+filter already handled sold-out products correctly (`ProductCard` dims the image and swaps the
+hover label, `ProductFilters`' "in stock only" checkbox and the empty-state copy on
+`ProductsPage` already covered it) — nothing there needed touching. `useCatalogRealtime`
+already watches `product_sizes`, so a size selling out updates every open tab without a
+refresh, unrelated to this section but worth confirming it still holds.
+
+**Verified with 95 assertions**: `stockLevel` at, above and below the threshold, with a
+negative quantity, `NaN`, and a negative threshold; the labels; `totalStock` and `stockInSize`
+against a full and a partial sizes map, including a defensively-clamped negative stored value;
+`availableSizes` and `joinNames` for zero, one, two and three sizes; **every demo product's
+`inStock`/`lowStock`/`totalStock` checked against `shared/stock.ts` directly** rather than
+against its own precomputed value, so the comparison cannot be circular, including the known
+sold-out fixture (Kohl Poplin Shirt) and confirming at least one genuinely low-stock product
+exists so the assertions are not vacuous; a text-level drift check against the SQL view's
+`low_stock` expression and its fallback threshold; and a render check of `StockBadge` (the
+count appears only when low and known, never as the literal string "undefined") and
+`SizeSelector` (a zero-stock size is genuinely `disabled`, the low-stock announcement names
+the right size and count, "every size sold out" renders when it is). All pass. Build,
+typecheck and lint are clean.
+
+**Not built, deliberately:** a dedicated "quantity" number on the product page outside the
+size selector's own "Only N left in Medium" line — section 11 says the quantity display "may
+include" this, and a second number next to the first would be restating it. A stock history or
+a "notify me when back in stock" needs a write path, which nothing has asked for and which
+every client write is denied by design (section 2).
+
+
 
 ## 9. Open questions — ask before inventing
 
@@ -1192,17 +1273,24 @@ so both sit behind the same demo-catalog fact as the happy path of checkout.
   and clearing site data empties it. That is a consequence of having no server, not an
   oversight — say so if the client asks. A saved bag needs auth, which §7 explicitly does
   not require.
-- **Nothing is blocked.** Sections 1-7, 9, 10, 13 and 14 are done and shipped. Section 11 is
-  next; sections 12 and 16 follow. Section 8 is Developer B's.
-- **THE `payment_method` MIGRATION IS NOT APPLIED TO THE LIVE DATABASE.**
-  `supabase/migrations/20260829000003_payment_method.sql` is committed but unapplied — it
-  needs `SUPABASE_ACCESS_TOKEN` (section 4). Apply it with the Management API, then
-  redeploy nothing: the Edge Function passes the function's result straight through and does
-  not need rebuilding. **Tell Developer B the `payment_method` column exists** so the admin
-  dashboard's order list shows it rather than hardcoding "COD".
+- **Nothing is blocked.** Sections 1-11, 13 and 14 are done and shipped. Section 12 is next,
+  then section 16. Section 8 is Developer B's.
+- **The `payment_method` migration is applied and verified.**
+  `supabase/migrations/20260829000003_payment_method.sql` was applied to the live project on
+  2026-08-29 with `SUPABASE_ACCESS_TOKEN`, and `place_order` was exercised end to end inside a
+  rolled-back transaction — the column, the enum and the restated function all behave as
+  written, and the database was confirmed empty afterwards. **Tell Developer B the
+  `payment_method` column exists** so the admin dashboard's order list can show it rather than
+  hardcoding "COD".
 - **A second payment method is a product decision, not a task.** Section 9 says online payment
   "may be added in the future if required". The enum and the column are ready for one; nothing
   else is. Ask the client before assuming it is wanted.
+- **"Low stock" is now ONE rule, in `shared/stock.ts`, and it was not before.** Section 11
+  found that the SQL view, the demo catalog and the size selector each computed it slightly
+  differently — a piece with 5 units left was "Low stock" in demo mode and "In stock" against
+  the database at the shipped threshold of 4. Any future stock-related surface (the admin
+  dashboard's low-stock alerts included) should read `stockLevel()` rather than reimplementing
+  the comparison — that is exactly the mistake this file exists to stop repeating.
 - **The happy path of checkout cannot be tested end to end yet**, because the storefront is
   still on demo data whose product ids do not exist in the database, so `place_order()`
   refuses every order. That is a sequencing fact, not a bug — it resolves when the admin
