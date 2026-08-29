@@ -4,8 +4,9 @@
 This file is the *state of the work*; `Requirements.md` is the spec.
 
 Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1 (brand identity),
-2 (landing page), 3 (products page), 4 (product details page) and 5 (categories) are
-built.** Everything from section 6 onward is still to do.
+2 (landing page), 3 (products page), 4 (product details page), 5 (categories) and
+6 (shopping cart) are built.** Section 7 (checkout) is next, and is **blocked on the Blaze
+plan** — it needs the `placeOrder` Cloud Function.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -87,7 +88,7 @@ Storefront builds clean; functions typecheck clean.
 | Area | State |
 | --- | --- |
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
-| Routing | react-router-dom, `/`, `/products`, `/products/:slug` and `/categories`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
+| Routing | react-router-dom, `/`, `/products`, `/products/:slug`, `/categories` and `/cart`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
 | Firebase client | Wired, web app registered, config in `storefront/.env.local` |
 | Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
 | Data source | `VITE_DATA_SOURCE=demo`. Switches to `firebase` when Blaze is bought |
@@ -99,10 +100,11 @@ Storefront builds clean; functions typecheck clean.
 | Products page | **Done (section 3).** `/products`, honours `?category=`, reuses `ProductGrid` |
 | Product details | **Done (section 4).** `/products/:slug` — gallery, size selection, reviews, related |
 | Categories | **Done (section 5).** `/categories` index, the category view on `/products?category=`, category chips, data-driven header and footer nav |
+| Shopping cart | **Done (section 6).** `/cart`, a mini-bag drawer, quantity and removal, live re-pricing against the catalog. **localStorage — there is no server** |
 | Demo catalog | 12 products, 3 categories, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
-| Product features | Listing, detail and category browsing. No cart, checkout, auth, review UI, search, sorting, admin |
+| Product features | Listing, detail, category browsing and the bag. No checkout, auth, review UI, search, sorting, admin |
 | Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
@@ -123,10 +125,13 @@ storefront/          React + Vite (Developer A)
                            CtaBand
   src/features/products/   ProductCard, ProductGrid, StockBadge - reused by sections 3/5/13
                            ProductGallery, SizeSelector, RelatedProducts
+  src/features/cart/       CartContext + CartProvider, CartButton, CartDrawer (lazy host),
+                           CartDrawerPanel, CartLineRow, CartSummary, QuantityStepper,
+                           useCartContents - the hook that prices the bag
   src/features/categories/ CategoryTile (shared: landing bento + /categories), CategoryNav
   src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews
   src/pages/               HomePage, ProductsPage, ProductDetailPage, CategoriesPage,
-                           NotFoundPage
+                           CartPage, NotFoundPage
   src/lib/firebase.ts      client SDK init
   src/lib/queries.ts       read layer + cache + THE SOURCE SWITCH
   src/lib/sources/         CatalogSource (the interface), firebaseSource, demoSource
@@ -134,6 +139,8 @@ storefront/          React + Vite (Developer A)
   src/lib/format.ts        formatPrice / formatRating / formatDate / prettifySlug
   src/lib/sizes.ts         SIZES + SIZE_LABELS - the order sizes are shown in
   src/lib/routes.ts        EVERY internal URL - the one definition of a category link
+  src/lib/cart.ts          bag rules: validation, mutations, pricing. PURE
+  src/lib/cartStore.ts     the bag as an external store over localStorage
   src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
 functions/           Cloud Functions, Admin SDK, own node_modules (NOT a workspace)
@@ -201,6 +208,9 @@ Functions dependencies install separately, once: change into `functions/` and ru
 - **List views read `productSummaries`, never `products`.**
 - **Never write an internal URL by hand.** Import `categoryPath` / `productPath` from
   `lib/routes.ts`. Six surfaces link to a category; they must agree on one URL.
+- **The bag never stores a price, a name or an image** — only ids, size and quantity.
+  Everything else is re-read from the catalog on render. A cached price would only ever
+  end up disagreeing with the server, which recomputes every total (§17).
 - **Never import `lib/demoData.ts` from a component or page.** Go through
   `lib/queries.ts` — that indirection is what makes switching to the database a
   one-file change instead of a rewrite.
@@ -248,8 +258,8 @@ one starts.
 | 3 | Products page — grid, cards | **Done** |
 | 4 | Product details — gallery, size selection | **Done** |
 | 5 | Categories | **Done** |
-| 6 | Shopping cart | **Next** |
-| 7 | Checkout — guest + signed in | to do |
+| 6 | Shopping cart | **Done** |
+| 7 | Checkout — guest + signed in | **Next** — blocked on Blaze |
 | 8 | *Admin dashboard — **Developer B**, not us* | not ours |
 | 9 | Payment — COD only | to do |
 | 10 | Delivery charges | to do |
@@ -547,35 +557,120 @@ B it exists** so the admin dashboard can offer it as an optional field.
 section 14), and per-category photography — the category art is the same generated demo
 tile the landing bento uses.
 
-### The next task — section 6, the shopping cart
+### What section 6 delivered
 
-Requirements section 6: an *Add to cart* option on every product, the size chosen before
-adding, a cart showing product / size / quantity / price / order total, and the ability to
-update a quantity or remove a line before checkout.
+The bag: an *Add to bag* control on every product behind the size gate, a `/cart` page
+showing product, size, quantity, price and the order total, and the ability to change a
+quantity or remove a line before checkout — which is what requirements section 6 asks for.
 
-What already exists — read it before building anything:
+**THE BAG HAS NO SERVER, and that shapes everything.** Every client write to the database
+is denied by design and Cloud Functions need Blaze, so the bag lives in `localStorage` on
+the visitor's own device. Two rules fall out of it and both are enforced in code:
 
-1. **The size gate is built.** `SizeSelector` on the product page already refuses a
-   sold-out size, and "Add to bag" is already disabled until a size is chosen and on a
-   piece where every size is gone (§11). Today that button only sets a line of copy saying
-   the cart is not built — that is the one thing to replace.
-2. **Per-product state has a known trap.** react-router swaps `:slug` without unmounting
-   the detail page, so the chosen size is stamped with the slug it was chosen for. A
-   quantity control on that page has exactly the same trap — see section 4's note.
-3. `ValueProps`, `Breadcrumbs`, `PageHeader`, `formatPrice` and `lib/routes.ts` are all
-   ready to reuse. The header has no cart control yet; it needs one with a count badge.
+1. **A stored line holds identity only** — `productId`, `slug`, `size`, `qty`. Never a
+   price, a name or an image. Those are re-read from the catalog every time the bag is
+   rendered, so a price the admin changes is right immediately and a bag left open for a
+   week cannot show last week's total. §17 has the SERVER recompute every total from stored
+   prices; a client that cached one would only ever be disagreeing with it.
+2. **Anything read back out is untrusted input.** Storage is plain text the visitor can
+   edit, so `readCart` validates every field and drops what does not typecheck — a bad
+   size, a negative quantity, a missing slug — rather than handing the app a bag that
+   cannot be priced (§17, reject malformed or oversized input). A corrupt value reads as an
+   empty bag and never throws.
 
-Decisions to make before writing anything:
+**The layering is deliberate, and worth keeping:**
 
-- **Where the cart lives.** It has no server — every client write is denied and Cloud
-  Functions need Blaze — so it is `localStorage` plus a React context. Agree the stored
-  shape: it must hold `productId`, `slug`, `size` and `qty`, and **re-read the price from
-  the catalog on render**, never trust a stored price, because §17 has the server recompute
-  every total and the cart must not show a stale one.
-- **A cart page, a drawer, or both.**
-- **What happens when a line goes out of stock while it sits in the cart.** §11 says an
-  unavailable option must not be purchasable, so the cart has to re-check `inStock` and the
-  per-size stock on read, not only at checkout.
+```
+lib/cart.ts        PURE - validation, mutations, and buildCart (the money)
+lib/cartStore.ts   the external store over localStorage + the cross-tab listener
+features/cart/     CartProvider binds those to React; everything else is UI
+```
+
+`buildCart` is the ONE place the bag is priced, so the drawer, the cart page and the header
+badge cannot disagree about a total (§18).
+
+**`useSyncExternalStore`, not `useState` seeded by an effect.** Storage is a thing outside
+React that changes without React being told, including from another tab. The effect version
+rendered the whole app twice on every page load — once with an empty bag — which meant the
+header badge flashed empty and a `ready` flag had to be threaded through the UI. The
+external store makes the first render already correct, and subscribes the `storage` event
+once however many components read the bag. ESLint's `react-hooks/set-state-in-effect` rule
+catches the old shape if anyone reintroduces it.
+
+**Two surfaces, one set of components.** `/cart` is the canonical bag — linkable, sharable,
+back-button-able. The drawer is the shortcut, and opens the moment something is added,
+because a button that changes nothing visible does not read as having worked. Both render
+the same `CartLineRow` and `CartSummary`.
+
+**The drawer is `lazy`.** `CartDrawer.tsx` is a tiny always-mounted host; the panel and
+everything it pulls in is a chunk that downloads the first time the bag is opened, shared
+with the cart page. Inlining it added ~4.4 kB gzip to every page load for something most
+visits never open (§19). The host also owns "close on navigate" — an effect inside the panel
+would fire on the panel's own mount and close the drawer in the same breath as it opened.
+
+**Stock is re-checked against the live catalog every time the bag renders** (§11). A line
+can be `gone` (retired), `sold-out` (that size went while the bag sat there) or `reduced`
+(fewer left than the quantity asked for). Any of them prices the line at ZERO, excludes it
+from the total, and **disables checkout** — a disabled `Button`, not a styled `Link`, because
+an anchor cannot be disabled and section 11 requires the option genuinely cannot be taken.
+One control clears all the bad lines so the visitor is not left hunting for the culprit.
+
+The bag reads the FULL product, not the summary, because stock is per size and only
+`products/{id}.sizes` carries it. One read per distinct product, in parallel, all served by
+the cache in `queries.ts` — and bounded by `MAX_LINES`, so it is never an unbounded read.
+
+**Delivery is shown in the bag** (§10) from the admin-configured settings, with free
+delivery above the threshold and the shortfall called out. Display only — the server
+recomputes it at checkout.
+
+**The product page gained a quantity stepper**, and it carries the same slug-stamping trap
+the size selector does: 3 of one shirt must not become 3 of the next one when react-router
+swaps `:slug` without unmounting. Changing size resets the quantity to 1, because a quantity
+valid for Large may exceed what is left in Small.
+
+**Verified with 59 assertions** through an SSR harness: storage validation, the merge and
+cap rules, quantity and removal, pricing from the catalog rather than storage, all three
+stock problems, delivery arithmetic, and what the line and summary actually render. The
+harness is not committed — it needs a `localStorage` stub and a browser-free React render,
+which is not worth a test runner in the repo yet.
+
+**Not built, deliberately:** checkout itself (section 7 — it needs `placeOrder`, so it needs
+Blaze; `/checkout` falls through to the catch-all page, which says so), a saved bag across
+devices (that needs auth and a write path), and promo codes, which nothing has asked for.
+
+### The next task — section 7, checkout
+
+**This is the first section that CANNOT be finished without the Blaze plan.** It needs the
+`placeOrder` Cloud Function, `functions/src/index.ts` currently throws `unimplemented`, and
+Cloud Functions will not deploy on Spark. Everything up to here has shipped without billing;
+this is the hard stop noted in section 2.
+
+What section 7 asks for: guest checkout with **no mandatory authentication**, the field list
+in §7 as clarified by §17 (postal code is OPTIONAL), validation that blocks confirmation
+while anything required is missing or invalid, and an order that lands in the admin
+dashboard.
+
+What already exists:
+
+1. **The bag is ready to hand over.** A stored `CartItem` is deliberately a superset of
+   `PlaceOrderInput["items"]` — drop `slug` and it is the payload. `buildCart` already knows
+   which lines are orderable.
+2. `OrderCustomer`, `PlaceOrderInput` and `PlaceOrderResult` are already in
+   `shared/types.ts`, and `orders/` is already server-write-only in the rules.
+3. `CHECKOUT` is already in `lib/routes.ts` and already linked from the bag.
+
+Before writing anything:
+
+- **Ask Huzaifa whether Blaze has been bought.** If not, the honest options are to build the
+  form and validation against a stubbed `placeOrder` and ship the rest, or to pause section 7
+  and do sections 13/14 (search, filters and sorting) first — both are pure storefront work
+  that needs no billing. **Section 12's order-success animation is also blocked**, since it
+  needs a real order to show.
+- **Validation belongs in one place.** §17 requires the same rules on the client and again on
+  the server. Put them in `shared/` so `functions/` and the storefront cannot drift — that is
+  a shared-contract addition, so agree it with Developer B.
+
+*(Section 6's brief is above, under "What section 6 delivered".)*
 
 **When Blaze is bought and the switch happens**, the checklist is:
 
@@ -633,6 +728,16 @@ Decisions to make before writing anything:
 - **Category artwork.** The `/categories` index and the category page headers reuse the same
   generated demo tiles as the landing bento. Real category photography is part of the same
   ask as the product photography above.
+- ~~Where the cart lives~~ — **resolved in section 6.** `localStorage`, via an external
+  store, holding identity only. Not a decision to revisit without a write path.
+- **The bag is per-device and per-browser.** It does not follow a customer to their phone,
+  and clearing site data empties it. That is a consequence of having no server, not an
+  oversight — say so if the client asks. A saved bag needs auth, which §7 explicitly does
+  not require.
+- **Blaze is now on the critical path.** Sections 1-6 are done and shipped without it.
+  Section 7 (checkout), section 12 (the order animation) and the review form in section 16
+  all need Cloud Functions. Sections 13 and 14 (search, filters, sorting) do NOT — they are
+  the work to do if Blaze is still not bought.
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
 - **Delivery charges** (section 10) — flat rate or per city? Undecided.
 - **Admin dashboard spec** (section 8) — still pending from the client.
