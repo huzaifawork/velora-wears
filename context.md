@@ -3,17 +3,24 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-7, 13 and 14 are
-built** — brand, landing, products, product details, categories, the cart, checkout, search,
-and filters and sorting.
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-7, 9, 10, 13 and 14
+are built** — brand, landing, products, product details, categories, the cart, checkout,
+payment, delivery charges, search, and filters and sorting.
 
 **MIGRATED TO SUPABASE on 2026-08-29.** The Firebase project has been deleted by its owner
 and every trace of Firebase is out of this repository. The stack is now Supabase — Postgres,
 Supabase Realtime, and Edge Functions. Read section 2 and section 4 before touching data code.
 
 **Nothing is blocked any more.** Edge Functions are on the Supabase free tier, so the Blaze
-paywall that blocked checkout is gone. Section 9 (payment) and section 10 (delivery charges)
-were delivered inside section 7; sections 11, 12 and 16 are next. Section 8 is Developer B's.
+paywall that blocked checkout is gone. Section 10 (delivery charges) was delivered inside
+section 7, and **section 9 (payment) was reviewed as its own section and finished**; sections
+11, 12 and 16 are next. Section 8 is Developer B's.
+
+> **One migration is written but NOT yet applied to the live database.**
+> `supabase/migrations/20260829000003_payment_method.sql` adds the `payment_method` column
+> and restates `place_order()`. Applying it needs `SUPABASE_ACCESS_TOKEN` — see section 4.
+> Until it is applied the storefront still works (a response without the method reads as
+> cash on delivery), but the column the admin dashboard needs does not exist yet.
 
 **Checkout cannot be completed end to end yet, and that is a sequencing fact, not a bug.**
 The storefront still reads the demo catalog, whose product ids do not exist in the database,
@@ -174,12 +181,15 @@ storefront/          React + Vite (Developer A)
   src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
 supabase/
-  migrations/        THE DATABASE. Schema, RLS policies, place_order(). Deployed.
+  migrations/        THE DATABASE. Schema, RLS policies, place_order().
+                     0001+0002 deployed; 0003 (payment_method) NOT YET APPLIED.
+                     0003 holds the live place_order() - 0002 is superseded history.
   functions/
     place-order/     Edge Function (Deno) - validation + the call into place_order()
   config.toml        CLI config
 shared/types.ts      DATA CONTRACT - shared with Developer B
 shared/checkout.ts   CHECKOUT RULES - mirrors the Edge Function's validation exactly
+shared/payment.ts    PAYMENT METHODS (section 9) - the enum and the words for it
 ```
 
 npm workspaces cover `storefront` and `shared` only. `supabase/functions/` is Deno, not
@@ -347,7 +357,8 @@ product_sizes       (product_id, size) PK, stock        <- per-size stock, secti
 product_images      product_id, position, thumb_url, full_url, width, height
 reviews             product_id, order_id, rating, comment, display_name,
                     verified_purchase, hidden           <- unique (order_id, product_id)
-orders              customer PII, subtotal/delivery/total, review_token  SERVER-WRITTEN ONLY
+orders              customer PII, subtotal/delivery/total, payment_method,
+                    review_token                                   SERVER-WRITTEN ONLY
 order_items         snapshot of name/slug/thumb/size/qty/unit_price at order time
 settings            ONE row: delivery_charge, free_delivery_threshold, low_stock_threshold
 settings_private    admin only
@@ -396,7 +407,7 @@ one starts.
 | 6 | Shopping cart | **Done** |
 | 7 | Checkout — guest + signed in | **Done** |
 | 8 | *Admin dashboard — **Developer B**, not us* | not ours |
-| 9 | Payment — COD only | **Done in section 7** — COD is stated on the form and the confirmation |
+| 9 | Payment — COD only | **Done.** Stated on the form and the confirmation, and now RECORDED on the order — `payment_method` in Postgres, `shared/payment.ts` in the applications |
 | 10 | Delivery charges | **Done in section 7** — admin-configured, shown in the bag, at checkout and on the confirmation; the SERVER applies it |
 | 11 | Stock and availability | mostly done — badges, per-size gating, and checkout blocked on an unfulfillable bag. **Next** |
 | 12 | Order success animation | to do |
@@ -1045,6 +1056,85 @@ which need an account.
 The Edge Function has none. It belongs there, or in front of it, not in the browser — a
 client-side limit is not a limit. Raise it before the shop takes real orders.
 
+### What section 9 delivered
+
+Payment. Requirements section 9 is three sentences — cash on delivery only, no online payment
+integration, other methods possibly later — and most of what it asks for had already fallen
+out of section 7: the checkout form states the method, the confirmation states it, and there
+is no card field anywhere in the application. **Reviewing it as its own section found one
+thing genuinely missing, and it was in the database.**
+
+**An order did not record how it was paid.** `orders` had no payment method column at all.
+That is invisible while there is one answer and ambiguous forever afterwards: the day a card
+option is added, every row written before it becomes a guess. Section 8 also requires the
+admin dashboard to show every confirmed order for management, and with no column the only
+thing it could print was a hardcoded word.
+
+So the method is now recorded, and the shape is deliberately the cheap one to extend:
+
+```
+supabase/migrations/20260829000003_payment_method.sql
+    create type public.payment_method as enum ('cod');
+    alter table public.orders add column payment_method ... not null default 'cod';
+    + an index on (payment_method, created_at desc)
+    + place_order() restated: writes the method, and returns it
+
+shared/payment.ts   the TS union, the default, and THE WORDS for each method
+```
+
+Adding a second method later is `alter type ... add value` plus whatever collects it — not a
+backfill over live orders.
+
+**The browser cannot set it, and that is the point.** `PlaceOrderInput` has no field for it,
+the Edge Function forwards only items and the customer, and `place_order()` writes `'cod'`
+itself. A client that could name how an order is paid could declare one paid — the same
+reasoning that keeps prices and totals server-side (§17).
+
+**`shared/payment.ts` holds the copy, not just the type.** Three surfaces describe the same
+order — the checkout form, the confirmation page, and the admin dashboard's order list — and
+they must not describe it differently (§18). The form and the confirmation now read their
+wording from it instead of each carrying its own sentence, so the label, the blurb, the
+"to pay on delivery" heading and the agreement line under the button all have one definition.
+
+**The confirmation reads the order, not an assumption.** It could hardcode "cash on delivery",
+since that is the only method there is, but then it would be stating a belief rather than the
+order, and would go on stating it after a second method existed. `PlaceOrderResult` and the
+stored receipt both carry the method now, and the page renders what came back.
+
+**Every read of the method is tolerant, on purpose.** `paymentMethodOf()` resolves anything
+unrecognised — a receipt written by an older build, a response from a database the migration
+has not been applied to yet, a value from a future build this bundle has not been taught — to
+cash on delivery, because that is what such an order actually was. A confirmation page is not
+worth breaking over a field that did not exist last week.
+
+> **`20260829000002_place_order.sql` IS NOW HISTORY.** A Postgres function cannot be patched
+> in place, so adding the method meant restating the whole body in `0003`. **Edit `0003`.**
+> A note at the top of `0002` says so; a change made there would apply on a fresh database and
+> then be overwritten by the later migration.
+
+**Verified with 31 assertions**: the method table and its copy; every tolerant read
+(`undefined`, `null`, a number, an unknown future value) resolving to the default; the receipt
+round-tripping the method, a legacy receipt with no method reading as COD, and a genuinely
+corrupt receipt still being refused; the result carrying the server's method through, and
+defaulting when the server omits it; the unreadable-success guard still firing; **the request
+body carrying no payment method, no price and no total, and no `Authorization` header for a
+guest**; and a drift check that reads the migration as text and asserts the Postgres enum and
+the TypeScript union name the same methods, that `place_order` sets the value itself, and that
+the Edge Function forwards nothing for it. All pass. Build, typecheck and lint are clean and
+the `supabase` chunk is still empty.
+
+**Not done — the migration is NOT applied.** `supabase/migrations/20260829000003_payment_method.sql`
+is written and committed but the live database does not have the column yet: applying it needs
+`SUPABASE_ACCESS_TOKEN` (section 4), which was not available in the session that wrote it.
+Nothing breaks meanwhile — no order can be placed at all while the catalog is demo data, and
+the client reads a missing method as COD — but **apply it before the shop takes real orders,
+and tell Developer B the column exists.**
+
+**Not built, deliberately:** any second payment method. Section 9 says online payment "may be
+added in the future if required", which is not a requirement, and building a card flow nobody
+has asked for would mean a provider, a webhook, and a paid-order state machine. The column and
+the enum are the whole preparation that is worth doing now.
+
 ### The next task — section 11, stock and availability
 
 Most of it is already standing: `StockBadge`, per-size gating on the product page, the bag's
@@ -1104,6 +1194,15 @@ so both sit behind the same demo-catalog fact as the happy path of checkout.
   not require.
 - **Nothing is blocked.** Sections 1-7, 9, 10, 13 and 14 are done and shipped. Section 11 is
   next; sections 12 and 16 follow. Section 8 is Developer B's.
+- **THE `payment_method` MIGRATION IS NOT APPLIED TO THE LIVE DATABASE.**
+  `supabase/migrations/20260829000003_payment_method.sql` is committed but unapplied — it
+  needs `SUPABASE_ACCESS_TOKEN` (section 4). Apply it with the Management API, then
+  redeploy nothing: the Edge Function passes the function's result straight through and does
+  not need rebuilding. **Tell Developer B the `payment_method` column exists** so the admin
+  dashboard's order list shows it rather than hardcoding "COD".
+- **A second payment method is a product decision, not a task.** Section 9 says online payment
+  "may be added in the future if required". The enum and the column are ready for one; nothing
+  else is. Ask the client before assuming it is wanted.
 - **The happy path of checkout cannot be tested end to end yet**, because the storefront is
   still on demo data whose product ids do not exist in the database, so `place_order()`
   refuses every order. That is a sequencing fact, not a bug — it resolves when the admin
