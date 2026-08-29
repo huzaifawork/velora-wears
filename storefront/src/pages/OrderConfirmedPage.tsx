@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Container } from "@/components/layout/Container";
 import { Image } from "@/components/ui/Image";
 import { buttonClasses } from "@/components/ui/Button";
+import { OrderSuccessAnimation } from "@/features/checkout/OrderSuccessAnimation";
 import { formatPrice } from "@/lib/format";
 import { readReceipt, receiptSubtotal } from "@/lib/orderReceipt";
 import { CART, HOME, PRODUCTS, productPath } from "@/lib/routes";
@@ -11,13 +12,12 @@ import { paymentMethodCopy } from "@shared/payment";
 
 /**
  * The order success page (requirements section 7 — "an order confirmation
- * message or success page should be displayed to the customer").
- *
- * **Requirements section 12's animation is not here yet.** That is its own
- * section and its own review, and it is built on top of this page rather than
- * instead of it: the packing-and-loading sequence replaces the mark at the top,
- * and everything below it — the number, the pieces, the total, what happens
- * next — is what the animation is confirming and stays exactly as it is.
+ * message or success page should be displayed to the customer") — now with
+ * section 12's animated confirmation at the top: a package packed, a
+ * delivery truck arriving, the package loaded in, then the confirmation
+ * mark drawing itself. See `features/checkout/OrderSuccessAnimation.tsx`.
+ * Everything below it — the number, the pieces, the total, what happens
+ * next — is what the animation is confirming and is unchanged by it.
  *
  * **It reads from `lib/orderReceipt`, not from the database.** The storefront
  * cannot read an order back: `orders` holds the customer's name, phone and
@@ -57,7 +57,7 @@ export function OrderConfirmedPage() {
     <Container className="py-16 sm:py-24">
       <div className="mx-auto max-w-2xl">
         <div className="text-center">
-          <ConfirmationMark />
+          <OrderSuccessAnimation />
 
           <p className="mt-8 text-[0.625rem] tracking-eyebrow text-accent uppercase">
             Order confirmed
@@ -174,42 +174,6 @@ export function OrderConfirmedPage() {
         </div>
       </div>
     </Container>
-  );
-}
-
-/**
- * A stroked circle and tick that draw themselves in. It is a mark, not
- * section 12's animation — that one has a package, a truck and a loading
- * sequence, and it replaces this. Both `stroke-dasharray` animations are
- * turned off by the reduced-motion rule in `index.css`, which leaves the tick
- * fully drawn rather than half of one.
- */
-function ConfirmationMark() {
-  return (
-    <svg
-      viewBox="0 0 64 64"
-      role="img"
-      aria-label="Order confirmed"
-      className="mx-auto h-20 w-20 text-accent"
-    >
-      <circle
-        cx="32"
-        cy="32"
-        r="29"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        opacity="0.45"
-      />
-      <path
-        d="M20 33.5 L28.5 42 L45 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   );
 }
 

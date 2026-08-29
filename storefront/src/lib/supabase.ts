@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+export { hasSupabaseConfig } from "@/lib/env";
+
 /**
  * The Supabase browser client.
  *
@@ -15,6 +17,12 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  *
  * The client is created lazily so that in demo mode it is never constructed and
  * the Supabase SDK is never even downloaded (see `lib/queries.ts`).
+ *
+ * **A real session is now kept.** Optional customer accounts (section 12's
+ * note in `Requirements.md`) need one: signing in has to survive a refresh,
+ * and the password-reset email link has to be readable from the URL it lands
+ * on. Guest checkout (section 7) is entirely unaffected — it never touches
+ * this session at all, signed in or not.
  */
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -32,20 +40,12 @@ export function getSupabase(): SupabaseClient {
 
     client = createClient(url, anonKey, {
       auth: {
-        // The storefront is a guest-first shop: checkout must work without an
-        // account (requirements section 7). Nothing here depends on a session,
-        // so there is no reason to keep one alive or to parse one out of a URL.
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
       },
     });
   }
 
   return client;
-}
-
-/** True when the storefront is configured to talk to Supabase at all. */
-export function hasSupabaseConfig(): boolean {
-  return Boolean(url && anonKey);
 }

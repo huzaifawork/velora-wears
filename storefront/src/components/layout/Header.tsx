@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from "react-router-do
 import { Logo } from "@/components/brand/Logo";
 import { Container } from "@/components/layout/Container";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { AccountMenu, AccountMobileLink } from "@/features/account/AccountMenu";
 import { CartButton } from "@/features/cart/CartButton";
 import { SearchBar } from "@/features/products/SearchBar";
 import { useAsync } from "@/hooks/useAsync";
@@ -28,6 +29,11 @@ import { CATEGORIES, PRODUCTS, categoryPath, searchPath } from "@/lib/routes";
  * the same `SearchBar` the products page uses, and submitting it navigates to
  * the products page with `?q=` — search results are a STATE of that page, not a
  * page of their own, which is what lets them be filtered and sorted.
+ *
+ * `AccountMenu` (optional customer accounts, the note added to section 12) is
+ * the last icon before the bag — sign in when signed out, the account page
+ * when signed in. `AccountMobileLink` is the same state as a row in the phone
+ * menu, since the icon carries no label there.
  */
 
 /**
@@ -168,6 +174,7 @@ export function Header() {
             </svg>
           </button>
 
+          <AccountMenu />
           <CartButton />
 
           <button
@@ -228,6 +235,7 @@ export function Header() {
                 </Link>
               );
             })}
+            <AccountMobileLink onNavigate={() => setOpen(false)} />
           </Container>
         </nav>
       )}

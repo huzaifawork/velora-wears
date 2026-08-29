@@ -62,15 +62,28 @@ export function CheckoutForm({
   /** Field errors the SERVER returned. It is the authority; these override. */
   serverErrors,
   disabled = false,
+  /**
+   * What to open the form with — a signed-in customer's email, and their
+   * most recent order's delivery details, so an account can genuinely "skip
+   * re-typing details next time" as the note added to section 12 promises.
+   * A guest gets `EMPTY_CHECKOUT_DRAFT`. Read once, on mount: the draft is
+   * the customer's from then on, and re-applying it out from under them if
+   * their account data loads a moment later would overwrite what they typed.
+   */
+  initialValues,
   onSubmit,
 }: {
   total: number;
   submitting: boolean;
   serverErrors?: CheckoutErrors;
   disabled?: boolean;
+  initialValues?: Partial<CheckoutDraft>;
   onSubmit: (customer: OrderCustomer) => void;
 }) {
-  const [draft, setDraft] = useState<CheckoutDraft>(EMPTY_CHECKOUT_DRAFT);
+  const [draft, setDraft] = useState<CheckoutDraft>(() => ({
+    ...EMPTY_CHECKOUT_DRAFT,
+    ...initialValues,
+  }));
   const [reporting, setReporting] = useState<Partial<Record<CheckoutField, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
   /** What was last sent, so a server objection can be retired once it is answered. */

@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Route, Routes } from "react-router-dom";
 
 import { Container } from "@/components/layout/Container";
+import { AuthProvider } from "@/features/account/AuthProvider";
 import { CartDrawer } from "@/features/cart/CartDrawer";
 import { CartProvider } from "@/features/cart/CartProvider";
 import { useCatalogRealtime } from "@/hooks/useCatalogRealtime";
@@ -36,6 +37,15 @@ const CheckoutPage = lazy(() =>
 const OrderConfirmedPage = lazy(() =>
   import("@/pages/OrderConfirmedPage").then((m) => ({ default: m.OrderConfirmedPage })),
 );
+const AccountPage = lazy(() =>
+  import("@/pages/AccountPage").then((m) => ({ default: m.AccountPage })),
+);
+const SignInPage = lazy(() =>
+  import("@/pages/SignInPage").then((m) => ({ default: m.SignInPage })),
+);
+const SignUpPage = lazy(() =>
+  import("@/pages/SignUpPage").then((m) => ({ default: m.SignUpPage })),
+);
 const NotFoundPage = lazy(() =>
   import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
 );
@@ -64,36 +74,43 @@ export default function App() {
     /* The bag is the one piece of global client state in the app, and it
        wraps everything because the header badge, the drawer and the cart
        page all read the same one (requirements section 6). */
-    <CartProvider>
-      <div className="flex min-h-screen flex-col">
-        <ScrollToTop />
-        <Header />
-        <main className="flex-1">
-          <Suspense fallback={<RouteFallback />}>
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/categories" element={<CategoriesPage />} />
-              {/* The category LISTING is /products?category=<slug> — the catalog
-                  and a single category are the same page in two states, so there
-                  is one canonical URL per category. See lib/routes.ts. */}
-              <Route path="/products" element={<ProductsPage />} />
-              <Route path="/products/:slug" element={<ProductDetailPage />} />
-              <Route path="/cart" element={<CartPage />} />
-              {/* Checkout and its confirmation (requirements section 7). No
-                  authentication guards either of them — guest checkout is
-                  mandatory, so there is nothing here to be signed in for. */}
-              <Route path="/checkout" element={<CheckoutPage />} />
-              <Route path="/order/confirmed" element={<OrderConfirmedPage />} />
-              <Route path="*" element={<NotFoundPage />} />
-            </Routes>
-          </Suspense>
-        </main>
-        <Footer />
+    <AuthProvider>
+      <CartProvider>
+        <div className="flex min-h-screen flex-col">
+          <ScrollToTop />
+          <Header />
+          <main className="flex-1">
+            <Suspense fallback={<RouteFallback />}>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/categories" element={<CategoriesPage />} />
+                {/* The category LISTING is /products?category=<slug> — the catalog
+                    and a single category are the same page in two states, so there
+                    is one canonical URL per category. See lib/routes.ts. */}
+                <Route path="/products" element={<ProductsPage />} />
+                <Route path="/products/:slug" element={<ProductDetailPage />} />
+                <Route path="/cart" element={<CartPage />} />
+                {/* Checkout and its confirmation (requirements section 7). No
+                    authentication guards either of them — guest checkout is
+                    mandatory, so there is nothing here to be signed in for. */}
+                <Route path="/checkout" element={<CheckoutPage />} />
+                <Route path="/order/confirmed" element={<OrderConfirmedPage />} />
+                {/* Optional customer accounts — the note added to section 12.
+                    Nothing above this line requires being signed in. */}
+                <Route path="/account" element={<AccountPage />} />
+                <Route path="/account/sign-in" element={<SignInPage />} />
+                <Route path="/account/sign-up" element={<SignUpPage />} />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Suspense>
+          </main>
+          <Footer />
 
-        {/* Outside <main> and rendered once: it is a sheet over the whole app,
-            not part of any one page. */}
-        <CartDrawer />
-      </div>
-    </CartProvider>
+          {/* Outside <main> and rendered once: it is a sheet over the whole app,
+              not part of any one page. */}
+          <CartDrawer />
+        </div>
+      </CartProvider>
+    </AuthProvider>
   );
 }

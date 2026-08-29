@@ -83,6 +83,91 @@
       transform: none;
     }
   }
+
+  /* Section 12 - the order success animation on /order/confirmed. One shot,
+     no loop: package packed -> truck arrives -> package loaded -> confirmed.
+     Each element gets its own named animation so the sequence reads as a
+     timeline rather than one keyframe block juggling every part at once. */
+  --animate-order-package: order-package-in 500ms var(--ease-brand) both,
+    order-package-load 450ms var(--ease-brand) 1550ms both;
+  --animate-order-truck: order-truck-in 900ms var(--ease-brand) 550ms both,
+    order-truck-out 800ms ease-in 2000ms both;
+  --animate-order-check-pop: order-check-pop 500ms var(--ease-brand) 2750ms both;
+  --animate-order-check-ring: order-check-ring 550ms linear 2750ms both;
+  --animate-order-check-tick: order-check-tick 350ms linear 3150ms both;
+
+  @keyframes order-package-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.7);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes order-package-load {
+    from {
+      opacity: 1;
+      transform: none;
+    }
+    to {
+      opacity: 0;
+      transform: translate(38px, -14px) scale(0.55);
+    }
+  }
+
+  @keyframes order-truck-in {
+    from {
+      transform: translateX(-170px);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes order-truck-out {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(320px);
+    }
+  }
+
+  @keyframes order-check-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+    65% {
+      opacity: 1;
+      transform: scale(1.08);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes order-check-ring {
+    from {
+      stroke-dashoffset: 183;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  @keyframes order-check-tick {
+    from {
+      stroke-dashoffset: 37;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
 }
 
 html {
@@ -127,6 +212,7 @@ h3 {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }

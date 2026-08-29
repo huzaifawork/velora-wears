@@ -3,29 +3,37 @@ import { Link, useNavigate } from "react-router-dom";
 
 import type { OrderCustomer } from "@shared/types";
 import type { CheckoutErrors } from "@shared/checkout";
+import type { CheckoutDraft } from "@shared/checkout";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { Container } from "@/components/layout/Container";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useAuth } from "@/features/account/AuthContext";
 import { CartLineRow } from "@/features/cart/CartLineRow";
 import { CartSummary } from "@/features/cart/CartSummary";
 import { useCart } from "@/features/cart/CartContext";
 import { useCartContents } from "@/features/cart/useCartContents";
 import { CheckoutForm } from "@/features/checkout/CheckoutForm";
+import { useAsync } from "@/hooks/useAsync";
 import { clearCatalogCache, isLiveSource } from "@/lib/queries";
 import { PlaceOrderError, isBagProblem, placeOrder } from "@/lib/placeOrder";
+import { listMyOrders } from "@/lib/myOrders";
 import { saveReceipt, type ReceiptLine } from "@/lib/orderReceipt";
-import { CART, HOME, ORDER_CONFIRMED, PRODUCTS } from "@/lib/routes";
+import { CART, CHECKOUT, HOME, ORDER_CONFIRMED, PRODUCTS, SIGN_IN } from "@/lib/routes";
 
 /**
  * Checkout (requirements section 7).
  *
- * **There is no sign-in on this page, and there is no way to reach one.**
- * Section 7 makes checkout without authentication mandatory, so a guest and a
- * signed-in customer take the identical path; the only difference an account
- * would make is that the Edge Function links the order to it, and that is
- * decided by a header, not by a screen.
+ * **Guest checkout is still the whole path, unchanged.** Section 7 makes
+ * checkout without authentication mandatory, so nothing here requires an
+ * account. What optional accounts (the note added to section 12) add is
+ * strictly additive: a signed-in customer's order carries an `Authorization`
+ * header so the Edge Function links it to them (`placeOrder` already had this
+ * parameter, unused, since section 7), and the form opens pre-filled from
+ * their most recent order rather than blank — "skip re-typing details next
+ * time", as the note puts it. A guest sees neither: no header sent, an empty
+ * form, exactly as before.
  *
  * The page composes, like the rest of the storefront. The form and its rules
  * are `features/checkout/CheckoutForm`, the bag beside it is the same
@@ -54,6 +62,7 @@ export function CheckoutPage() {
   const cart = useCartContents();
   const { clear } = useCart();
   const navigate = useNavigate();
+  const { status: authStatus, user, accessToken } = useAuth();
 
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<PlaceOrderError>();
@@ -62,8 +71,35 @@ export function CheckoutPage() {
   const [placed, setPlaced] = useState(false);
   const alert = useRef<HTMLDivElement>(null);
 
+  /**
+   * The signed-in customer's most recent order, read once to pre-fill the
+   * form. Resolves to `[]` immediately for a guest, so this never waits on a
+   * network call that a guest's session was never going to make.
+   */
+  const prefill = useAsync(
+    () => (authStatus === "signed-in" ? listMyOrders() : Promise.resolve([])),
+    `checkout-prefill:${authStatus}:${authStatus === "signed-in" ? user?.id : ""}`,
+  );
+
+  const authReady = authStatus !== "loading" && (authStatus !== "signed-in" || !prefill.loading);
+  const initialValues: Partial<CheckoutDraft> | undefined =
+    authStatus === "signed-in"
+      ? (() => {
+          const latest = prefill.data?.[0];
+          return {
+            fullName: latest?.customer.fullName ?? "",
+            email: latest?.customer.email ?? user?.email ?? "",
+            phone: latest?.customer.phone ?? "",
+            address: latest?.customer.address ?? "",
+            city: latest?.customer.city ?? "",
+            postalCode: latest?.customer.postalCode ?? "",
+          };
+        })()
+      : undefined;
+
   const empty = !cart.loading && cart.lines.length === 0;
   const blocked = cart.hasProblems || cart.subtotal === 0;
+  const preparing = cart.loading || !authReady;
 
   async function submit(customer: OrderCustomer) {
     setSubmitting(true);
@@ -95,7 +131,7 @@ export function CheckoutPage() {
     }));
 
     try {
-      const result = await placeOrder({ items, customer });
+      const result = await placeOrder({ items, customer }, accessToken);
 
       saveReceipt({
         orderId: result.orderId,
@@ -154,7 +190,7 @@ export function CheckoutPage() {
       />
 
       <Container className="py-14 sm:py-20">
-        {cart.loading ? (
+        {preparing ? (
           <CheckoutSkeleton />
         ) : cart.error ? (
           <p className="py-10 text-center text-sm text-ink-soft">
@@ -170,6 +206,7 @@ export function CheckoutPage() {
                 {!isLiveSource() && <DemoNotice />}
                 {blocked && <BlockedNotice />}
                 {failure && <FailureNotice error={failure} />}
+                {authStatus === "signed-out" && <SignInPrompt />}
               </div>
 
               <CheckoutForm
@@ -177,6 +214,7 @@ export function CheckoutPage() {
                 submitting={submitting}
                 serverErrors={fieldErrors}
                 disabled={blocked}
+                initialValues={initialValues}
                 onSubmit={submit}
               />
             </div>
@@ -255,6 +293,26 @@ function BlockedNotice() {
       Something in your bag is no longer available, so the order cannot be confirmed yet. Remove it
       using the control in the order summary, or go back to your bag to change the size.
     </div>
+  );
+}
+
+/**
+ * The one place checkout mentions accounts at all — a convenience, not a
+ * gate. `?next=` sends the customer straight back here after signing in, so
+ * `SignInPage` lands them where they left off rather than on `/account`.
+ */
+function SignInPrompt() {
+  return (
+    <p className="mb-8 text-sm text-ink-soft">
+      Have an account?{" "}
+      <Link
+        to={`${SIGN_IN}?next=${encodeURIComponent(CHECKOUT)}`}
+        className="text-ink underline underline-offset-4 transition hover:text-accent"
+      >
+        Sign in to use your saved details
+      </Link>
+      .
+    </p>
   );
 }
 

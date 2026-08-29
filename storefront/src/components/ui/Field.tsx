@@ -55,7 +55,7 @@ export function Field({
   optional?: boolean;
   multiline?: boolean;
   rows?: number;
-  type?: "text" | "email" | "tel";
+  type?: "text" | "email" | "tel" | "password";
   autoComplete?: string;
   inputMode?: "text" | "email" | "tel" | "numeric";
   maxLength?: number;

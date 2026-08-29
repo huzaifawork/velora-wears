@@ -50,3 +50,17 @@ export function productPath(slug: string): string {
 export function searchPath(term: string): string {
   return `${PRODUCTS}?q=${encodeURIComponent(term)}`;
 }
+
+/**
+ * Optional customer accounts — the note added to requirements section 12 on
+ * 2026-08-29. Guest checkout (section 7) is unaffected: nothing links here
+ * from the checkout form itself, only from the header and, as a convenience,
+ * a "sign in to use your saved details" line above it.
+ *
+ * No password-reset route yet, deliberately: that flow needs an email
+ * provider this project does not have configured. Build it when the client
+ * provides one — see `context.md`.
+ */
+export const ACCOUNT = "/account";
+export const SIGN_IN = "/account/sign-in";
+export const SIGN_UP = "/account/sign-up";

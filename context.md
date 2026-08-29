@@ -3,9 +3,10 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-11, 13 and 14 are
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-14 are
 built** — brand, landing, products, product details, categories, the cart, checkout, payment,
-delivery charges, stock and availability, search, and filters and sorting.
+delivery charges, stock and availability, the order success animation, search, and filters
+and sorting.
 
 **MIGRATED TO SUPABASE on 2026-08-29.** The Firebase project has been deleted by its owner
 and every trace of Firebase is out of this repository. The stack is now Supabase — Postgres,
@@ -13,8 +14,12 @@ Supabase Realtime, and Edge Functions. Read section 2 and section 4 before touch
 
 **Nothing is blocked any more.** Edge Functions are on the Supabase free tier, so the Blaze
 paywall that blocked checkout is gone. Section 10 (delivery charges) was delivered inside
-section 7, section 9 (payment) was reviewed and finished on its own, and **section 11 (stock
-and availability) is now done too**; sections 12 and 16 are next. Section 8 is Developer B's.
+section 7, section 9 (payment) was reviewed and finished on its own, section 11 (stock and
+availability) is done, **section 12 (the order success animation) is done, and so is the
+optional-customer-accounts note added to it** — sign up, sign in, order history, and a
+"skip re-typing details" prefill at checkout, all built on RLS and a `place_order()` parameter
+that had been sitting ready and unused since the Supabase migration. Section 16 is next.
+Section 8 is Developer B's.
 
 > **The `payment_method` migration IS APPLIED.** `supabase/migrations/20260829000003_payment_method.sql`
 > was applied to the live project on 2026-08-29 via the Management API and verified: the
@@ -114,8 +119,8 @@ Storefront builds, typechecks and lints clean.
 | Area | State |
 | --- | --- |
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
-| Routing | react-router-dom, `/`, `/products`, `/products/:slug`, `/categories`, `/cart`, `/checkout` and `/order/confirmed`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
-| Supabase client | `lib/supabase.ts`, anon key in `storefront/.env.local` and on Vercel |
+| Routing | react-router-dom, `/`, `/products`, `/products/:slug`, `/categories`, `/cart`, `/checkout`, `/order/confirmed`, `/account`, `/account/sign-in` and `/account/sign-up`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
+| Supabase client | `lib/supabase.ts`, anon key in `storefront/.env.local` and on Vercel. **Session IS persisted** (accounts) |
 | Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
 | Data source | `VITE_DATA_SOURCE=demo`. Switches to `supabase` when the admin dashboard can create real products |
 | Database schema | **Deployed and verified** — 10 tables + the `product_summaries` VIEW, in `supabase/migrations/` |
@@ -129,7 +134,9 @@ Storefront builds, typechecks and lints clean.
 | Product details | **Done (section 4).** `/products/:slug` — gallery, size selection, reviews, related |
 | Categories | **Done (section 5).** `/categories` index, the category view on `/products?category=`, category chips, data-driven header and footer nav |
 | Shopping cart | **Done (section 6).** `/cart`, a mini-bag drawer, quantity and removal, live re-pricing against the catalog. **localStorage — there is no server** |
-| Checkout | **Done (section 7).** `/checkout` — guest-only form, shared validation rules, COD, delivery charge, and `/order/confirmed`. **No order can complete while the catalog is demo data** |
+| Checkout | **Done (section 7).** Guest-first form, shared validation rules, COD, delivery charge, and `/order/confirmed`; now also links to a signed-in customer's account and pre-fills from it. **No order can complete while the catalog is demo data** |
+| Order success animation | **Done (section 12).** A one-shot package/truck/checkmark sequence on `/order/confirmed` |
+| Optional customer accounts | **Done (section 12's note).** `/account`, `/account/sign-in`, `/account/sign-up` — email/password via Supabase Auth, order history, checkout prefill. **Guest checkout is unaffected.** Password reset not built (needs an email provider) |
 | Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
 | Filters and sorting | **Done (section 14).** Category chips, in-stock filter, four sorts, Load more |
 | Demo catalog | **19 products, 5 categories**, settings — all typed against `shared/types.ts` |
@@ -162,11 +169,20 @@ storefront/          React + Vite (Developer A)
                            CartDrawerPanel, CartLineRow, CartSummary, QuantityStepper,
                            useCartContents - the hook that prices the bag
   src/features/checkout/   CheckoutForm - the section 7 form and when it reports an error
+                           OrderSuccessAnimation - the section 12 animated confirmation
+  src/features/account/    optional customer accounts - AuthContext + AuthProvider,
+                           AccountMenu (header) + AccountMobileLink, AuthLayout + FormError
+                           (shared shell for the auth pages), OrderHistory
   src/features/categories/ CategoryTile (shared: landing bento + /categories), CategoryNav
   src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews
   src/pages/               HomePage, ProductsPage, ProductDetailPage, CategoriesPage,
-                           CartPage, CheckoutPage, OrderConfirmedPage, NotFoundPage
-  src/lib/supabase.ts      client init - anon key only, NEVER the service role key
+                           CartPage, CheckoutPage, OrderConfirmedPage, NotFoundPage,
+                           AccountPage, SignInPage, SignUpPage
+  src/lib/supabase.ts      client init - anon key only, NEVER the service role key.
+                           Session IS persisted now (accounts need one to survive a refresh)
+  src/lib/env.ts           hasSupabaseConfig() with NO Supabase SDK import - lets a caller
+                           decide whether to dynamically import lib/supabase.ts at all
+  src/lib/myOrders.ts      a signed-in customer's own orders - RLS-scoped, no CatalogSource
   src/lib/queries.ts       read layer + cache + THE SOURCE SWITCH
   src/lib/sources/         CatalogSource (the interface), supabaseSource, demoSource
   src/hooks/useCatalogRealtime.ts  the ONE Realtime subscription for the whole tab
@@ -411,7 +427,7 @@ one starts.
 | 9 | Payment — COD only | **Done.** Stated on the form and the confirmation, and now RECORDED on the order — `payment_method` in Postgres, `shared/payment.ts` in the applications |
 | 10 | Delivery charges | **Done in section 7** — admin-configured, shown in the bag, at checkout and on the confirmation; the SERVER applies it |
 | 11 | Stock and availability | **Done.** One shared rule for "low" (`shared/stock.ts`), the badge now shows the count when it matters, and the product page states which sizes are actually available instead of a hardcoded three |
-| 12 | Order success animation | to do |
+| 12 | Order success animation | **Done.** A one-shot CSS/SVG sequence on `/order/confirmed` — package packed, truck arrives and drives off, confirmation mark draws in. **Its added note — optional customer accounts — is also done:** sign up/in/out, order history, checkout prefill and linking. Guest checkout unaffected |
 | 13 | Search | **Done** |
 | 14 | Filters and sorting | **Done** |
 | 15 | Mobile responsiveness | ongoing, every section |
@@ -1047,11 +1063,10 @@ checkout page actually render. All pass. The harness is not committed — it nee
 stubs, a `fetch` stub and a browser-free React render, which is still not worth a test runner
 in the repo.
 
-**Not built, deliberately:** section 12's success animation (its own section — it replaces
-the mark at the top of the confirmation page and leaves everything below it alone), the
-review link on the confirmation (section 16 — the `reviewToken` is already stored for it),
-sign-in (section 7 forbids requiring it, and nothing else needs it yet), and saved addresses,
-which need an account.
+**Not built, deliberately:** the review link on the confirmation (section 16 — the
+`reviewToken` is already stored for it), sign-in (section 7 forbids requiring it, and nothing
+else needs it yet), and saved addresses, which need an account. Section 12's success
+animation was built afterwards, on top of this page — see its own write-up below.
 
 **Not done, and it is the server's job:** §17 asks for **rate limiting on order placement**.
 The Edge Function has none. It belongs there, or in front of it, not in the browser — a
@@ -1224,6 +1239,169 @@ include" this, and a second number next to the first would be restating it. A st
 a "notify me when back in stock" needs a write path, which nothing has asked for and which
 every client write is denied by design (section 2).
 
+### What section 12 delivered
+
+The order success animation on `/order/confirmed`, requirements section 12: after an order is
+placed the page should feel "modern, visually appealing, and engaging" rather than a plain
+message, with an example sequence of a package being packed, a truck arriving, the package
+being loaded, and a confirmation. It replaces the static checkmark that sat at the top of the
+page since section 7; everything below it — the order number, the pieces, the total, what
+happens next — is unchanged, because that content is what the animation is confirming, not
+something the animation should compete with.
+
+**It is one component, `features/checkout/OrderSuccessAnimation.tsx`: an inline SVG animated
+entirely with CSS keyframes.** No animation library was added — `--animate-rise` and
+`--animate-marquee` already established the pattern of naming a keyframe animation as a
+`--animate-*` custom property in `index.css`'s `@theme` block, which Tailwind v4 turns into an
+`animate-*` utility class for free. Five more were added the same way
+(`order-package`, `order-truck`, `order-check-pop`, `order-check-ring`, `order-check-tick`),
+each one a comma-separated list of named keyframes with their own duration and delay baked in,
+so the whole ~3.5s sequence reads as a timeline in the CSS rather than one keyframe block
+juggling every part of the scene against a shared percentage axis.
+
+**The sequence, in order:** a gift-boxed package draws in near a dashed "road" line, a
+delivery-truck silhouette drives in from off-canvas and parks beside it, the package fades and
+lifts away as if loaded aboard, the truck drives back off-canvas to the right, and a ring-and-
+tick confirmation mark — the same shape the old static `ConfirmationMark` used — pops in and
+draws itself with a `stroke-dashoffset` animation. Every keyframe animation uses `both` fill
+mode, so the scene holds its start frame before an element's delay elapses and holds its end
+frame forever after — there is no loop and nothing to clean up.
+
+**`prefers-reduced-motion` needed one more line than the existing global rule had.** The rule
+in `index.css` already collapsed every `animation-duration` to `0.01ms`; it did not touch
+`animation-delay`, which does not need `reduced-motion` to matter for a one-shot fade but
+absolutely does for a five-stage timeline built from staggered delays — without the fix, a
+reduced-motion visitor would have sat looking at a near-blank scene for ~2.75 real seconds
+(waiting out the checkmark's delay) before everything snapped to its end state in a single
+frame. `animation-delay: 0s !important` was added next to the duration override, so a
+reduced-motion visitor now sees the finished checkmark immediately instead of a silent wait
+followed by a snap.
+
+**Verified by actually running it, not just building it.** The dev server was driven with a
+headless Playwright browser (installed to the session scratch directory, not the repo — this
+project has no test runner and none was added for one check), a fake receipt was written into
+`sessionStorage` under the key `orderReceipt.ts` already uses, and the page was screenshotted
+at several points through the sequence. **That caught a real bug the build and lint could not:**
+the truck's exit distance (`translateX(260px)`) was short of clearing the 300-unit-wide
+viewBox by 20 units, leaving a stray horizontal stub of its floor line visible next to the
+finished checkmark in the resting frame. Fixed by lengthening the exit to `translateX(320px)` —
+comfortably past the truck's leftmost point (`x=20`) plus the viewBox width. Re-screenshotted
+after the fix: package, truck and checkmark all render as intended at every stage, and
+`console --errors` was empty throughout.
+
+**No new dependency, no schema change, no Edge Function change.** This section is presentation
+only — it reads nothing new and writes nothing. Build, typecheck and lint are clean.
+
+**Not built, deliberately:** confetti or any second flourish on top of the checkmark. The
+brand's existing motion vocabulary (`rise`, `marquee`) is understated, and requirements section
+12 asks for "modern... engaging", not celebratory noise — the package/truck/checkmark sequence
+already answers the brief's own example list. Sound was never a candidate; nothing on this
+project plays audio.
+
+### What optional customer accounts delivered
+
+Sign up, sign in, sign out, and an order history page — the client request added to
+requirements section 12 on 2026-08-29 ("Sign-in and sign-up are not in the original brief but
+are now requested... an account only lets a customer see past orders and skip re-typing their
+details next time"). **Guest checkout (section 7) is untouched.** Nothing about the checkout
+form, the Edge Function's guest path, or `/checkout` itself required for a guest changed —
+accounts are strictly additive.
+
+**The backend was already built, and had been since the Supabase migration.** This is the one
+genuinely surprising thing about this piece of work: `orders.user_id`, the RLS policy
+`customers read their own orders` (`user_id = auth.uid()`), the matching policy on
+`order_items`, and `place_order(p_user_id uuid default null)` were all already in
+`supabase/migrations/20260829000001_init.sql`, and the `place-order` Edge Function already
+read an `Authorization` header and forwarded the user id — all written in anticipation of this
+feature months of section-work ago, unused until now. **Zero migrations were needed.** The
+entire task was the identity layer and the UI in front of infrastructure that was already
+correct and already deployed.
+
+**Email/password, via Supabase Auth, decided on the spot.** Google needs an OAuth app
+registered externally with a client id and secret nobody had; phone needs an SMS provider.
+Neither was available, and email/password needed neither.
+
+**Sign-up auto-confirms — no email verification step.** Supabase's Auth settings were changed
+via the Management API (`mailer_autoconfirm: true`, plus `site_url` and `uri_allow_list`
+updated from `localhost:3000` to the production URL): the project has no configured mailer of
+its own, and Supabase's shared default one is rate-limited and not meant for real signup
+volume — exactly the reasoning that already keeps this project from promising an order
+confirmation email (section 7's notes). Asked Huzaifa directly before making this change,
+since it is a live change to the project's security settings, not a code change; he chose
+auto-confirm. **Password reset is NOT built** for the identical reason — it is a genuine
+one-off email with no way around sending one, and there is nowhere to send it from yet. Build
+it once the client supplies SMTP credentials.
+
+**Identity has no "demo mode", and that has a real bundle-size cost.** `lib/queries.ts` keeps
+the Supabase SDK out of the bundle entirely while `VITE_DATA_SOURCE=demo` (sections 2 and
+19), because there is a real alternative catalog to read instead. There is no alternative
+identity provider — an account is either backed by the live Supabase project or it does not
+exist — so `AuthProvider` dynamically imports `lib/supabase.ts` on mount, on every page,
+regardless of the data source, to know whether anyone is signed in. **The `supabase` chunk is
+no longer empty in demo mode.** The production build now ships a real ~217 kB (~57 kB gzip)
+`supabase` chunk that downloads on every visit. The import stays dynamic rather than static —
+it does not block first paint, and it is not in the main bundle — but it is no longer
+optional. This is a real, deliberate cost of building this feature, not an oversight.
+
+**The shape mirrors `CartContext`/`CartProvider` exactly (§18):** `features/account/
+AuthContext.ts` holds the context and the `useAuth()` hook, `AuthProvider.tsx` binds Supabase
+Auth to it. `getSupabase()` in `lib/supabase.ts` switched from `persistSession: false` to
+`true` (with `autoRefreshToken` and `detectSessionInUrl`) — checkout's guest path never reads
+this session at all, so nothing there changed, but a real login now survives a refresh, which
+it could not before. `hasSupabaseConfig()` moved to a new dependency-free `lib/env.ts`, so
+`AuthProvider` can check it BEFORE the dynamic import the same way `useCatalogRealtime`
+already did — importing it from `lib/supabase.ts` directly would have pulled the whole SDK in
+statically, defeating the lazy-load it exists to enable.
+
+**What an account unlocks, precisely what the client asked for and nothing more:**
+
+1. **Order history**, at `/account` — `lib/myOrders.ts`, a new module rather than a
+   `CatalogSource` method, because unlike the catalog, an order has no demo-mode equivalent:
+   checkout always writes through the real Edge Function regardless of `VITE_DATA_SOURCE` (see
+   `lib/placeOrder.ts`), so reading it back always goes straight to Supabase too. **Security is
+   the RLS policy, not this file** — it runs `select * from orders` with no `user_id` filter at
+   all, because the policy already scopes it to `auth.uid()`; a guest or another customer's
+   session gets `[]`, never an error and never someone else's order. Verified live: a fresh
+   test account correctly saw "You have not placed an order yet."
+2. **Skip re-typing details.** `CheckoutForm` gained an `initialValues` prop, read once via a
+   lazy `useState` initializer — re-applying it after the customer has started typing would
+   overwrite what they typed. `CheckoutPage` builds it from the signed-in customer's most
+   recent order (name, phone, address, city, postal code) plus their account email as a
+   fallback when there is no order yet. `CheckoutPage` now also waits on that read (`preparing`
+   folds in `!authReady`) before showing the form, so the skeleton holds a beat longer for a
+   signed-in customer rather than the form flashing empty and then refilling itself under
+   their cursor.
+3. **A "Sign in to use your saved details" line above the form for a guest** — the only
+   sentence checkout says about accounts at all — linking to `/account/sign-in?next=/checkout`
+   so signing in returns them to where they were, not to `/account`.
+4. **The order itself gets linked.** `placeOrder(input, accessToken)` already had this
+   parameter, unused since section 7; `CheckoutPage` now passes `useAuth().accessToken`, which
+   is `undefined` for a guest — no header sent, identical to before.
+
+**The header (requirements section 12's literal ask: "add login/signup... in the header")**
+gained one icon, `AccountMenu`, after search and before the bag — a person-outline glyph
+linking to `/account/sign-in` when signed out and `/account` when signed in, with a small gold
+dot marking the signed-in state so it reads at a glance without a label. `AccountMobileLink` is
+the same state as a text row in the phone menu (section 15), since the icon carries no label
+there. Nothing renders while the session is still resolving, so a visitor never sees "Sign in"
+flash to the signed-in icon a moment later on a return visit.
+
+**Verified against the live project, not just built.** A headless Playwright browser (the same
+approach section 12 used) drove the real flow against `https://owbnbzutqslihhnzdnyo.supabase
+.co`: signed up a test account, confirmed it landed signed-in on `/account` with no email step,
+confirmed the header icon updated with the gold dot, confirmed order history rendered the
+correct empty state, signed out, signed back in, added a product to the bag and confirmed a
+**guest** saw the sign-in prompt on `/checkout` while a **signed-in** customer did not and had
+the email field pre-filled from their account. Zero console errors throughout. The three test
+accounts this created were deleted from `auth.users` afterward via the Management API — the
+database was left exactly as this project's convention requires: empty.
+
+**Not built, deliberately:** password reset (needs an email provider — see above), saved
+addresses as their own feature (the requirements note only promised "skip re-typing... next
+time", which the most-recent-order prefill already delivers without inventing a new data
+model — a dedicated address book is a bigger, separate design, per the existing open question
+below), and any social login (no OAuth app registered). Section 16's review form can reuse
+`useAuth()` unchanged when it is built.
 
 
 ## 9. Open questions — ask before inventing
@@ -1273,8 +1451,8 @@ every client write is denied by design (section 2).
   and clearing site data empties it. That is a consequence of having no server, not an
   oversight — say so if the client asks. A saved bag needs auth, which §7 explicitly does
   not require.
-- **Nothing is blocked.** Sections 1-11, 13 and 14 are done and shipped. Section 12 is next,
-  then section 16. Section 8 is Developer B's.
+- **Nothing is blocked.** Sections 1-14 are done and shipped. Section 16 is next. Section 8
+  is Developer B's.
 - **The `payment_method` migration is applied and verified.**
   `supabase/migrations/20260829000003_payment_method.sql` was applied to the live project on
   2026-08-29 with `SUPABASE_ACCESS_TOKEN`, and `place_order` was exercised end to end inside a
@@ -1319,18 +1497,17 @@ every client write is denied by design (section 2).
 - **No price-range or size filter.** Size stock is on `products/{id}.sizes`, not on the
   summary, so filtering by it needs a denormalised field agreed with Developer B rather than
   reading full products for a grid (§19).
-- **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
-  Note that checkout does **not** need it: section 7 forbids requiring an account, and the
-  storefront has no sign-in anywhere.
-- **Optional customer sign-in/sign-up — new client request, 2026-08-29, not yet built.**
-  Requirements.md section 12 now notes it. It is planned alongside the order confirmation
-  animation. **Guest checkout stays mandatory** — this only ever adds an alternative, never
-  replaces it (§7). `place-order` already accepts an `Authorization` header and
-  `placeOrder(input, accessToken)` already threads one through unused, so linking an order to
-  an account at checkout is a small change once sign-in exists. What is undecided: the
-  provider (same open question as reviews above — settle both at once), and what an account
-  actually unlocks (order history is the obvious one; saved addresses needs its own design).
-  Supabase Auth is the natural choice since the project is already on Supabase.
+- ~~Auth provider — email/password, Google, or phone?~~ **Decided and built,
+  2026-08-29: email/password, via Supabase Auth.** Google needs an OAuth app registered
+  with a client id and secret from an external console, which nobody had to hand; phone
+  needs an SMS provider. Email/password needed neither. Section 16's review form, when it
+  is built, gets this for free — it is the same `useAuth()`.
+- **Optional customer accounts — built, 2026-08-29.** Sign up, sign in, sign out, and
+  order history at `/account`. Guest checkout is untouched — see the write-up below.
+  **Password reset is NOT built.** It needs a real email provider; Supabase's shared
+  default mailer is the only one configured and is not meant for production volume.
+  Build it when the client supplies SMTP credentials — until then, a customer who forgets
+  their password has no self-serve recovery.
 - **Delivery charges** (section 10) — the mechanism is built and the admin configures one
   flat charge plus an optional free-delivery threshold, which is what §10 asks for. **Per-city
   rates are still undecided** and would be a schema change (`settings` holds one number), so
