@@ -3,10 +3,13 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1 (brand identity),
-2 (landing page), 3 (products page), 4 (product details page), 5 (categories) and
-6 (shopping cart) are built.** Section 7 (checkout) is next, and is **blocked on the Blaze
-plan** — it needs the `placeOrder` Cloud Function.
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-6, 13 and 14 are
+built** — brand, landing, products, product details, categories, the cart, search, and
+filters and sorting.
+
+**Everything that can be built without the Blaze plan is now done.** What is left all needs
+Cloud Functions: section 7 (checkout), section 12 (the order animation) and section 16's
+review form. Section 8 is Developer B's. See "Open questions" for the exact list.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -97,14 +100,16 @@ Storefront builds clean; functions typecheck clean.
 | Data contract | `shared/types.ts` written |
 | Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
 | Landing page | **Done (section 2).** Hero, categories, featured grid, promos, story, reviews, Instagram strip, CTA, footer |
-| Products page | **Done (section 3).** `/products`, honours `?category=`, reuses `ProductGrid` |
+| Products page | **Done (sections 3, 13, 14).** `/products` — the catalog, a category, search results, filters and sorting, all as URL state |
 | Product details | **Done (section 4).** `/products/:slug` — gallery, size selection, reviews, related |
 | Categories | **Done (section 5).** `/categories` index, the category view on `/products?category=`, category chips, data-driven header and footer nav |
 | Shopping cart | **Done (section 6).** `/cart`, a mini-bag drawer, quantity and removal, live re-pricing against the catalog. **localStorage — there is no server** |
+| Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
+| Filters and sorting | **Done (section 14).** Category chips, in-stock filter, four sorts, Load more |
 | Demo catalog | 12 products, 3 categories, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
-| Product features | Listing, detail, category browsing and the bag. No checkout, auth, review UI, search, sorting, admin |
+| Product features | Listing, detail, category browsing, the bag, search, filters and sorting. No checkout, auth, review UI, admin |
 | Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
@@ -125,6 +130,7 @@ storefront/          React + Vite (Developer A)
                            CtaBand
   src/features/products/   ProductCard, ProductGrid, StockBadge - reused by sections 3/5/13
                            ProductGallery, SizeSelector, RelatedProducts
+                           SearchBar (section 13), ProductFilters (section 14)
   src/features/cart/       CartContext + CartProvider, CartButton, CartDrawer (lazy host),
                            CartDrawerPanel, CartLineRow, CartSummary, QuantityStepper,
                            useCartContents - the hook that prices the bag
@@ -265,8 +271,8 @@ one starts.
 | 10 | Delivery charges | to do |
 | 11 | Stock and availability | to do |
 | 12 | Order success animation | to do |
-| 13 | Search | to do |
-| 14 | Filters and sorting | to do |
+| 13 | Search | **Done** |
+| 14 | Filters and sorting | **Done** |
 | 15 | Mobile responsiveness | ongoing, every section |
 | 16 | Reviews and ratings | to do |
 | 17 | Validation and security | to do |
@@ -638,12 +644,86 @@ which is not worth a test runner in the repo yet.
 Blaze; `/checkout` falls through to the catch-all page, which says so), a saved bag across
 devices (that needs auth and a write path), and promo codes, which nothing has asked for.
 
-### The next task — section 7, checkout
+### What sections 13 and 14 delivered
 
-**This is the first section that CANNOT be finished without the Blaze plan.** It needs the
-`placeOrder` Cloud Function, `functions/src/index.ts` currently throws `unimplemented`, and
-Cloud Functions will not deploy on Spark. Everything up to here has shipped without billing;
-this is the hard stop noted in section 2.
+Search, filters and sorting — the last work that could be done without the Blaze plan.
+
+**They are all states of `/products`, and all of them live in the URL.** That is the one
+decision this work is built around. A search, a category, a sort order and the availability
+filter are query parameters — `?q=`, `?category=`, `?sort=`, `?stock=in` — so every
+combination is linkable, shareable, survives the back button, and composes with the others
+for free. Nothing is component state, so there is nothing to keep in sync.
+
+A separate `/search` page was the obvious alternative and would have been worse: it needed
+its own grid, its own filters and its own sort, and half of them would quietly not have
+worked together.
+
+**`searchProducts` is gone; `listProducts` does everything.** Searching and browsing produce
+the same thing — a filtered, sorted page of summaries — and a visitor who searches must
+still be able to narrow by category, hide what is sold out and sort by price. Two entry
+points meant two sets of filtering code, one of which would not have supported half of them.
+`ListProductsOptions` now carries `search` and `inStockOnly` alongside `categorySlug`,
+`sort` and `limit`. **Nothing was using `searchProducts` yet**, so this cost nothing.
+
+**The Realtime Database can only order by ONE field per query**, so the combination has to
+be split. `firebaseSource.fetchWindow` picks the single indexed query that fetches the
+smallest correct window — search is the narrowest filter, then a category, and only when
+neither is present is the one index worth spending on the sort field itself — and whatever
+is left over runs in the browser through the shared `applyFilters`. Because the server's
+limit applies BEFORE those leftovers, the window is widened (`OVERFETCH`, capped at
+`MAX_FETCH`) and trimmed afterwards; asking for exactly 24 and discarding half would return
+12 and wrongly look like the end of the catalog. It stays bounded, which is what §19
+requires.
+
+**`applyFilters` and `sortSummaries` are shared by both sources**, so the demo path and the
+database path cannot disagree about what a search or a sort means. Search is therefore
+**prefix-only on both** — that is all `startAt`/`endAt` can do, and matching mid-string in
+the demo source would quietly break the day the flag flips.
+
+**Search does not run per keystroke** (§13, and §19 for a different reason). `SearchBar` is
+a real `<form>`, so Enter submits it for free and the button is a plain submit — no key
+handler, no debounce. The typed value is stamped with the URL term it was typed against, so
+following a category chip or the back button re-syncs the field without an effect.
+
+**Sorting offers four axes**: newest, price low-to-high, price high-to-low (the two §14
+requires) and best rated. Rating and price are precomputed on the summary, so none of them
+costs a read. Every comparison falls back to `createdAt`, so ties do not shuffle between
+reads, and an **unrated piece sorts below a poorly rated one** rather than competing with
+the worst review in the shop.
+
+**The category filter is deliberately NOT in `ProductFilters`.** It is `CategoryNav` from
+section 5 — a row of links, because a category is a browsable place with its own title and
+picture, not a checkbox. `ProductFilters` is the sort and the in-stock toggle, and uses a
+native `<select>`: one control, keyboard accessible for free, and on a phone it opens the
+platform picker instead of a list scrolling inside a scrolling page (§15).
+
+**"Load more" is not cursor pagination, deliberately.** A `startAfter` cursor cannot page
+through a result set that is partly assembled in the browser, which this one is whenever the
+filters exceed what a single `orderByChild` can express. Raising the bound and re-reading is
+correct, stays bounded, and is served from the cache for everything already fetched. Revisit
+it when one category is big enough to need a composite index.
+
+**No database or rules change.** `searchText`, `price`, `categorySlug` and `createdAt` were
+already indexed from earlier sections, so `deploy:rules` was not needed. A hand-typed
+`?sort=` that matches nothing falls back to the default rather than breaking the page.
+
+**Verified with 52 assertions**: search normalisation, prefix-only matching, every category
+count against its precomputed `productCount`, the in-stock filter, all four sorts including
+tie-breaks and the unrated case, all four filters composing at once, limits and paging, and
+what the two controls render. All pass.
+
+**Not built, deliberately:** a price-range filter and size-availability filtering. Size stock
+lives on `products/{id}.sizes` and not on the summary, so filtering by it would mean either
+reading full products for a grid — which §19 forbids — or adding a denormalised field to the
+shared contract, which is Developer B's to agree. Search suggestions and typo tolerance are
+not possible on RTDB prefix matching and would need a search service.
+
+### The next task — section 7, checkout (BLOCKED on Blaze)
+
+**Everything that does not need Blaze is now finished.** Sections 1-6, 13 and 14 are built
+and shipped. What remains needs the `placeOrder` Cloud Function — `functions/src/index.ts`
+still throws `unimplemented`, and Cloud Functions will not deploy on Spark. This is the hard
+stop noted in section 2, and there is no longer any storefront work to do around it.
 
 What section 7 asks for: guest checkout with **no mandatory authentication**, the field list
 in §7 as clarified by §17 (postal code is OPTIONAL), validation that blocks confirmation
@@ -661,14 +741,16 @@ What already exists:
 
 Before writing anything:
 
-- **Ask Huzaifa whether Blaze has been bought.** If not, the honest options are to build the
-  form and validation against a stubbed `placeOrder` and ship the rest, or to pause section 7
-  and do sections 13/14 (search, filters and sorting) first — both are pure storefront work
-  that needs no billing. **Section 12's order-success animation is also blocked**, since it
-  needs a real order to show.
+- **Ask Huzaifa whether Blaze has been bought.** If it has not, the only remaining option is
+  to build the checkout FORM and its validation against a `placeOrder` that still throws, so
+  the flow is ready the day billing is enabled — the order cannot actually be placed, and
+  section 12's success animation has no real order to show. Say that plainly rather than
+  shipping a checkout that looks finished and is not.
 - **Validation belongs in one place.** §17 requires the same rules on the client and again on
   the server. Put them in `shared/` so `functions/` and the storefront cannot drift — that is
   a shared-contract addition, so agree it with Developer B.
+- **The bag is ready to hand over unchanged.** Drop `slug` from a `CartItem` and it is
+  `PlaceOrderInput["items"]`. Do not invent a second shape for it.
 
 *(Section 6's brief is above, under "What section 6 delivered".)*
 
@@ -734,10 +816,18 @@ Before writing anything:
   and clearing site data empties it. That is a consequence of having no server, not an
   oversight — say so if the client asks. A saved bag needs auth, which §7 explicitly does
   not require.
-- **Blaze is now on the critical path.** Sections 1-6 are done and shipped without it.
-  Section 7 (checkout), section 12 (the order animation) and the review form in section 16
-  all need Cloud Functions. Sections 13 and 14 (search, filters, sorting) do NOT — they are
-  the work to do if Blaze is still not bought.
+- **Blaze is now THE blocker, and there is no work left around it.** Sections 1-6, 13 and 14
+  are done and shipped without it. Everything remaining — section 7 (checkout), section 12
+  (the order animation) and section 16's review form — needs Cloud Functions. Section 8 is
+  Developer B's. **Ask the client to enable billing.**
+- **Search is prefix-only, on both data sources.** `startAt`/`endAt` is the whole of what the
+  Realtime Database can do, so "oxford" finds the Oxford Shirt but "shirt" does not. If the
+  client expects mid-word search, that is a search service (Algolia, Typesense) or a
+  denormalised token index the admin writes — a real decision, not a small fix. **Raise it
+  with the client before they notice it themselves.**
+- **No price-range or size filter.** Size stock is on `products/{id}.sizes`, not on the
+  summary, so filtering by it needs a denormalised field agreed with Developer B rather than
+  reading full products for a grid (§19).
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
 - **Delivery charges** (section 10) — flat rate or per city? Undecided.
 - **Admin dashboard spec** (section 8) — still pending from the client.
