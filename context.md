@@ -3,10 +3,10 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-14 are
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-15 are
 built** — brand, landing, products, product details, categories, the cart, checkout, payment,
-delivery charges, stock and availability, the order success animation, search, and filters
-and sorting.
+delivery charges, stock and availability, the order success animation, search, filters
+and sorting, and mobile responsiveness.
 
 **MIGRATED TO SUPABASE on 2026-08-29.** The Firebase project has been deleted by its owner
 and every trace of Firebase is out of this repository. The stack is now Supabase — Postgres,
@@ -18,8 +18,10 @@ section 7, section 9 (payment) was reviewed and finished on its own, section 11 
 availability) is done, **section 12 (the order success animation) is done, and so is the
 optional-customer-accounts note added to it** — sign up, sign in, order history, and a
 "skip re-typing details" prefill at checkout, all built on RLS and a `place_order()` parameter
-that had been sitting ready and unused since the Supabase migration. Section 16 is next.
-Section 8 is Developer B's.
+that had been sitting ready and unused since the Supabase migration. **Search and filters and
+sorting (sections 13, 14) are done, and so is section 15 (mobile responsiveness)** — audited
+across four breakpoints on every page, with one real bug found and fixed (the header overflowed
+and hid the mobile menu button below 375px). Section 16 is next. Section 8 is Developer B's.
 
 > **The `payment_method` migration IS APPLIED.** `supabase/migrations/20260829000003_payment_method.sql`
 > was applied to the live project on 2026-08-29 via the Management API and verified: the
@@ -139,6 +141,7 @@ Storefront builds, typechecks and lints clean.
 | Optional customer accounts | **Done (section 12's note).** `/account`, `/account/sign-in`, `/account/sign-up` — email/password via Supabase Auth, order history, checkout prefill. **Guest checkout is unaffected.** Password reset not built (needs an email provider) |
 | Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
 | Filters and sorting | **Done (section 14).** Category chips, in-stock filter, four sorts, Load more |
+| Mobile responsiveness | **Audited (section 15).** Every page checked at 375/768/1280/1600px with a headless browser for console errors and horizontal overflow. One real bug found and fixed — see the write-up below |
 | Demo catalog | **19 products, 5 categories**, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
@@ -430,7 +433,7 @@ one starts.
 | 12 | Order success animation | **Done.** A one-shot CSS/SVG sequence on `/order/confirmed` — package packed, truck arrives and drives off, confirmation mark draws in. **Its added note — optional customer accounts — is also done:** sign up/in/out, order history, checkout prefill and linking. Guest checkout unaffected |
 | 13 | Search | **Done** |
 | 14 | Filters and sorting | **Done** |
-| 15 | Mobile responsiveness | ongoing, every section |
+| 15 | Mobile responsiveness | **Done.** Audited at 375/768/1280/1600px on every page; one real bug found and fixed. Still worth attention as new sections land |
 | 16 | Reviews and ratings | to do |
 | 17 | Validation and security | checkout is done (shared rules, server re-validation). **Rate limiting is NOT built** |
 | 18 | Stack and component reuse | ongoing, every section |
@@ -1402,6 +1405,63 @@ time", which the most-recent-order prefill already delivers without inventing a 
 model — a dedicated address book is a bigger, separate design, per the existing open question
 below), and any social login (no OAuth app registered). Section 16's review form can reuse
 `useAuth()` unchanged when it is built.
+
+### What section 15 delivered
+
+Mobile responsiveness, requirements section 15's ask: the whole site works on phones, tablets,
+laptops and desktops, with particular attention to navigation, product grids, filters and
+search, product pages, cart and checkout, and the order confirmation animation. Nearly all of
+that was already true going in — every section from 1 onward was built mobile-first and says so
+in its own comments (`CategoryNav`'s horizontal-scroll chips, `ProductFilters`' native
+`<select>`, `Header`'s `lg:` breakpoint for the hamburger menu, and more) — so this section is an
+**audit pass across the whole site**, not a rebuild.
+
+**Verified by actually rendering the site, not by reading the CSS.** A headless Playwright
+browser (the same approach sections 7, 12 and the accounts work used) drove the real dev server
+at four breakpoints — 375px (phone), 768px (tablet), 1280px (laptop) and 1600px (desktop) —
+across every page: home, the catalog, a filtered category, a product detail page, categories,
+the cart and checkout both empty and with a line in them, an account page, and the
+order-confirmed animation. Every page was checked for console errors and for
+`document.documentElement.scrollWidth` exceeding the viewport — the actual definition of "not
+responsive," not an eyeballed screenshot.
+
+**One real bug, and it only showed up at 320px.** Every tested page overflowed horizontally by
+the same ~49px at a 320px viewport (the oldest iPhone SE and some budget Android widths — still
+sold in Pakistan, this brand's market) and nowhere wider; 375px and up were already clean. The
+cause was identical on every page because it lives in the one thing every page shares —
+`Header.tsx`. The full wordmark logo (~149px) plus the four header icons (search, account, bag,
+hamburger — 172px, each at the 44px minimum touch target) do not fit in a 320px screen's ~288px
+of content width once the container's padding is subtracted, and a flex row does not shrink
+below its content's natural width. The row pushed the hamburger button off the right edge of the
+screen entirely — the one control a phone visitor needs to reach the nav was not reachable
+without first scrolling the whole page sideways, on the narrowest phones this store's own market
+is more likely than most to have in use.
+
+**Fixed with a breakpoint swap, not a redesign.** Below 375px the header now shows the bare
+monogram (`Logo variant="mark"`, 36px) instead of the full wordmark; at 375px and up nothing
+changed — that is still the vast majority of phones in use. Both variants render, and Tailwind's
+`min-[375px]:hidden` / `hidden min-[375px]:inline-flex` toggle which one is visible.
+`display:none` removes the hidden one from the accessibility tree entirely, so nothing is
+double-announced to a screen reader — the outer `Link`'s own `aria-label="Velora Wears — home"`
+names it either way.
+
+**Everything else checked out clean, because it had already been built with this in mind:** the
+mobile nav (hamburger below `lg:`/1024px — deliberately below tablet width too, since five nav
+links plus four icons do not fit at 768px either), the category chip row (horizontal scroll
+below `sm:`, wraps above it), the sort control (a native `<select>`, so a phone gets the
+platform's own picker instead of a bespoke list), the product grid (2 columns on a phone, up to
+4 on desktop), the checkout form (single column on a phone, paired fields — email/phone,
+city/postal — from tablet up), the cart drawer and page, and the order-confirmed animation (an
+SVG `viewBox`, so the package/truck/checkmark sequence scales with its container at every width
+tested, 320px to 1600px).
+
+**No database, schema, or Edge Function change.** This section is presentation only. Build,
+typecheck and lint are clean.
+
+**Not built, deliberately:** a dedicated tablet-specific product-grid column count (2 columns at
+768px reads a little sparse on an iPad, but changing it is a one-line class with no functional
+stakes, and nothing about it actually broke); support for viewports narrower than 320px, which
+no shipping device uses.
 
 
 ## 9. Open questions — ask before inventing

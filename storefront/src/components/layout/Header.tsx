@@ -122,7 +122,16 @@ export function Header() {
           className="shrink-0 text-ink transition hover:opacity-80"
           aria-label="Velora Wears — home"
         >
-          <Logo />
+          {/* Below 375px the full wordmark plus the four header icons no longer
+              fit on one row (requirements section 15) — the monogram alone
+              carries the brand at that width instead of forcing a horizontal
+              scroll or pushing the menu button off-screen. */}
+          <span className="min-[375px]:hidden">
+            <Logo variant="mark" />
+          </span>
+          <span className="hidden min-[375px]:inline-flex">
+            <Logo />
+          </span>
         </Link>
 
         <nav className="hidden items-center gap-9 lg:flex" aria-label="Primary">
