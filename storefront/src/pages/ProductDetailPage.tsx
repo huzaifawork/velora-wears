@@ -8,10 +8,12 @@ import { ValueProps } from "@/components/layout/ValueProps";
 import { Button, buttonClasses } from "@/components/ui/Button";
 import { Rating } from "@/components/ui/Rating";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useCart } from "@/features/cart/CartContext";
 import { ProductGallery } from "@/features/products/ProductGallery";
 import { RelatedProducts } from "@/features/products/RelatedProducts";
 import { SizeSelector } from "@/features/products/SizeSelector";
 import { StockBadge } from "@/features/products/StockBadge";
+import { QuantityStepper } from "@/features/cart/QuantityStepper";
 import { ProductReviews } from "@/features/reviews/ProductReviews";
 import { useAsync } from "@/hooks/useAsync";
 import { formatPrice, prettifySlug } from "@/lib/format";
@@ -53,22 +55,27 @@ const FALLBACK_LOW_STOCK = 4;
 export function ProductDetailPage() {
   const slug = useParams().slug ?? "";
 
+  const { add, openDrawer } = useCart();
+
   /**
-   * The chosen size is STAMPED with the slug it was chosen for.
+   * The chosen size and quantity are STAMPED with the slug they were chosen
+   * for.
    *
    * Following a related product swaps the route parameter without unmounting
    * this component, so a plain `useState` would carry "M" over to the next
    * piece — where M may well be sold out, leaving a sold-out size selected and
    * the add button live. Comparing against the current slug resets the choice
    * during the same render, with no effect and no flash of the stale selection.
+   * The quantity has exactly the same trap: 3 of one shirt must not become 3 of
+   * the next one.
    */
-  const [chosen, setChosen] = useState<{ slug: string; size?: Size; notice: boolean }>({
+  const [chosen, setChosen] = useState<{ slug: string; size?: Size; qty: number }>({
     slug,
-    notice: false,
+    qty: 1,
   });
   const current = chosen.slug === slug ? chosen : undefined;
   const size = current?.size;
-  const cartNotice = current?.notice ?? false;
+  const qty = current?.qty ?? 1;
 
   const main = useAsync(
     () =>
@@ -112,6 +119,23 @@ export function ProductDetailPage() {
     prettifySlug(product.categorySlug);
 
   const soldOut = SIZES.every((s) => (product.sizes[s]?.stock ?? 0) === 0);
+
+  /** Stock in the chosen size — the cap on what can go into the bag. */
+  const availableInSize = size ? (product.sizes[size]?.stock ?? 0) : 0;
+
+  /**
+   * Adding is gated on a size that actually has stock, so an unavailable option
+   * can never be purchased (requirements section 11). The drawer opens straight
+   * after, because a button that changes nothing the visitor can see does not
+   * read as having worked — and it is also the route to checkout that section 6
+   * asks for.
+   */
+  const addToBag = () => {
+    if (!size || availableInSize === 0) return;
+    add({ productId: product.id, slug: product.slug, size }, qty, availableInSize);
+    setChosen({ slug, size, qty: 1 });
+    openDrawer();
+  };
 
   return (
     <>
@@ -160,31 +184,43 @@ export function ProductDetailPage() {
               <SizeSelector
                 sizes={product.sizes}
                 selected={size}
-                onSelect={(next) => setChosen({ slug, size: next, notice: false })}
+                onSelect={(next) => setChosen({ slug, size: next, qty: 1 })}
                 lowStockThreshold={settings?.lowStockThreshold ?? FALLBACK_LOW_STOCK}
               />
             </div>
 
-            <div className="flex flex-col gap-3">
-              {/* The bag itself is requirements section 6. The size gate in
-                  front of it is section 4's requirement, and it is real: no
-                  size, no button — and an entirely sold-out piece can never be
-                  added (section 11). */}
+            <div className="flex flex-col gap-4">
+              {/* The size gate is real: no size, no button — and an entirely
+                  sold-out piece can never be added (requirements sections 4
+                  and 11). */}
+              {!soldOut && (
+                <div className="flex items-center gap-4">
+                  <span className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
+                    Quantity
+                  </span>
+                  <QuantityStepper
+                    qty={qty}
+                    max={size ? availableInSize : 1}
+                    disabled={!size}
+                    label={product.name}
+                    onChange={(next) =>
+                      setChosen({ slug, size, qty: Math.max(1, next) })
+                    }
+                  />
+                </div>
+              )}
+
               <Button
                 size="lg"
                 disabled={soldOut || !size}
-                onClick={() => setChosen({ slug, size, notice: true })}
+                onClick={addToBag}
                 className="w-full sm:w-auto"
               >
                 {soldOut ? "Sold out" : "Add to bag"}
               </Button>
 
-              {/* Present from the first render, empty: a live region inserted
-                  at the same moment its text appears is not announced. */}
-              <p aria-live="polite" className="text-sm text-ink-soft">
-                {cartNotice
-                  ? "The bag and checkout are the next part of the build — this piece cannot be ordered online just yet."
-                  : ""}
+              <p className="text-sm text-ink-soft">
+                Cash on delivery. Nothing is reserved until an order is placed.
               </p>
             </div>
 

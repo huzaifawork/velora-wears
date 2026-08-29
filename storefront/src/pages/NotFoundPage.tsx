@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Container } from "@/components/layout/Container";
 import { Logo } from "@/components/brand/Logo";
 import { buttonClasses } from "@/components/ui/Button";
-import { CATEGORIES, HOME, PRODUCTS } from "@/lib/routes";
+import { CART, HOME, PRODUCTS } from "@/lib/routes";
 
 /**
  * Catch-all page.
@@ -25,15 +25,15 @@ export function NotFoundPage() {
         This part of the store is still being built.
       </h1>
       <p className="mt-5 max-w-prose leading-relaxed text-ink-soft">
-        The bag and checkout are on their way. In the meantime the full collection is ready
-        to browse, piece by piece.
+        Checkout is the next piece of work. Your bag is saved on this device in the meantime,
+        so nothing you have added will be lost.
       </p>
       <div className="mt-9 flex flex-wrap justify-center gap-3">
         <Link to={PRODUCTS} className={buttonClasses({ size: "lg" })}>
           Shop the collection
         </Link>
-        <Link to={CATEGORIES} className={buttonClasses({ variant: "secondary", size: "lg" })}>
-          Browse categories
+        <Link to={CART} className={buttonClasses({ variant: "secondary", size: "lg" })}>
+          View your bag
         </Link>
         <Link to={HOME} className={buttonClasses({ variant: "ghost", size: "lg" })}>
           Back to home
