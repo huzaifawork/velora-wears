@@ -1,58 +1,107 @@
+import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { Container } from "@/components/layout/Container";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { buttonClasses } from "@/components/ui/Button";
+import { Button, buttonClasses } from "@/components/ui/Button";
 import { Image } from "@/components/ui/Image";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { CategoryNav } from "@/features/categories/CategoryNav";
+import { ProductFilters } from "@/features/products/ProductFilters";
 import { ProductGrid } from "@/features/products/ProductGrid";
+import { SearchBar } from "@/features/products/SearchBar";
 import { useAsync } from "@/hooks/useAsync";
 import { formatPieceCount, prettifySlug } from "@/lib/format";
-import { getCategories, listProducts } from "@/lib/queries";
+import { DEFAULT_SORT, SORT_OPTIONS, getCategories, listProducts } from "@/lib/queries";
+import type { SortOption } from "@/lib/queries";
 import { CATEGORIES, HOME, PRODUCTS } from "@/lib/routes";
 
 /**
- * The products page (requirements section 3) AND the category listing
- * (section 5) — they are the same page in two states, which is why there is one
- * canonical URL for a category rather than two (`lib/routes.ts`).
+ * The products page — the catalog (section 3), a single category (section 5),
+ * search results (section 13), and the filter and sort controls (section 14).
  *
- * With no `?category=` it is the whole collection. With one it becomes that
- * category's own page: its name as the `h1`, its line of copy, its picture, and
- * a breadcrumb trail back through the categories index. In both states the
- * chips above the grid let a visitor move sideways to another category without
- * going back first, which is what "browse products based on their selected
- * category" actually asks for.
+ * They are all the SAME page in different states, and every one of those states
+ * lives in the URL. That is the decision this file is built around: a search, a
+ * category, a sort order and the availability filter are query parameters, so
+ * every combination of them is linkable, shareable, survives the back button,
+ * and composes with the others for free. None of it is component state, so
+ * there is nothing to keep in sync with anything.
  *
- * It composes; it does not draw. The cards and the grid are the same
- * `ProductCard` / `ProductGrid` the landing page's featured strip uses, so the
- * two can never drift into looking like different shops (section 18).
- *
- * The filter and sort CONTROLS are requirements section 14, and search is
- * section 13; neither is built. The row above the grid is where they go.
+ * The alternative — a separate /search page — would have needed its own grid,
+ * its own filters and its own sort, and half of them would have quietly not
+ * worked together.
  */
 
 /**
- * Matches the default in `listProducts`. Beyond this a "load more" needs a real
- * cursor — Realtime Database pagination is `startAfter` on the ordering key,
- * not an offset — which arrives with the filtering work in section 14. The
- * catalog is well under this today.
+ * How many pieces a page shows before "Load more".
+ *
+ * This is not cursor pagination, and deliberately so. The Realtime Database can
+ * only order by one field per query, so a category, a search and the in-stock
+ * filter cannot all run on the server — whichever one does not, runs in the
+ * browser over a bounded window. A `startAfter` cursor cannot page through a
+ * result set that is partly assembled client-side. Raising the bound and
+ * re-reading is correct, stays bounded (which is what section 19 requires), and
+ * is served from the cache for everything already fetched. Revisit it when a
+ * single category is big enough to need a composite index.
  */
-const LIST_LIMIT = 24;
+const PAGE_SIZE = 12;
 
 /** The category art is written at this intrinsic size (see the shared contract). */
 const CATEGORY_IMAGE = { width: 800, height: 1000 } as const;
 
-export function ProductsPage() {
-  const [params] = useSearchParams();
-  const categorySlug = params.get("category")?.trim() || undefined;
+/** A hand-typed or stale `?sort=` must not break the page. */
+function parseSort(raw: string | null): SortOption {
+  return SORT_OPTIONS.some((option) => option.value === raw) ? (raw as SortOption) : DEFAULT_SORT;
+}
 
-  // Both reads go out together: the grid needs the summaries, and the chips,
-  // the title and the cards all need the categories' display names.
+export function ProductsPage() {
+  const [params, setParams] = useSearchParams();
+
+  const categorySlug = params.get("category")?.trim() || undefined;
+  const search = params.get("q")?.trim() ?? "";
+  const sort = parseSort(params.get("sort"));
+  const inStockOnly = params.get("stock") === "in";
+
+  /**
+   * Every parameter change goes through here, so one control can never wipe
+   * another's — changing the sort while searching inside a category has to keep
+   * the search and the category. Removing a value drops the key entirely rather
+   * than leaving `?q=` in the URL.
+   */
+  const updateParams = (changes: Record<string, string | undefined>) => {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
+    setParams(next);
+  };
+
+  /**
+   * Identifies the current result set. Everything that changes what is being
+   * asked for is in it, which makes it both the reload trigger and the thing
+   * "load more" has to reset against.
+   */
+  const queryKey = `${categorySlug ?? "all"}:${search}:${sort}:${inStockOnly}`;
+
+  /**
+   * How many pages have been asked for, STAMPED with the query they were asked
+   * for. Searching again while on page three must show page one of the new
+   * results, not page three — and comparing against the current key resets it
+   * during the same render, with no effect and no flash of the wrong page.
+   */
+  const [paging, setPaging] = useState({ key: queryKey, pages: 1 });
+  const pages = paging.key === queryKey ? paging.pages : 1;
+  const limit = pages * PAGE_SIZE;
+
   const state = useAsync(
-    () => Promise.all([listProducts({ categorySlug, limit: LIST_LIMIT }), getCategories()]),
-    `products:${categorySlug ?? "all"}:${LIST_LIMIT}`,
+    () =>
+      Promise.all([
+        listProducts({ categorySlug, search, inStockOnly, sort, limit }),
+        getCategories(),
+      ]),
+    `products:${queryKey}:${limit}`,
   );
 
   const [products, categories] = state.data ?? [undefined, undefined];
@@ -61,37 +110,53 @@ export function ProductsPage() {
   /** A `?category=` that no category matches — a stale or hand-typed link. */
   const unknownCategory = Boolean(categorySlug && categories && !category);
 
+  const count = products?.length ?? 0;
+  const searching = search.length > 0;
+
+  // A full page back means there is probably another one. It can be wrong by
+  // one read at the exact boundary, which costs a fetch that returns nothing
+  // new — cheaper than a count query on every page.
+  const mayHaveMore = !state.loading && count === limit;
+
+  const filtered = searching || inStockOnly || Boolean(categorySlug);
+
   // Named from the slug while the categories are still in flight, so the title
   // does not flip from "the whole collection" to "Hoodies" as the data lands.
-  const title = categorySlug
-    ? (category?.name ?? prettifySlug(categorySlug))
-    : "The whole collection";
+  const categoryName = category?.name ?? (categorySlug ? prettifySlug(categorySlug) : undefined);
 
-  const description = category?.description
-    ? category.description
-    : categorySlug
-      ? "Every piece in this edit. Open any one for its fabric, fit and available sizes."
-      : "Shirts, hoodies and everyday essentials, made in small runs. Open any piece for its fabric, fit and available sizes.";
+  const title = searching
+    ? `Results for “${search}”`
+    : (categoryName ?? "The whole collection");
 
-  const count = products?.length ?? 0;
+  const description = searching
+    ? categoryName
+      ? `Searching ${categoryName}. Search matches the beginning of a product name.`
+      : "Search matches the beginning of a product name — try “hood” or “oxford”."
+    : category?.description
+      ? category.description
+      : categorySlug
+        ? "Every piece in this edit. Open any one for its fabric, fit and available sizes."
+        : "Shirts, hoodies and everyday essentials, made in small runs. Open any piece for its fabric, fit and available sizes.";
 
   return (
     <>
       <Breadcrumbs
         items={[
           { label: "Home", to: HOME },
-          ...(categorySlug
-            ? [{ label: "Categories", to: CATEGORIES }, { label: title }]
-            : [{ label: "Shop" }]),
+          ...(searching
+            ? [{ label: "Shop", to: PRODUCTS }, { label: "Search" }]
+            : categorySlug
+              ? [{ label: "Categories", to: CATEGORIES }, { label: title }]
+              : [{ label: "Shop" }]),
         ]}
       />
 
       <PageHeader
-        eyebrow={categorySlug ? "Category" : "Shop"}
+        eyebrow={searching ? "Search" : categorySlug ? "Category" : "Shop"}
         title={title}
         description={unknownCategory ? undefined : description}
         media={
-          categorySlug && !unknownCategory ? (
+          categorySlug && !searching && !unknownCategory ? (
             state.loading ? (
               <Skeleton className="aspect-4/5 w-full rounded-sm" />
             ) : category?.thumb ? (
@@ -107,10 +172,16 @@ export function ProductsPage() {
           ) : undefined
         }
       >
-        {/* The category switcher sits in the header on BOTH states, so it is
-            always the same control in the same place (requirements section 5). */}
+        <SearchBar
+          className="mt-8 max-w-xl"
+          value={search}
+          onSearch={(term) => updateParams({ q: term || undefined })}
+        />
+
+        {/* The category switcher sits in the header in every state, so it is
+            always the same control in the same place (section 5). */}
         <CategoryNav
-          className="mt-8"
+          className="mt-6"
           categories={categories}
           activeSlug={category?.slug}
           loading={state.loading}
@@ -122,7 +193,9 @@ export function ProductsPage() {
           /* Not `NotFoundPage`: the URL is a real page in an unreal state, and
              the visitor is one tap from a category that does exist. */
           <div className="py-8 text-center">
-            <h2 className="text-2xl">There is no &ldquo;{prettifySlug(categorySlug!)}&rdquo; edit</h2>
+            <h2 className="text-2xl">
+              There is no &ldquo;{prettifySlug(categorySlug!)}&rdquo; edit
+            </h2>
             <p className="mx-auto mt-4 max-w-prose leading-relaxed text-ink-soft">
               That category has either been renamed or retired. The ones that are live are
               listed above, and the whole collection is always one tap away.
@@ -131,33 +204,45 @@ export function ProductsPage() {
               <Link to={PRODUCTS} className={buttonClasses()}>
                 Shop the collection
               </Link>
-              <Link
-                to={CATEGORIES}
-                className={buttonClasses({ variant: "secondary" })}
-              >
+              <Link to={CATEGORIES} className={buttonClasses({ variant: "secondary" })}>
                 Browse categories
               </Link>
             </div>
           </div>
         ) : (
           <>
-            {/* The count sits on its own rule above the grid — this row is where
-                section 14's sort control and filter chips will go. */}
-            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-line pb-5">
-              <p className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
+            <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border-b border-line pb-5">
+              <p
+                aria-live="polite"
+                className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase"
+              >
                 {state.loading
-                  ? "Loading the collection"
-                  : formatPieceCount(count)}
+                  ? "Loading"
+                  : mayHaveMore
+                    ? `Showing ${count}`
+                    : formatPieceCount(count)}
               </p>
-              {categorySlug && !state.loading && (
+
+              <ProductFilters
+                sort={sort}
+                onSortChange={(next) =>
+                  updateParams({ sort: next === DEFAULT_SORT ? undefined : next })
+                }
+                inStockOnly={inStockOnly}
+                onInStockChange={(only) => updateParams({ stock: only ? "in" : undefined })}
+              />
+            </div>
+
+            {filtered && (
+              <p className="mt-5">
                 <Link
                   to={PRODUCTS}
-                  className={buttonClasses({ variant: "secondary", size: "sm" })}
+                  className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase underline underline-offset-4 transition hover:text-accent"
                 >
-                  View the whole collection
+                  Clear search and filters
                 </Link>
-              )}
-            </div>
+              </p>
+            )}
 
             <ProductGrid
               className="mt-12"
@@ -169,11 +254,27 @@ export function ProductsPage() {
               emptyMessage={
                 state.error
                   ? "The collection could not be loaded just now. Please refresh the page."
-                  : categorySlug
-                    ? "Nothing in this edit yet. Try another category above — the whole collection is one tap away."
-                    : "Nothing in the collection yet. Check back shortly."
+                  : searching
+                    ? `Nothing matches “${search}”. Search looks at the start of a product name, so try a shorter word — or clear the search and browse the collection.`
+                    : inStockOnly
+                      ? "Everything here is sold out at the moment. Turn off “in stock only” to see the full edit."
+                      : categorySlug
+                        ? "Nothing in this edit yet. Try another category above — the whole collection is one tap away."
+                        : "Nothing in the collection yet. Check back shortly."
               }
             />
+
+            {mayHaveMore && (
+              <div className="mt-14 flex justify-center">
+                <Button
+                  variant="secondary"
+                  size="lg"
+                  onClick={() => setPaging({ key: queryKey, pages: pages + 1 })}
+                >
+                  Load more
+                </Button>
+              </div>
+            )}
           </>
         )}
       </Container>
