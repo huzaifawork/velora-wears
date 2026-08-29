@@ -50,6 +50,11 @@ interface FindOrderRow {
   qty: number;
 }
 
+/** Thrown only for the rate limit (requirements section 17) — every other
+ *  kind of failure, including a genuine wrong guess, resolves to `[]` so a
+ *  guess cannot be distinguished from a typo by how the call behaves. */
+export class ReviewLookupRateLimitedError extends Error {}
+
 /**
  * Every item on the order matched by this order number and email, or `[]`
  * when nothing matches — deliberately the same shape either way (a wrong
@@ -65,7 +70,19 @@ export async function findOrderForReview(orderNumber: string, email: string): Pr
     body: JSON.stringify({ p_order_number: orderNumber, p_email: email }),
   });
 
-  if (!response.ok) return [];
+  if (!response.ok) {
+    // PostgREST does not map a raised exception's SQLSTATE to 4xx in any way
+    // this can rely on — a plain `raise exception` came back as a 500 in
+    // testing against the live project, not the 400 a validation-style error
+    // would suggest. So this checks the body's message, not the status code.
+    const body = await response.json().catch(() => undefined);
+    if (typeof body?.message === "string" && /too many attempts/i.test(body.message)) {
+      throw new ReviewLookupRateLimitedError(
+        "Too many attempts. Please wait a few minutes and try again.",
+      );
+    }
+    return [];
+  }
 
   const rows = (await response.json().catch(() => [])) as FindOrderRow[];
   return rows.map((row) => ({

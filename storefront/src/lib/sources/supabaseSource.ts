@@ -214,6 +214,22 @@ function toReview(row: ReviewRow): Review {
 const SUMMARY_COLUMNS =
   "id, slug, name, price, category_slug, thumb, in_stock, low_stock, total_stock, rating_avg, rating_count, active, created_at, search_text";
 
+/**
+ * What a PUBLIC review listing needs, and nothing more (requirements section
+ * 17 — customer personal data must never be publicly readable). `user_id` and
+ * `order_id` are neither shown anywhere nor used by any public-facing
+ * component, but `select("*")` would still hand them to anyone reading the
+ * API directly: `order_id` lets a stranger tell that two reviews came from
+ * the same order, and `user_id` is a stable identifier a stranger could use
+ * to correlate a customer's reviews across products. Neither is "personal
+ * data" the way an email or phone number is, but neither has any business
+ * being public either. `getExistingReview` in `lib/reviewLookup.ts` is not
+ * this — it is the REVIEWER checking their own review for one order they
+ * already know, not a public listing, so it keeps `select("*")`.
+ */
+const PUBLIC_REVIEW_COLUMNS =
+  "id, product_id, rating, comment, display_name, verified_purchase, hidden, created_at";
+
 /** Postgres treats `%` and `_` as wildcards inside `like`; a search term must not. */
 function escapeLike(term: string): string {
   return term.replace(/[\\%_]/g, (match) => `\\${match}`);
@@ -359,7 +375,7 @@ async function getSettings(): Promise<Settings | null> {
 async function listReviews(productId: string, limit: number): Promise<Review[]> {
   const { data, error } = await getSupabase()
     .from("reviews")
-    .select("*")
+    .select(PUBLIC_REVIEW_COLUMNS)
     .eq("product_id", productId)
     .order("created_at", { ascending: false })
     .limit(limit);
@@ -378,7 +394,7 @@ async function listReviews(productId: string, limit: number): Promise<Review[]> 
 async function listTestimonials(limit: number): Promise<Review[]> {
   const { data, error } = await getSupabase()
     .from("reviews")
-    .select("*")
+    .select(PUBLIC_REVIEW_COLUMNS)
     .eq("verified_purchase", true)
     .gte("rating", 4)
     .order("created_at", { ascending: false })

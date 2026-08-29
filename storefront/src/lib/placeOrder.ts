@@ -48,6 +48,7 @@ export type PlaceOrderErrorCode =
   | "EMPTY_CART"
   | "ORDER_FAILED"
   | "BAD_REQUEST"
+  | "RATE_LIMITED"
   | "NOT_CONFIGURED"
   | "NETWORK";
 
@@ -91,6 +92,7 @@ const KNOWN_CODES: readonly string[] = [
   "EMPTY_CART",
   "ORDER_FAILED",
   "BAD_REQUEST",
+  "RATE_LIMITED",
 ];
 
 export async function placeOrder(

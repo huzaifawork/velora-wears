@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { rateLimited } from "../_shared/rateLimit.ts";
 
 /**
  * place-order — the trusted server code that writes an order.
@@ -62,8 +63,19 @@ const MAX_QTY = 10;
 const PHONE = /^(?:\+92|0092|0)3\d{9}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/**
+ * Control characters and invisible Unicode (zero-width characters, the
+ * byte-order mark) stripped before anything is stored — `shared/sanitize.ts`
+ * has the full reasoning; this file carries the same pattern inline because
+ * Deno cannot import it.
+ */
+const UNSAFE_CHARS = new RegExp(
+  "[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F-\\x9F\\u200B-\\u200F\\uFEFF]",
+  "g",
+);
+
 const clean = (value: unknown): string =>
-  typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  typeof value === "string" ? value.replace(UNSAFE_CHARS, "").trim().replace(/\s+/g, " ") : "";
 
 function validateCustomer(raw: any): { customer: Record<string, string>; errors: Record<string, string> } {
   const errors: Record<string, string> = {};
@@ -168,14 +180,6 @@ Deno.serve(async (request: Request) => {
     return fail("BAD_REQUEST", "Could not read the request.", 400);
   }
 
-  const { items, error: itemsError } = validateItems(body?.items);
-  if (itemsError) return fail("INVALID_ITEMS", itemsError);
-
-  const { customer, errors } = validateCustomer(body?.customer);
-  if (Object.keys(errors).length > 0) {
-    return json({ error: { code: "VALIDATION", message: "Please check the form.", fields: errors } }, 400);
-  }
-
   // The service role key bypasses row level security, which is exactly why it
   // lives here and never in the browser. It is injected by the platform.
   const supabase = createClient(
@@ -183,6 +187,22 @@ Deno.serve(async (request: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     { auth: { persistSession: false } },
   );
+
+  // Checked before any validation work, so a flood of requests is rejected as
+  // cheaply as possible rather than after the (more expensive) field checks
+  // below (requirements section 17 — "apply rate limiting to order
+  // placement"). Eight orders per fifteen minutes per connection is well
+  // above what a real household places, and well below what a script can.
+  const limited = await rateLimited(supabase, request, "place-order", 8, 900, CORS);
+  if (limited) return limited;
+
+  const { items, error: itemsError } = validateItems(body?.items);
+  if (itemsError) return fail("INVALID_ITEMS", itemsError);
+
+  const { customer, errors } = validateCustomer(body?.customer);
+  if (Object.keys(errors).length > 0) {
+    return json({ error: { code: "VALIDATION", message: "Please check the form.", fields: errors } }, 400);
+  }
 
   /**
    * A signed-in customer's order is linked to them so they can see it later.

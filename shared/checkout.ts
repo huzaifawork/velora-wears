@@ -37,6 +37,7 @@
  */
 
 import type { OrderCustomer } from "./types";
+import { stripUnsafeChars } from "./sanitize";
 
 /** Every field on the checkout form, required and optional alike. */
 export type CheckoutField =
@@ -133,7 +134,7 @@ export const MAX_QTY_PER_LINE = 10;
  * ----------------------------------------------------------------------- */
 
 export function cleanField(value: unknown): string {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  return typeof value === "string" ? stripUnsafeChars(value).trim().replace(/\s+/g, " ") : "";
 }
 
 /** Spaces and dashes are how people actually type a phone number. */

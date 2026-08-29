@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { rateLimited } from "../_shared/rateLimit.ts";
 
 /**
  * submit-review — the trusted server code that writes, edits or removes a
@@ -70,8 +71,19 @@ const NAME_MIN = 2;
 const NAME_MAX = 60;
 const EDIT_WINDOW_DAYS = 30;
 
+/**
+ * Control characters and invisible Unicode stripped before anything is
+ * stored (requirements section 17) — same pattern as `place-order` and
+ * `shared/sanitize.ts`, inlined here for the same reason every other shared
+ * rule is: Deno cannot import from `shared/`.
+ */
+const UNSAFE_CHARS = new RegExp(
+  "[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F-\\x9F\\u200B-\\u200F\\uFEFF]",
+  "g",
+);
+
 const clean = (value: unknown): string =>
-  typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  typeof value === "string" ? value.replace(UNSAFE_CHARS, "").trim().replace(/\s+/g, " ") : "";
 
 function validateDraft(raw: any): { draft?: { rating: number; comment: string; displayName: string }; errors: Record<string, string> } {
   const errors: Record<string, string> = {};
@@ -194,10 +206,6 @@ Deno.serve(async (request: Request) => {
     return fail("BAD_REQUEST", "Could not read the request.", 400);
   }
 
-  const action = body?.action === "delete" ? "delete" : "upsert";
-  const productId = clean(body?.productId);
-  if (!productId) return fail("VALIDATION", "A product must be given.");
-
   // The service role key bypasses row level security, which is exactly why it
   // lives here and never in the browser (mirrors `place-order`).
   const supabase = createClient(
@@ -205,6 +213,19 @@ Deno.serve(async (request: Request) => {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     { auth: { persistSession: false } },
   );
+
+  // Requirements section 17 — "apply rate limiting to... review submission."
+  // Checked before ANY validation, same reasoning as `place-order`: a flood
+  // of malformed requests should not even get as far as a validation error.
+  // Fifteen per fifteen minutes covers a customer reviewing every item from a
+  // large order, editing a couple of them, and still leaves no room for a
+  // script.
+  const limited = await rateLimited(supabase, request, "submit-review", 15, 900, CORS);
+  if (limited) return limited;
+
+  const action = body?.action === "delete" ? "delete" : "upsert";
+  const productId = clean(body?.productId);
+  if (!productId) return fail("VALIDATION", "A product must be given.");
 
   const resolved = await resolveOrder(supabase, request, body, productId);
   if ("error" in resolved) return fail(resolved.error, resolved.message, 403);

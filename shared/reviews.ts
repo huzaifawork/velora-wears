@@ -19,6 +19,8 @@
  * constants inline. CHANGING A RULE MEANS CHANGING BOTH.
  */
 
+import { stripUnsafeChars } from "./sanitize";
+
 export const REVIEW_RATINGS = [1, 2, 3, 4, 5] as const;
 export type ReviewRating = (typeof REVIEW_RATINGS)[number];
 
@@ -51,7 +53,7 @@ export function withinEditWindow(createdAtMs: number, nowMs: number = Date.now()
 
 /** Same normalisation `shared/checkout.ts` uses: trim, collapse internal whitespace. */
 export function cleanReviewText(value: unknown): string {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+  return typeof value === "string" ? stripUnsafeChars(value).trim().replace(/\s+/g, " ") : "";
 }
 
 export interface ReviewDraft {

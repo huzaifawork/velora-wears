@@ -33,6 +33,7 @@ export type SubmitReviewErrorCode =
   | "NOT_FOUND"
   | "REVIEW_FAILED"
   | "BAD_REQUEST"
+  | "RATE_LIMITED"
   | "NOT_CONFIGURED"
   | "NETWORK";
 
@@ -71,6 +72,7 @@ const KNOWN_CODES: readonly string[] = [
   "NOT_FOUND",
   "REVIEW_FAILED",
   "BAD_REQUEST",
+  "RATE_LIMITED",
 ];
 
 interface ErrorBody {

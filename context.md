@@ -3,11 +3,12 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-16 are
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-17 are
 built** — brand, landing, products, product details, categories, the cart, checkout, payment,
 delivery charges, stock and availability, the order success animation, search, filters
-and sorting, mobile responsiveness, and reviews and ratings (the customer-facing half —
-**moderation is the admin dashboard's, section 8, and is NOT built here — see the note below**).
+and sorting, mobile responsiveness, reviews and ratings (the customer-facing half —
+**moderation is the admin dashboard's, section 8, and is NOT built here — see the note below**),
+and validation and security, including rate limiting on the two write endpoints.
 
 **MIGRATED TO SUPABASE on 2026-08-29.** The Firebase project has been deleted by its owner
 and every trace of Firebase is out of this repository. The stack is now Supabase — Postgres,
@@ -30,8 +31,14 @@ is requirements section 16's own "Admin" subsection, which belongs to section 8 
 dashboard, Developer B's — and nothing about it has been built here.** The database side
 (`hidden` column, the RLS policy that already excludes hidden reviews from every public read)
 was already in place from the initial schema; only the admin UI to set it is missing, and that
-UI is not ours to build. Section 17 (validation and security) still has its one open gap — see
-below. Section 8 (the admin dashboard itself) is Developer B's, in full.
+UI is not ours to build. **Section 17 (validation and security) is also done and deployed** —
+rate limiting on `place-order` and `submit-review`, backed by a Postgres counter and verified
+live by actually tripping each limit; text sanitisation (control characters and invisible
+Unicode stripped before storing, on both the checkout form and reviews); and public review
+reads tightened to stop exposing `user_id`/`order_id`. **Rate limiting on search is the one
+thing section 17 asks for that is NOT built, and it stays that way deliberately — see the
+write-up below for why the architecture makes it impractical without a redesign nothing has
+asked for.** Section 8 (the admin dashboard itself) is Developer B's, in full.
 
 > **The `payment_method` migration IS APPLIED.** `supabase/migrations/20260829000003_payment_method.sql`
 > was applied to the live project on 2026-08-29 via the Management API and verified: the
@@ -217,19 +224,25 @@ storefront/          React + Vite (Developer A)
   src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
 supabase/
-  migrations/        THE DATABASE. Schema, RLS policies, place_order(), find_order_for_review().
-                     0001-0004 all deployed and verified. 0003 holds the live place_order() -
-                     0002 is superseded history. 0004 is section 16 (reviews).
+  migrations/        THE DATABASE. Schema, RLS policies, place_order(), find_order_for_review(),
+                     check_rate_limit(). 0001-0005 all deployed and verified. 0003 holds the
+                     live place_order() - 0002 is superseded history. 0004 is section 16
+                     (reviews). 0005 is section 17 (rate limiting).
   functions/
     place-order/     Edge Function (Deno) - validation + the call into place_order()
     submit-review/   Edge Function (Deno) - section 16: write/edit/remove a review, proves
                      the reviewer bought the product one of three ways (see context.md)
+    _shared/rateLimit.ts   section 17 - the one bit of code shared between Deno functions,
+                     since they cannot import from shared/ at the repo root. Everything else
+                     each function needs is still inlined per file, on purpose (see context.md)
   config.toml        CLI config
 shared/types.ts      DATA CONTRACT - shared with Developer B
 shared/checkout.ts   CHECKOUT RULES - mirrors the Edge Function's validation exactly
 shared/payment.ts    PAYMENT METHODS (section 9) - the enum and the words for it
 shared/stock.ts       STOCK RULES (section 11) - what "low" means, once
 shared/reviews.ts     REVIEW RULES (section 16) - mirrors submit-review's validation exactly
+shared/sanitize.ts    TEXT SANITISATION (section 17) - strips control/invisible characters
+                     before storing; checkout.ts and reviews.ts both call it
 ```
 
 npm workspaces cover `storefront` and `shared` only. `supabase/functions/` is Deno, not
@@ -464,7 +477,7 @@ one starts.
 | 14 | Filters and sorting | **Done** |
 | 15 | Mobile responsiveness | **Done.** Audited at 375/768/1280/1600px on every page; one real bug found and fixed. Still worth attention as new sections land |
 | 16 | Reviews and ratings | **Done, customer-facing half.** Write, edit, remove — signed in or guest. **Admin moderation (hide/remove a review) is section 8's "Admin" subsection — Developer B's, not built here** |
-| 17 | Validation and security | checkout AND reviews are done (shared rules, server re-validation). **Rate limiting is NOT built**, on either order placement or review submission |
+| 17 | Validation and security | **Done.** Checkout and review validation (shared rules, server re-validation), rate limiting on `place-order` and `submit-review`, text sanitisation, and public review reads tightened to exclude `user_id`/`order_id`. **Rate limiting on search is NOT built — architecturally out of reach with this design, not an oversight. See the write-up** |
 | 18 | Stack and component reuse | ongoing, every section |
 | 19 | Performance | ongoing, every section |
 
@@ -1611,16 +1624,129 @@ not just built.** `SUPABASE_ACCESS_TOKEN` was available this session, so:
   read, and `submit-review` never touches it either way. The only missing piece is the UI a
   moderator would click, which belongs in the admin dashboard, not here. **Tell Developer B**: the
   column and the policy are ready, nothing needs to change on the database side for that feature.
-- **Rate limiting on review submission.** Section 17 asks for it on order placement, review
-  submission, and search alike; order placement's is still not built either (flagged since section
-  7), and this is the same unbuilt gap, now doubled. It has to be solved server-side — in front of
-  the Edge Functions, not in the browser — before the shop takes real traffic.
+- ~~Rate limiting on review submission.~~ **Built in section 17 — see its write-up below.**
 - **Sorting or filtering the review list itself** (newest first is what `listReviews` has always
   done) — section 16 does not ask for it, and the six-review display limit on the product page
   makes it moot today.
 - **A dedicated "my reviews" page.** A customer's reviews are reachable from where they were
   written — order history and the product itself — which is what section 16 asks for; a
   standalone list across every product nobody has asked for.
+
+### What section 17 delivered
+
+Validation and security — a review of everything requirements section 17 asks for, across the
+whole site, not one new feature. Most of it was already true, built as a side effect of sections
+7 and 16 doing their own jobs properly: required-field validation on blur and on submit,
+whitespace-only treated as blank, the server re-validating everything and never trusting a
+price or a total, stock re-checked at the moment of confirmation, RLS closing every table to
+direct client writes, and customer PII never publicly readable. **What this section found and
+built is the specific things that review turned up as genuinely missing.**
+
+**Rate limiting on order placement and review submission — the gap flagged since section 7,
+finally closed.** "A client-side limit is not a limit" (section 17's own words), so this had to
+live inside `place-order` and `submit-review` themselves, backed by something durable enough to
+survive being called from however many separate instances a serverless function spins up — an
+in-memory counter in the function would not do, because two concurrent invocations on two
+different instances would each see zero and both let a request through. Postgres is that durable
+store, because it is the one thing both functions can already reach without adding a queue, an
+external rate-limiting service, or any infrastructure this project does not already have
+(deliberately no Docker, no service beyond Supabase).
+
+```
+rate_limits              key ("<bucket>:<ip>"), window_start, count — one row per caller
+                          ever seen, upserted in place, not one row per request
+check_rate_limit()       atomic fixed-window counter (SECURITY DEFINER). One
+                          insert-on-conflict statement, not select-then-update, so two
+                          requests arriving at the same instant cannot both read zero
+```
+
+`place-order`: 8 orders per 15 minutes per connection. `submit-review`: 15 per 15 minutes (a
+customer reviewing every item from a large order, plus a couple of edits, still fits). Both are
+checked FIRST, before any field validation — a flood of malformed requests is rejected as
+cheaply as possible rather than after the more expensive checks. **A real bug was caught by
+testing rather than assumed away**: `submit-review`'s check was originally written after the
+`productId` presence check, so an empty or malformed body short-circuited before the rate limit
+ever ran — seventeen deliberately-empty requests all came back `VALIDATION`, never
+`RATE_LIMITED`. Reordered to check first, matching `place-order`, and reverified: fifteen
+requests validated normally, the sixteenth and seventeenth were rejected.
+
+**A second gap, not flagged anywhere before this review found it: `find_order_for_review` had no
+protection at all.** It is the one place in the whole schema an anonymous caller can invoke
+directly with zero server-side code in front of it (section 16's guest "verify with your order
+number and email" path) — which also makes it the one place guessing wrong is exactly what
+brute-forcing a stranger's order would look like. It now rate-limits itself, from inside the
+SQL function, at 20 attempts per 15 minutes — reading the caller's IP via
+`current_setting('request.headers', true)`, which is how PostgREST exposes request headers to a
+function body. **Verified live**: the 21st and 22nd of 22 identical lookups came back rejected
+with the rate-limit message; a genuine lookup afterward (after the test bucket was cleared)
+still worked.
+
+**A real hole in `check_rate_limit()` itself, caught before it shipped rather than after**:
+Postgres grants `EXECUTE` on a newly created function to `PUBLIC` by default, unlike a table,
+where RLS closes things by default. Left alone, ANY authenticated or anonymous caller could have
+called `check_rate_limit('place-order:203.0.113.5', 1, 999999999)` directly — not to bypass their
+own limit, but to exhaust a **different, real customer's** bucket and get them wrongly
+rate-limited. Caught by checking the actual grants after applying the migration rather than
+assuming the explicit `grant ... to service_role` was the only one that mattered; fixed with an
+explicit `revoke all ... from public` right beside the grant, live and in the migration.
+
+**Sanitisation, requirements section 17's "sanitise and escape all customer-supplied text...
+before storing or displaying it."** Escaping was already handled — nothing in `storefront/` uses
+`dangerouslySetInnerHTML`, so React escapes every piece of customer text on render regardless of
+what is stored, and this section confirmed that by checking rather than assuming it. Sanitising
+BEFORE storing was the real gap: `cleanField`/`cleanReviewText` trimmed and collapsed whitespace
+but let control characters and invisible Unicode (zero-width characters, the byte-order mark)
+straight through. `shared/sanitize.ts` strips them now, called from both `shared/checkout.ts` and
+`shared/reviews.ts`, with the same pattern inlined in both Edge Functions (the usual reason:
+Deno cannot import `shared/`). **Verified live** by submitting a review with a name and a comment
+built from Python with literal NUL, BEL and zero-width characters embedded — both came back
+clean.
+
+**Public review reads no longer expose `user_id` or `order_id`.** Neither is "personal data" the
+way an email or a phone number is — section 17's own example is "email, phone, address" — but
+neither had any reason being public either: `order_id` lets a stranger tell two reviews came
+from the same order, and `user_id` is a stable identifier a stranger could use to correlate one
+customer's reviews across products. `listReviews`/`listTestimonials` in `supabaseSource.ts` used
+to `select("*")`; they now name exactly the columns `ReviewCard` and the testimonials strip
+actually render. **This is an application-level minimisation, not a database-level lock** —
+directly querying `/rest/v1/reviews?select=*` with the anon key still returns both columns, since
+RLS is row-level, not column-level, and both fields are needed internally (`order_id` by
+`getExistingReview` in `lib/reviewLookup.ts`, checking the reviewer's OWN review for one order
+they already know, which rightly keeps `select("*")`). Verified live: the same row returned both
+columns under `select=*` and neither under the storefront's actual column list.
+
+**Rate limiting on SEARCH is the one thing section 17 asks for that is NOT built, and it is a
+genuine architectural limitation, not an oversight.** Search is not a separate endpoint — it is
+`listProducts` with a `search` option, reading `product_summaries` straight over PostgREST with
+the anon key, the exact same read every plain category browse already makes (sections 2, 18 and
+19's whole point: the public catalog is fast because nothing sits between the browser and
+Postgres). There is no server-side code in that path for a check like `check_rate_limit` to run
+inside, unlike `find_order_for_review`, which is a single well-defined function and could embed
+one. The two ways to add it would be routing search through a new Edge Function (which is what
+section 19 explicitly designed AGAINST for the whole catalog) or Supabase's paid API gateway
+rate-limiting, not available on the free tier this project runs on. **Raise this with the client
+if search abuse becomes a real problem** — the fix is a real architecture decision, not a
+follow-up task.
+
+**No demo/frontend change, and no change to the review or checkout UI.** Every fix here is
+server-side or in the shared validation modules; a customer filling in a form or writing a
+review sees nothing different except a clearer message if they are the rare case hitting a
+limit. Build, typecheck and lint are clean.
+
+**Verified against the live project, all of it, 2026-08-29**: the migration
+(`20260829000005_rate_limits.sql`) applied, both Edge Functions redeployed, and — with a fresh
+temporary order created and then fully deleted, the same pattern every prior section's
+verification has used — every limit was actually tripped (not just read as code and assumed to
+work): 8-then-rejected on `place-order`, 15-then-rejected on `submit-review`, 20-then-rejected on
+`find_order_for_review`; sanitisation confirmed by round-tripping genuinely dirty input; the
+column restriction confirmed by comparing `select=*` against the storefront's real query
+side-by-side. **The database and the rate-limit table were both confirmed empty afterward.**
+
+**Not built, deliberately:** rate limiting on search (above); a cleanup job for old
+`rate_limits` rows — the table's size is bounded by distinct callers ever seen, not by request
+volume, since each key is upserted in place rather than inserted fresh per request, so this is a
+minor housekeeping item rather than an unbounded-growth risk, worth revisiting only if it
+actually becomes one.
 
 
 ## 9. Open questions — ask before inventing
@@ -1670,9 +1796,10 @@ not just built.** `SUPABASE_ACCESS_TOKEN` was available this session, so:
   and clearing site data empties it. That is a consequence of having no server, not an
   oversight — say so if the client asks. A saved bag needs auth, which §7 explicitly does
   not require.
-- **Nothing is blocked.** Sections 1-16 are done and shipped (16's admin-moderation piece is
-  Developer B's — see the note below). Section 17's remaining gap is rate limiting; sections 18
-  and 19 are ongoing housekeeping, not a discrete build. Section 8 is Developer B's, in full.
+- **Nothing is blocked.** Sections 1-17 are done and shipped (16's admin-moderation piece is
+  Developer B's — see the note below; 17's one gap, rate limiting on search, is architectural,
+  not a to-do — see its write-up). Sections 18 and 19 are ongoing housekeeping, not a discrete
+  build. Section 8 is Developer B's, in full.
 - **Admin review moderation (requirements section 16's own "Admin" subsection) is NOT built,
   and is not ours to build.** Section 20's ownership table puts the admin dashboard on
   Developer B (section 8) in full, and "hide or remove a review that is abusive or spam" is
@@ -1705,10 +1832,12 @@ not just built.** `SUPABASE_ACCESS_TOKEN` was available this session, so:
   disappears on its own when `VITE_DATA_SOURCE` becomes `supabase`. What HAS been exercised
   is everything up to and including the request: the form, its rules, the payload, and every
   error the server can return.
-- **RATE LIMITING ON ORDER PLACEMENT AND REVIEW SUBMISSION IS NOT BUILT**, and §17 asks for it
-  on both. Neither `place-order` nor `submit-review` limits how many requests one caller can
-  make. It has to be solved server-side — a client-side limit is not a limit — and it must be in
-  place before the shop takes real orders or real reviews.
+- ~~RATE LIMITING ON ORDER PLACEMENT AND REVIEW SUBMISSION IS NOT BUILT~~ **Built in section
+  17, 2026-08-29, and verified by actually tripping each limit against the live project** — 8
+  per 15 minutes on `place-order`, 15 per 15 minutes on `submit-review`, 20 per 15 minutes on
+  `find_order_for_review` (a real gap section 17's review found that nothing had flagged
+  before). **Rate limiting search is NOT built and stays that way — see section 17's write-up
+  for why the architecture makes it impractical without a redesign nobody has asked for.**
 - **Section 16 — reviews — is deployed and verified against the live project, 2026-08-29.**
   `supabase/migrations/20260829000004_reviews.sql` (the `reviews.updated_at` column and
   `find_order_for_review`) is applied, and `submit-review` is deployed with `--no-verify-jwt`.
@@ -1716,6 +1845,12 @@ not just built.** `SUPABASE_ACCESS_TOKEN` was available this session, so:
   exercised against a temporary order created and then fully deleted — see the section 16
   write-up above for the full list of what was checked. **The database was confirmed empty
   afterward.**
+- **Section 17 — validation and security — is deployed and verified against the live project,
+  2026-08-29.** `supabase/migrations/20260829000005_rate_limits.sql` (the `rate_limits` table,
+  `check_rate_limit()`, and `find_order_for_review()` restated to rate-limit itself) is applied;
+  `place-order` and `submit-review` were both redeployed with the check wired in. See the
+  section 17 write-up above for the two real bugs this caught (a check that never ran because it
+  sat after an early return, and a function `PUBLIC` could call directly) before either shipped.
 - **No email is sent when an order is placed.** There is no mail service on this project, so
   the confirmation page deliberately does not promise one; it tells the customer to keep
   their order number. If the client wants an order email, that is a new decision — it needs

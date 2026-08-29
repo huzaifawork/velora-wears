@@ -7,7 +7,7 @@ import { useAuth } from "@/features/account/AuthContext";
 import { ReviewComposer } from "@/features/reviews/ReviewComposer";
 import { useAsync } from "@/hooks/useAsync";
 import { listMyOrders } from "@/lib/myOrders";
-import { findOrderForReview } from "@/lib/reviewLookup";
+import { ReviewLookupRateLimitedError, findOrderForReview } from "@/lib/reviewLookup";
 
 /**
  * The entry point to writing a review from the product page — the two paths
@@ -118,8 +118,12 @@ function GuestVerify({ productId, productName }: { productId: string; productNam
         return;
       }
       setVerified({ orderId: match.orderId, reviewToken: match.reviewToken });
-    } catch {
-      setError("We could not verify your order just now. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof ReviewLookupRateLimitedError
+          ? err.message
+          : "We could not verify your order just now. Please try again.",
+      );
     } finally {
       setVerifying(false);
     }
