@@ -20,20 +20,27 @@ import type { CartTotals } from "@/lib/cart";
  * leaving the visitor to work out which line is at fault, there is one control
  * that clears them all.
  *
- * Every figure here is display only. The server recomputes the order total from
- * stored prices when `placeOrder` is built (section 17); nothing on this screen
- * is ever what an order is written from.
+ * Every figure here is display only. The `place-order` Edge Function recomputes
+ * the order total from stored prices and the admin-configured delivery charge
+ * (section 17); nothing on this screen is ever what an order is written from.
+ *
+ * Checkout renders the same component with `showActions` off: it needs the
+ * identical breakdown beside its form, but the way out of it is the confirm
+ * button on the form, not a second link to itself.
  */
 export function CartSummary({
   cart,
   /** The drawer wants the same numbers without the surrounding card. */
   compact = false,
   onNavigate,
+  showActions = true,
 }: {
   cart: CartTotals;
   compact?: boolean;
   /** Lets the drawer close itself when a link inside is followed. */
   onNavigate?: () => void;
+  /** Off on checkout, where the form owns the way forward. */
+  showActions?: boolean;
 }) {
   const { removeMany } = useCart();
   const { subtotal, deliveryCharge, total, hasProblems, freeDeliveryRemaining } = cart;
@@ -95,32 +102,34 @@ export function CartSummary({
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-3">
-        {/* A disabled `Button` rather than a `Link`: an anchor cannot be
-            disabled, and section 11 requires that an unavailable option
-            genuinely cannot be taken to checkout. */}
-        {blocked ? (
-          <Button size="lg" disabled className="w-full">
-            Proceed to checkout
-          </Button>
-        ) : (
-          <Link
-            to={CHECKOUT}
-            onClick={onNavigate}
-            className={buttonClasses({ size: "lg", className: "w-full" })}
-          >
-            Proceed to checkout
-          </Link>
-        )}
+      {showActions && (
+        <div className="mt-6 flex flex-col gap-3">
+          {/* A disabled `Button` rather than a `Link`: an anchor cannot be
+              disabled, and section 11 requires that an unavailable option
+              genuinely cannot be taken to checkout. */}
+          {blocked ? (
+            <Button size="lg" disabled className="w-full">
+              Proceed to checkout
+            </Button>
+          ) : (
+            <Link
+              to={CHECKOUT}
+              onClick={onNavigate}
+              className={buttonClasses({ size: "lg", className: "w-full" })}
+            >
+              Proceed to checkout
+            </Link>
+          )}
 
-        <Link
-          to={PRODUCTS}
-          onClick={onNavigate}
-          className={buttonClasses({ variant: "secondary", className: "w-full" })}
-        >
-          Continue shopping
-        </Link>
-      </div>
+          <Link
+            to={PRODUCTS}
+            onClick={onNavigate}
+            className={buttonClasses({ variant: "secondary", className: "w-full" })}
+          >
+            Continue shopping
+          </Link>
+        </div>
+      )}
 
       <p className="mt-5 text-center text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
         Cash on delivery &middot; Nationwide
