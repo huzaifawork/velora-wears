@@ -1,20 +1,11 @@
-import type { Size } from "@shared/types";
-
 /**
  * Sizes, in the order they are always shown (requirements section 4 — Small,
  * Medium, Large).
  *
- * `Record<Size, SizeStock>` is an unordered map, so something has to decide the
- * order the options appear in. That decision lives here, once: the product
- * detail page's size selector, the cart lines (section 6) and the stock
- * displays (section 11) must all agree, and iterating `Object.keys` would leave
- * the order up to whatever wrote the record.
+ * **The definition moved to `shared/stock.ts` in section 11** and this file
+ * re-exports it. The order and the names are not the storefront's to decide
+ * alone: the admin dashboard edits per-size stock and must show the same three
+ * in the same order, and `shared/stock.ts` needs the order itself to answer
+ * "which sizes can actually be bought". Every existing import still works.
  */
-export const SIZES: readonly Size[] = ["S", "M", "L"];
-
-/** Full names, for labels and screen readers — the letter alone reads poorly. */
-export const SIZE_LABELS: Record<Size, string> = {
-  S: "Small",
-  M: "Medium",
-  L: "Large",
-};
+export { SIZES, SIZE_LABELS } from "@shared/stock";

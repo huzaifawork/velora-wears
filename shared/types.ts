@@ -54,6 +54,15 @@ export interface ProductSummary {
   /** Precomputed so listings never have to read the sizes map to know availability. */
   inStock: boolean;
   lowStock: boolean;
+  /**
+   * Units left across every size. Section 11 asks for the "available product
+   * quantity" to be shown, and a grid cannot read the per-size map to work it
+   * out (§19) — so the summary carries the total, exactly as `product_summaries`
+   * has always computed it. Optional, because a summary from a source that
+   * predates the field is still a usable summary: treat a missing value as
+   * "unknown", not as zero, and fall back to the two flags above.
+   */
+  totalStock?: number;
   ratingAvg: number;
   ratingCount: number;
   active: boolean;
