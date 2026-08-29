@@ -1,6 +1,7 @@
 import type { Product, Settings, Size } from "@shared/types";
 import { MAX_ORDER_LINES, MAX_QTY_PER_LINE } from "@shared/checkout";
 import { SIZES } from "@/lib/sizes";
+import { stockInSize } from "@shared/stock";
 
 /**
  * The bag (requirements section 6) — storage, validation and arithmetic.
@@ -228,7 +229,7 @@ export function buildCart(
       };
     }
 
-    const available = product.sizes[item.size]?.stock ?? 0;
+    const available = stockInSize(product.sizes, item.size);
     const orderableQty = Math.min(item.qty, available);
     const problem: CartLineProblem | undefined =
       available === 0 ? "sold-out" : orderableQty < item.qty ? "reduced" : undefined;

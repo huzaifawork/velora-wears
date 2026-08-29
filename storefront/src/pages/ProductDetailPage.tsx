@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import type { Size } from "@shared/types";
+import { FALLBACK_LOW_STOCK_THRESHOLD, availableSizes, joinNames, stockInSize } from "@shared/stock";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { Container } from "@/components/layout/Container";
 import { ValueProps } from "@/components/layout/ValueProps";
@@ -25,7 +26,7 @@ import {
   listProducts,
   listReviews,
 } from "@/lib/queries";
-import { SIZES } from "@/lib/sizes";
+import { SIZE_LABELS } from "@/lib/sizes";
 import { CATEGORIES, HOME, PRODUCTS, categoryPath } from "@/lib/routes";
 
 /**
@@ -49,8 +50,7 @@ const REVIEW_LIMIT = 6;
 /** Enough of the category to fill the related strip after removing this product. */
 const RELATED_LIMIT = 8;
 
-/** Only used until the settings record lands; matches the seeded default. */
-const FALLBACK_LOW_STOCK = 4;
+
 
 export function ProductDetailPage() {
   const slug = useParams().slug ?? "";
@@ -118,10 +118,10 @@ export function ProductDetailPage() {
     categories?.find((c) => c.slug === product.categorySlug)?.name ??
     prettifySlug(product.categorySlug);
 
-  const soldOut = SIZES.every((s) => (product.sizes[s]?.stock ?? 0) === 0);
+  const soldOut = availableSizes(product.sizes).length === 0;
 
   /** Stock in the chosen size — the cap on what can go into the bag. */
-  const availableInSize = size ? (product.sizes[size]?.stock ?? 0) : 0;
+  const availableInSize = size ? stockInSize(product.sizes, size) : 0;
 
   /**
    * Adding is gated on a size that actually has stock, so an unavailable option
@@ -185,7 +185,7 @@ export function ProductDetailPage() {
                 sizes={product.sizes}
                 selected={size}
                 onSelect={(next) => setChosen({ slug, size: next, qty: 1 })}
-                lowStockThreshold={settings?.lowStockThreshold ?? FALLBACK_LOW_STOCK}
+                lowStockThreshold={settings?.lowStockThreshold ?? FALLBACK_LOW_STOCK_THRESHOLD}
               />
             </div>
 
@@ -235,7 +235,11 @@ export function ProductDetailPage() {
                 <dt className="w-28 shrink-0 text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
                   Sizes
                 </dt>
-                <dd className="text-ink-soft">Small, Medium and Large</dd>
+                <dd className="text-ink-soft">
+                  {soldOut
+                    ? "None left — every size is sold out"
+                    : joinNames(availableSizes(product.sizes).map((s) => SIZE_LABELS[s]))}
+                </dd>
               </div>
               <div className="flex gap-3">
                 <dt className="w-28 shrink-0 text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">

@@ -1,4 +1,5 @@
 import type { Size, SizeStock } from "@shared/types";
+import { availableSizes, stockInSize, stockLevel } from "@shared/stock";
 import { SIZES, SIZE_LABELS } from "@/lib/sizes";
 
 /**
@@ -11,7 +12,10 @@ import { SIZES, SIZE_LABELS } from "@/lib/sizes";
  * the order will carry. The remaining quantity for the chosen size is shown
  * underneath, so a visitor is told what is left before they commit to it.
  *
- * Reused by the cart's size switcher in section 6 — do not write a second one.
+ * **"Low" is decided by `shared/stock.ts`**, the same rule the
+ * `product_summaries` VIEW and `StockBadge` use — this used to compare
+ * directly against `lowStockThreshold` on its own, which happened to agree by
+ * coincidence rather than by sharing a definition.
  */
 export function SizeSelector({
   sizes,
@@ -25,9 +29,9 @@ export function SizeSelector({
   /** From admin settings; below or at this, the remaining count is called out. */
   lowStockThreshold: number;
 }) {
-  const stockFor = (size: Size) => sizes[size]?.stock ?? 0;
-  const anyAvailable = SIZES.some((size) => stockFor(size) > 0);
-  const selectedStock = selected ? stockFor(selected) : 0;
+  const anyAvailable = availableSizes(sizes).length > 0;
+  const selectedStock = selected ? stockInSize(sizes, selected) : 0;
+  const selectedLevel = selected ? stockLevel(selectedStock, lowStockThreshold) : undefined;
 
   return (
     <div>
@@ -37,7 +41,7 @@ export function SizeSelector({
 
       <div role="radiogroup" aria-label="Size" className="mt-4 flex flex-wrap gap-3">
         {SIZES.map((size) => {
-          const stock = stockFor(size);
+          const stock = stockInSize(sizes, size);
           const soldOut = stock === 0;
           const active = selected === size;
 
@@ -75,7 +79,7 @@ export function SizeSelector({
           ? "Every size is sold out. This piece is not available to order right now."
           : !selected
             ? "Choose a size to continue."
-            : selectedStock <= lowStockThreshold
+            : selectedLevel === "low-stock"
               ? `Only ${selectedStock} left in ${SIZE_LABELS[selected]}.`
               : `${SIZE_LABELS[selected]} is in stock.`}
       </p>
