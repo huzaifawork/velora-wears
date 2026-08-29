@@ -30,6 +30,15 @@ export function prettifySlug(slug: string): string {
 }
 
 /**
+ * `12` -> `12 pieces`, `1` -> `1 piece`. The catalog is counted in three places
+ * — the category tiles, the category chips and the row above the grid — so the
+ * plural is decided once (requirements section 18).
+ */
+export function formatPieceCount(count: number): string {
+  return `${count} ${count === 1 ? "piece" : "pieces"}`;
+}
+
+/**
  * `1755043200000` -> `12 Aug 2026`. Used on reviews now, and by the order
  * pages in sections 7 and 12 — dates are formatted in exactly one place.
  */

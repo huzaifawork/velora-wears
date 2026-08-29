@@ -79,6 +79,20 @@ export interface Category {
   name: string;
   sortOrder: number;
   thumb?: string;
+  /**
+   * One line of copy introducing the category, shown on the category tiles and
+   * at the top of a category listing (requirements section 5).
+   *
+   * ADDITIVE and optional — every read path renders correctly without it, so
+   * nothing breaks for either developer while it is absent. The admin dashboard
+   * should offer it as an optional field when section 8 gets to categories.
+   */
+  description?: string;
+  /**
+   * Precomputed at write time so a tile can show "6 pieces" without the
+   * storefront counting products (requirements section 19). The admin dashboard
+   * must keep it in sync when a product is created, retired or recategorised.
+   */
   productCount: number;
 }
 

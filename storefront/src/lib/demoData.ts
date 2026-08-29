@@ -643,6 +643,8 @@ export const demoCategories: Category[] = [
     name: "Shirts",
     sortOrder: 1,
     thumb: "/categories/shirts.webp",
+    description:
+      "Poplin, oxford and slub cotton, cut a little relaxed. The shirts that go to work on a Monday and out to dinner on a Friday.",
     productCount: demoSummaries.filter((p) => p.categorySlug === "shirts").length,
   },
   {
@@ -650,6 +652,8 @@ export const demoCategories: Category[] = [
     name: "Hoodies",
     sortOrder: 2,
     thumb: "/categories/hoodies.webp",
+    description:
+      "Heavyweight brushed fleece for Lahore and Islamabad winters, in the muted colours that go with everything already in the wardrobe.",
     productCount: demoSummaries.filter((p) => p.categorySlug === "hoodies").length,
   },
   {
@@ -657,6 +661,8 @@ export const demoCategories: Category[] = [
     name: "Essentials",
     sortOrder: 3,
     thumb: "/categories/essentials.webp",
+    description:
+      "Plain tees, knits and the quiet layers underneath. The pieces that get worn twice a week and are replaced, not retired.",
     productCount: demoSummaries.filter((p) => p.categorySlug === "essentials").length,
   },
 ];
