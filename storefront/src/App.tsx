@@ -18,6 +18,9 @@ const HomePage = lazy(() =>
 const ProductsPage = lazy(() =>
   import("@/pages/ProductsPage").then((m) => ({ default: m.ProductsPage })),
 );
+const CategoriesPage = lazy(() =>
+  import("@/pages/CategoriesPage").then((m) => ({ default: m.CategoriesPage })),
+);
 const ProductDetailPage = lazy(() =>
   import("@/pages/ProductDetailPage").then((m) => ({ default: m.ProductDetailPage })),
 );
@@ -44,6 +47,10 @@ export default function App() {
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<HomePage />} />
+            <Route path="/categories" element={<CategoriesPage />} />
+            {/* The category LISTING is /products?category=<slug> — the catalog
+                and a single category are the same page in two states, so there
+                is one canonical URL per category. See lib/routes.ts. */}
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/products/:slug" element={<ProductDetailPage />} />
             <Route path="*" element={<NotFoundPage />} />
