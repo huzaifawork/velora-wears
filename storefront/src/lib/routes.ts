@@ -18,6 +18,16 @@ export const HOME = "/";
 export const PRODUCTS = "/products";
 export const CATEGORIES = "/categories";
 
+/** The bag (requirements section 6). The drawer is a shortcut over this page. */
+export const CART = "/cart";
+
+/**
+ * Checkout (requirements section 7). NOT BUILT — it needs the `placeOrder`
+ * Cloud Function, and Cloud Functions need the Blaze plan. The route resolves
+ * to the catch-all page, which says so, rather than to a dead link.
+ */
+export const CHECKOUT = "/checkout";
+
 /** The canonical URL for browsing one category (requirements section 5). */
 export function categoryPath(slug: string): string {
   return `${PRODUCTS}?category=${encodeURIComponent(slug)}`;
