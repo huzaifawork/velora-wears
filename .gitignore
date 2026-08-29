@@ -4,9 +4,6 @@ node_modules/
 # build output
 dist/
 build/
-# Cloud Functions compile to functions/lib. Scoped on purpose: a bare `lib/`
-# also swallowed storefront/src/lib, so the read layer was never committed.
-functions/lib/
 *.tsbuildinfo
 .vite/
 
@@ -16,21 +13,21 @@ functions/lib/
 !.env.example
 
 # ---------------------------------------------------------------------------
-# Firebase Admin SDK service account keys — NEVER commit these
+# Credentials — NEVER commit these. THIS REPOSITORY IS PUBLIC.
+#
+# The Supabase service role key and personal access tokens (sbp_...) grant
+# full control. They belong in the Supabase platform and in your shell, never
+# in a file here.
 # ---------------------------------------------------------------------------
 *serviceAccountKey.json
 *service-account*.json
 *serviceAccount*.json
-*firebase-adminsdk*.json
 secrets/
 credentials/
 
-# firebase tooling
-.firebase/
-firebase-debug.log*
-firebase-debug.*.log*
-database-debug.log*
-ui-debug.log*
+# supabase cli local state
+supabase/.temp/
+supabase/.branches/
 
 # logs
 npm-debug.log*
