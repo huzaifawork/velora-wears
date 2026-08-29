@@ -13,6 +13,8 @@ import {
 import type { Category, Product, ProductSummary, Review, Settings } from "@shared/types";
 import { getDb } from "@/lib/firebase";
 import {
+  applyFilters,
+  normaliseSearch,
   sortSummaries,
   type CatalogSource,
   type ResolvedListOptions,
@@ -44,25 +46,85 @@ function toArray<T>(val: Record<string, T> | null): T[] {
 }
 
 /**
- * NOTE ON A REAL RTDB LIMITATION: a query may use only ONE `orderByChild`. So
- * "filter by category AND sort by price" cannot be expressed server-side. We
- * filter on the indexed `categorySlug` and sort the (much smaller) result in
- * memory. If a single category ever grows large enough for that to hurt, add a
- * denormalised composite key such as `categorySlug_price` and index that.
+ * How much to over-fetch when a filter has to be finished in the browser.
+ *
+ * THE CONSTRAINT: a Realtime Database query may use only ONE `orderByChild`, so
+ * "search for shirt AND only in hoodies AND sort by price" cannot be expressed
+ * server-side. Whichever filter the server applied, the rest run in memory —
+ * and the server's `limit` is applied BEFORE those, so asking for exactly 24
+ * and then discarding half of them would return 12 and wrongly look like the
+ * end of the catalog.
+ *
+ * So when a filter is left over, the window is widened and the page is trimmed
+ * afterwards. It stays bounded, which is what section 19 actually requires.
  */
-async function listProducts({
-  categorySlug,
-  sort,
-  limit,
-}: ResolvedListOptions): Promise<ProductSummary[]> {
+const OVERFETCH = 4;
+const MAX_FETCH = 200;
+
+/**
+ * Picks the single indexed query that fetches the smallest correct window, and
+ * reports whether anything is left to do in memory.
+ *
+ * The order of preference matters: search is the narrowest filter there is, a
+ * category is the next narrowest, and only when neither is present is it worth
+ * spending the one `orderByChild` on the sort field itself.
+ */
+async function fetchWindow(options: ResolvedListOptions): Promise<ProductSummary[]> {
+  const { categorySlug, search, sort, limit } = options;
   const base = ref(getDb(), "productSummaries");
+  const term = normaliseSearch(search);
 
-  const q = categorySlug
-    ? query(base, orderByChild("categorySlug"), equalTo(categorySlug), limitToFirst(limit))
-    : query(base, orderByChild("createdAt"), limitToFirst(limit));
+  // Anything the server cannot express is finished in the browser, so the
+  // window has to be wide enough to survive it.
+  const leftover = Boolean((term && categorySlug) || options.inStockOnly || term);
+  const window = Math.min(leftover ? limit * OVERFETCH : limit, MAX_FETCH);
 
-  const rows = toArray<ProductSummary>((await get(q)).val()).filter((p) => p.active);
-  return sortSummaries(rows, sort);
+  if (term) {
+    // Prefix match against the denormalised lowercase `searchText`
+    // (requirements section 13). `` is the highest code point Firebase
+    // will match, which is how RTDB expresses "everything starting with".
+    const q = query(
+      base,
+      orderByChild("searchText"),
+      startAt(term),
+      endAt(`${term}`),
+      limitToFirst(window),
+    );
+    return toArray<ProductSummary>((await get(q)).val());
+  }
+
+  if (categorySlug) {
+    const q = query(base, orderByChild("categorySlug"), equalTo(categorySlug), limitToFirst(window));
+    return toArray<ProductSummary>((await get(q)).val());
+  }
+
+  // No filter to spend the index on, so spend it on the sort. `price` is
+  // indexed; "highest first" is `limitToLast`, which is how RTDB expresses it.
+  if (sort === "price-asc") {
+    return toArray<ProductSummary>(
+      (await get(query(base, orderByChild("price"), limitToFirst(window)))).val(),
+    );
+  }
+  if (sort === "price-desc") {
+    return toArray<ProductSummary>(
+      (await get(query(base, orderByChild("price"), limitToLast(window)))).val(),
+    );
+  }
+
+  // `rating` has no index and is not worth one: sorting by it without a filter
+  // means reading a page of the catalog either way, so it reads the newest.
+  return toArray<ProductSummary>(
+    (await get(query(base, orderByChild("createdAt"), limitToLast(window)))).val(),
+  );
+}
+
+/**
+ * The one list read — browsing, category filtering, search, the in-stock
+ * filter and sorting (requirements sections 3, 5, 11, 13 and 14).
+ */
+async function listProducts(options: ResolvedListOptions): Promise<ProductSummary[]> {
+  const rows = await fetchWindow(options);
+  return sortSummaries(applyFilters(rows, options), options.sort).slice(0, options.limit);
 }
 
 /** Detail view — one full product, fetched only when the user opens it. */
@@ -87,23 +149,6 @@ async function getProductSummaryBySlug(slug: string): Promise<ProductSummary | n
     limitToFirst(1),
   );
   return toArray<ProductSummary>((await get(q)).val()).filter((p) => p.active)[0] ?? null;
-}
-
-/**
- * Search (requirements section 13 — runs on Enter/button, not per keystroke).
- * Prefix match against the denormalised lowercase `searchText` field.
- */
-async function searchProducts(term: string, limit: number): Promise<ProductSummary[]> {
-  const t = term.trim().toLowerCase();
-  if (!t) return [];
-  const q = query(
-    ref(getDb(), "productSummaries"),
-    orderByChild("searchText"),
-    startAt(t),
-    endAt(`${t}\uf8ff`),
-    limitToFirst(limit),
-  );
-  return toArray<ProductSummary>((await get(q)).val()).filter((p) => p.active);
 }
 
 async function getCategories(): Promise<Category[]> {
@@ -154,7 +199,6 @@ export const firebaseSource: CatalogSource = {
   listProducts,
   getProductBySlug,
   getProductSummaryBySlug,
-  searchProducts,
   getCategories,
   getSettings,
   listReviews,

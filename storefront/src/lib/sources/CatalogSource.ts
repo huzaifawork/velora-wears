@@ -13,10 +13,33 @@ import type { Category, Product, ProductSummary, Review, Settings } from "@share
  * a method to one without the other stops compiling.
  */
 
-export type SortOption = "newest" | "price-asc" | "price-desc";
+export type SortOption = "newest" | "price-asc" | "price-desc" | "rating";
 
+/** The sort control's options, in the order they are offered (section 14). */
+export const SORT_OPTIONS: ReadonlyArray<{ value: SortOption; label: string }> = [
+  { value: "newest", label: "Newest first" },
+  { value: "price-asc", label: "Price: low to high" },
+  { value: "price-desc", label: "Price: high to low" },
+  { value: "rating", label: "Best rated" },
+];
+
+export const DEFAULT_SORT: SortOption = "newest";
+
+/**
+ * Everything the products page can ask for (requirements sections 13 and 14).
+ *
+ * Search is an OPTION here rather than a separate method, because searching and
+ * browsing produce the same thing — a filtered, sorted page of summaries — and
+ * a visitor who searches must still be able to narrow by category, hide what is
+ * sold out, and sort by price. Two entry points would have meant two sets of
+ * filtering code, one of which would quietly not support half of them.
+ */
 export interface ListProductsOptions {
   categorySlug?: string;
+  /** Free text (requirements section 13). Prefix-matched — see the note below. */
+  search?: string;
+  /** Hide what cannot be bought (requirements sections 11 and 14). */
+  inStockOnly?: boolean;
   sort?: SortOption;
   limit?: number;
 }
@@ -24,16 +47,23 @@ export interface ListProductsOptions {
 /** Options after `queries.ts` has applied its defaults — implementations get concrete values. */
 export interface ResolvedListOptions {
   categorySlug?: string;
+  search?: string;
+  inStockOnly: boolean;
   sort: SortOption;
   limit: number;
 }
 
 export interface CatalogSource {
+  /**
+   * The one list read. Handles browsing, category filtering, search, the
+   * in-stock filter and sorting, because the Realtime Database can only order
+   * by ONE field per query and so the combination has to be resolved in one
+   * place (see `firebaseSource` for which half runs on the server).
+   */
   listProducts(options: ResolvedListOptions): Promise<ProductSummary[]>;
   getProductBySlug(slug: string): Promise<Product | null>;
   /** The list projection for ONE product — its precomputed rating and stock flags. */
   getProductSummaryBySlug(slug: string): Promise<ProductSummary | null>;
-  searchProducts(term: string, limit: number): Promise<ProductSummary[]>;
   getCategories(): Promise<Category[]>;
   getSettings(): Promise<Settings | null>;
   /** Visible reviews for one product, newest first (section 16). */
@@ -42,14 +72,61 @@ export interface CatalogSource {
   listTestimonials(limit: number): Promise<Review[]>;
 }
 
-/** Shared by both implementations so ordering cannot drift between them. */
+/** Normalised the same way on both sources, and by the page that builds the URL. */
+export function normaliseSearch(term: string | undefined): string {
+  return (term ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/**
+ * Shared by both implementations so ordering cannot drift between them.
+ *
+ * Sorting is finished in memory even when the server ordered the read, because
+ * a query can only order by one field and the page may have been narrowed after
+ * that. Sorting an already-sorted, bounded array costs nothing.
+ *
+ * Every comparison falls back to `createdAt`, so two pieces at the same price
+ * or the same rating always come out in the same order rather than shuffling
+ * between reads.
+ */
 export function sortSummaries(rows: ProductSummary[], sort: SortOption): ProductSummary[] {
+  const newestFirst = (a: ProductSummary, b: ProductSummary) => b.createdAt - a.createdAt;
+
   switch (sort) {
     case "price-asc":
-      return rows.sort((a, b) => a.price - b.price);
+      return rows.sort((a, b) => a.price - b.price || newestFirst(a, b));
     case "price-desc":
-      return rows.sort((a, b) => b.price - a.price);
+      return rows.sort((a, b) => b.price - a.price || newestFirst(a, b));
+    case "rating":
+      // An unrated piece is not a zero-star piece — it sorts below everything
+      // rated rather than competing with the worst review in the shop.
+      return rows.sort(
+        (a, b) => b.ratingAvg - a.ratingAvg || b.ratingCount - a.ratingCount || newestFirst(a, b),
+      );
     default:
-      return rows.sort((a, b) => b.createdAt - a.createdAt);
+      return rows.sort(newestFirst);
   }
+}
+
+/**
+ * The filters that CANNOT be expressed as a Realtime Database query alongside
+ * whatever the server already ordered by, applied identically on both sources.
+ *
+ * `searchText` is the denormalised lowercase "name + category" the admin writes
+ * at write time, and matching is PREFIX-ONLY, because `startAt`/`endAt` is all
+ * the database can do — matching mid-string here would quietly break the day
+ * the flag flips to the real source.
+ */
+export function applyFilters(
+  rows: ProductSummary[],
+  { categorySlug, search, inStockOnly }: ResolvedListOptions,
+): ProductSummary[] {
+  const term = normaliseSearch(search);
+
+  return rows.filter((row) => {
+    if (!row.active) return false;
+    if (categorySlug && row.categorySlug !== categorySlug) return false;
+    if (inStockOnly && !row.inStock) return false;
+    if (term && !row.searchText.startsWith(term)) return false;
+    return true;
+  });
 }

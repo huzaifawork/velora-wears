@@ -1,4 +1,5 @@
 import type { Category, Product, ProductSummary, Review, Settings } from "@shared/types";
+import { DEFAULT_SORT, normaliseSearch } from "@/lib/sources/CatalogSource";
 import type {
   CatalogSource,
   ListProductsOptions,
@@ -6,6 +7,7 @@ import type {
 } from "@/lib/sources/CatalogSource";
 
 export type { ListProductsOptions, SortOption };
+export { DEFAULT_SORT, SORT_OPTIONS } from "@/lib/sources/CatalogSource";
 
 /**
  * The storefront's read layer — the ONLY module pages and components may import
@@ -65,14 +67,32 @@ export function clearCatalogCache(): void {
   cache.clear();
 }
 
-/** Product grid data — always summaries, never full products. */
+/**
+ * Product grid data — always summaries, never full products.
+ *
+ * This is the ONE list read: the products page, a category, a search and the
+ * landing strips all come through here (requirements sections 3, 5, 13 and 14).
+ * The cache key has to name every option, or two different pages of results
+ * would share an entry.
+ */
 export function listProducts({
   categorySlug,
-  sort = "newest",
+  search,
+  inStockOnly = false,
+  sort = DEFAULT_SORT,
   limit = 24,
 }: ListProductsOptions = {}): Promise<ProductSummary[]> {
-  return cached(`list:${categorySlug ?? "all"}:${sort}:${limit}`, async () =>
-    (await source()).listProducts({ categorySlug, sort, limit }),
+  const term = normaliseSearch(search);
+  const key = `list:${categorySlug ?? "all"}:${term}:${inStockOnly}:${sort}:${limit}`;
+
+  return cached(key, async () =>
+    (await source()).listProducts({
+      categorySlug,
+      search: term || undefined,
+      inStockOnly,
+      sort,
+      limit,
+    }),
   );
 }
 
@@ -89,13 +109,6 @@ export function getProductBySlug(slug: string): Promise<Product | null> {
  */
 export function getProductSummaryBySlug(slug: string): Promise<ProductSummary | null> {
   return cached(`summary:${slug}`, async () => (await source()).getProductSummaryBySlug(slug));
-}
-
-/** Search (requirements section 13 — runs on Enter/button, not per keystroke). */
-export function searchProducts(term: string, limit = 24): Promise<ProductSummary[]> {
-  return cached(`search:${term.trim().toLowerCase()}:${limit}`, async () =>
-    (await source()).searchProducts(term, limit),
-  );
 }
 
 export function getCategories(): Promise<Category[]> {

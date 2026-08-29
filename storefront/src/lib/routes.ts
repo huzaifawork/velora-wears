@@ -37,3 +37,8 @@ export function categoryPath(slug: string): string {
 export function productPath(slug: string): string {
   return `${PRODUCTS}/${encodeURIComponent(slug)}`;
 }
+
+/** Search results (requirements section 13) — a state of the products page. */
+export function searchPath(term: string): string {
+  return `${PRODUCTS}?q=${encodeURIComponent(term)}`;
+}

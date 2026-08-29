@@ -7,6 +7,7 @@ import {
   demoSummaries,
 } from "@/lib/demoData";
 import {
+  applyFilters,
   sortSummaries,
   type CatalogSource,
   type ResolvedListOptions,
@@ -20,11 +21,16 @@ import {
  *
  *  - every function is async, so no caller can accidentally depend on data
  *    being available synchronously;
- *  - results are filtered by `active`, sorted, and limited exactly the way
- *    `firebaseSource` does, through the same shared `sortSummaries` helper;
- *  - search is a PREFIX match on `searchText`, because that is all a Realtime
- *    Database `startAt`/`endAt` query can do — matching mid-string here would
- *    quietly break the day the flag flips.
+ *  - filtering and ordering go through the SAME `applyFilters` and
+ *    `sortSummaries` helpers `firebaseSource` uses, so the two cannot disagree
+ *    about what a search or a sort means;
+ *  - search is therefore a PREFIX match on `searchText`, because that is all a
+ *    Realtime Database `startAt`/`endAt` query can do — matching mid-string
+ *    here would quietly break the day the flag flips.
+ *
+ * The one thing it does not imitate is the over-fetch window: there is no
+ * server round trip to bound, so it filters the whole demo catalog and trims.
+ * That difference is invisible above this file.
  *
  * Deleted together with `demoData.ts` when the switch happens.
  */
@@ -34,15 +40,13 @@ function clone<T>(rows: T[]): T[] {
   return rows.map((row) => ({ ...row }));
 }
 
-async function listProducts({
-  categorySlug,
-  sort,
-  limit,
-}: ResolvedListOptions): Promise<ProductSummary[]> {
-  const rows = demoSummaries.filter(
-    (p) => p.active && (!categorySlug || p.categorySlug === categorySlug),
-  );
-  return sortSummaries(clone(rows), sort).slice(0, limit);
+/**
+ * The one list read — browsing, category filtering, search, the in-stock
+ * filter and sorting (requirements sections 3, 5, 11, 13 and 14).
+ */
+async function listProducts(options: ResolvedListOptions): Promise<ProductSummary[]> {
+  const rows = applyFilters(demoSummaries, options);
+  return sortSummaries(clone(rows), options.sort).slice(0, options.limit);
 }
 
 async function getProductBySlug(slug: string): Promise<Product | null> {
@@ -53,13 +57,6 @@ async function getProductBySlug(slug: string): Promise<Product | null> {
 async function getProductSummaryBySlug(slug: string): Promise<ProductSummary | null> {
   const found = demoSummaries.find((p) => p.slug === slug && p.active);
   return found ? { ...found } : null;
-}
-
-async function searchProducts(term: string, limit: number): Promise<ProductSummary[]> {
-  const t = term.trim().toLowerCase();
-  if (!t) return [];
-  const rows = demoSummaries.filter((p) => p.active && p.searchText.startsWith(t));
-  return clone(rows).slice(0, limit);
 }
 
 async function getCategories(): Promise<Category[]> {
@@ -106,7 +103,6 @@ export const demoSource: CatalogSource = {
   listProducts,
   getProductBySlug,
   getProductSummaryBySlug,
-  searchProducts,
   getCategories,
   getSettings,
   listReviews,
