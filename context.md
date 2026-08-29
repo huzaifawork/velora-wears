@@ -4,8 +4,8 @@
 This file is the *state of the work*; `Requirements.md` is the spec.
 
 Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1 (brand identity),
-2 (landing page), 3 (products page) and 4 (product details page) are built.** Everything
-from section 5 onward is still to do.
+2 (landing page), 3 (products page), 4 (product details page) and 5 (categories) are
+built.** Everything from section 6 onward is still to do.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -87,7 +87,7 @@ Storefront builds clean; functions typecheck clean.
 | Area | State |
 | --- | --- |
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
-| Routing | react-router-dom, `/`, `/products` and `/products/:slug`, lazy-loaded, scroll reset on navigate |
+| Routing | react-router-dom, `/`, `/products`, `/products/:slug` and `/categories`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
 | Firebase client | Wired, web app registered, config in `storefront/.env.local` |
 | Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
 | Data source | `VITE_DATA_SOURCE=demo`. Switches to `firebase` when Blaze is bought |
@@ -98,10 +98,11 @@ Storefront builds clean; functions typecheck clean.
 | Landing page | **Done (section 2).** Hero, categories, featured grid, promos, story, reviews, Instagram strip, CTA, footer |
 | Products page | **Done (section 3).** `/products`, honours `?category=`, reuses `ProductGrid` |
 | Product details | **Done (section 4).** `/products/:slug` — gallery, size selection, reviews, related |
+| Categories | **Done (section 5).** `/categories` index, the category view on `/products?category=`, category chips, data-driven header and footer nav |
 | Demo catalog | 12 products, 3 categories, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
-| Product features | Listing and detail. No cart, checkout, auth, review UI, search, filters, admin |
+| Product features | Listing, detail and category browsing. No cart, checkout, auth, review UI, search, sorting, admin |
 | Seed data | **Database is empty — intentionally.** Catalog comes from demo data |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
@@ -122,14 +123,17 @@ storefront/          React + Vite (Developer A)
                            CtaBand
   src/features/products/   ProductCard, ProductGrid, StockBadge - reused by sections 3/5/13
                            ProductGallery, SizeSelector, RelatedProducts
+  src/features/categories/ CategoryTile (shared: landing bento + /categories), CategoryNav
   src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews
-  src/pages/               HomePage, ProductsPage, ProductDetailPage, NotFoundPage
+  src/pages/               HomePage, ProductsPage, ProductDetailPage, CategoriesPage,
+                           NotFoundPage
   src/lib/firebase.ts      client SDK init
   src/lib/queries.ts       read layer + cache + THE SOURCE SWITCH
   src/lib/sources/         CatalogSource (the interface), firebaseSource, demoSource
   src/lib/demoData.ts      throwaway demo catalog - never import from a component
   src/lib/format.ts        formatPrice / formatRating / formatDate / prettifySlug
   src/lib/sizes.ts         SIZES + SIZE_LABELS - the order sizes are shown in
+  src/lib/routes.ts        EVERY internal URL - the one definition of a category link
   src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
 functions/           Cloud Functions, Admin SDK, own node_modules (NOT a workspace)
@@ -195,6 +199,8 @@ Functions dependencies install separately, once: change into `functions/` and ru
 - **Every new `orderByChild` needs a matching `.indexOn`** in `database.rules.json`, added in
   the same change. Missing indexes are the main cause of slow RTDB apps.
 - **List views read `productSummaries`, never `products`.**
+- **Never write an internal URL by hand.** Import `categoryPath` / `productPath` from
+  `lib/routes.ts`. Six surfaces link to a category; they must agree on one URL.
 - **Never import `lib/demoData.ts` from a component or page.** Go through
   `lib/queries.ts` — that indirection is what makes switching to the database a
   one-file change instead of a rewrite.
@@ -241,8 +247,8 @@ one starts.
 | 2 | Landing page — hero, featured, categories, testimonials, footer | **Done** |
 | 3 | Products page — grid, cards | **Done** |
 | 4 | Product details — gallery, size selection | **Done** |
-| 5 | Categories | **Next** |
-| 6 | Shopping cart | to do |
+| 5 | Categories | **Done** |
+| 6 | Shopping cart | **Next** |
 | 7 | Checkout — guest + signed in | to do |
 | 8 | *Admin dashboard — **Developer B**, not us* | not ours |
 | 9 | Payment — COD only | to do |
@@ -469,25 +475,107 @@ page says so and offers the collection.
 (section 6), and a size guide. There is no "notify me when back in stock" — it needs a
 write path, and every client write is denied by design.
 
-### The next task — section 5, categories
+### What section 5 delivered
 
-Requirements section 5: products organised into categories, and users able to view and
-browse products by the category they choose.
+Categories, as requirements section 5 asks: the catalog organised into categories, and a
+visitor able to view and browse products by the category they choose.
 
-Most of the machinery already exists — read it before building anything:
+**The URL question in the old notes is settled.** `/products?category=<slug>` is the ONE
+canonical URL for a category. The catalog and a single category are the same page in two
+states, which is also the URL section 14's filter controls will write to, so a second
+`/category/:slug` route would have meant two addresses for one thing and an active-state
+check that matches neither. Nothing moved; every existing link still works.
 
-1. `categories` are already modelled, seeded, and read through `getCategories()`, each
-   with `name`, `slug`, `thumb` and a precomputed `productCount`.
-2. `/products?category=<slug>` already lists a category, with an unknown-slug state, and
-   the header, footer, category tiles, promo banners, breadcrumbs and the related strip
-   all already link to it.
-3. `CategoryStrip` on the landing page is the category bento.
+**`lib/routes.ts` is new, and is the point of that decision.** Every internal URL is built
+there — `categoryPath`, `productPath`, `HOME` / `PRODUCTS` / `CATEGORIES`. Six surfaces
+link to a category (header, footer, landing bento, the index, a product's breadcrumbs, the
+related strip); before this each one wrote the query string by hand. **Do not write an
+internal URL literal anywhere else** — and if the shape is ever revisited, `categoryPath`
+is the only thing that changes.
 
-So the open question is what section 5 still owes: most likely a **category landing route**
-(`/category/:slug` or a `/categories` index) and, if so, whether `?category=` should
-redirect to it so there is one canonical URL per category rather than two — decide that
-before writing anything, because every existing link would move. Ask Huzaifa which he
-wants; do not build both.
+**What was built:**
+
+- **`/categories`** — the index. Every category as a tile with its art, name, piece count
+  and a line of copy. It reads ONLY the small `categories` node, already cached from
+  wherever the visitor came from; it deliberately does **not** preview products per
+  category, which would be one catalog read per category on a page whose whole job is to
+  hand the visitor on (§19).
+- **The category view on `/products?category=`** — the products page now becomes that
+  category's own page: its name as the `h1`, its copy, its picture in the header, and a
+  breadcrumb trail back through the index. Same page, same component, one extra state.
+- **`CategoryNav`** — the chip row (Everything / Shirts / Hoodies / Essentials / All
+  categories), each with its precomputed count, in the page header in *both* states. It is
+  what makes browsing real: a visitor can move sideways between categories without going
+  back first. Every chip is a plain `Link`, so the selected category is URL state — back
+  button, sharing and bookmarking all work. It is **not** section 14's filter system: one
+  axis, one selection; sorting and multi-select come later, on the row above the grid.
+
+**Three things were shared rather than duplicated (§18):**
+
+- **`CategoryTile`** (`features/categories/`) — the landing bento's tile was lifted out and
+  is now used by the index too, with `feature` / `compact` / `portrait` variants that change
+  proportion and type scale only. `CategoryStrip` now owns the *layout*, not the tile.
+- **`PageHeader` gained a `media` slot** rather than a near-identical `CategoryHeader`
+  existing. With no media the markup is exactly what it was before.
+- **`formatPieceCount`** moved into `lib/format.ts`; three places were pluralising "piece"
+  by hand.
+
+**The header and footer navigation is now built from the data, not hardcoded.** It used to
+be three literal slugs, which meant a category the admin creates in the dashboard would
+never appear in the navigation, and one they retire would go on being linked. Both read the
+cached `categories` node — one read for the session, shared with the page below. The header
+shows up to four and always links on to `/categories`; the desktop bar holds its width with
+a skeleton so the links do not slide sideways as the data lands.
+
+**An empty category is not a link.** A tile with `productCount: 0` renders "Coming soon",
+desaturated, with no `Shop` affordance — a tile that promises pieces and opens an empty grid
+is worse than one that says the edit is on its way. `productCount` is precomputed on the
+record, so nothing is counted to know this (§19).
+
+**An unknown `?category=` is a real state, not `NotFoundPage`** — the same reasoning as an
+unknown product slug. It now explains itself and offers the collection and the index,
+rather than rendering an empty grid with a line of text under it.
+
+**No database or rules change.** Categories are read as one small flat node with no
+`orderByChild`, so there is no new index and `deploy:rules` was not needed. The one contract
+change is **additive**: `Category.description?` in `shared/types.ts` — optional, and every
+read path renders correctly without it, so nothing breaks for Developer B. **Tell Developer
+B it exists** so the admin dashboard can offer it as an optional field.
+
+**Not built, deliberately:** sorting and multi-select filtering (section 14), search
+(section 13), pagination (still bounded at 24, still waiting on the cursor decision in
+section 14), and per-category photography — the category art is the same generated demo
+tile the landing bento uses.
+
+### The next task — section 6, the shopping cart
+
+Requirements section 6: an *Add to cart* option on every product, the size chosen before
+adding, a cart showing product / size / quantity / price / order total, and the ability to
+update a quantity or remove a line before checkout.
+
+What already exists — read it before building anything:
+
+1. **The size gate is built.** `SizeSelector` on the product page already refuses a
+   sold-out size, and "Add to bag" is already disabled until a size is chosen and on a
+   piece where every size is gone (§11). Today that button only sets a line of copy saying
+   the cart is not built — that is the one thing to replace.
+2. **Per-product state has a known trap.** react-router swaps `:slug` without unmounting
+   the detail page, so the chosen size is stamped with the slug it was chosen for. A
+   quantity control on that page has exactly the same trap — see section 4's note.
+3. `ValueProps`, `Breadcrumbs`, `PageHeader`, `formatPrice` and `lib/routes.ts` are all
+   ready to reuse. The header has no cart control yet; it needs one with a count badge.
+
+Decisions to make before writing anything:
+
+- **Where the cart lives.** It has no server — every client write is denied and Cloud
+  Functions need Blaze — so it is `localStorage` plus a React context. Agree the stored
+  shape: it must hold `productId`, `slug`, `size` and `qty`, and **re-read the price from
+  the catalog on render**, never trust a stored price, because §17 has the server recompute
+  every total and the cart must not show a stale one.
+- **A cart page, a drawer, or both.**
+- **What happens when a line goes out of stock while it sits in the cart.** §11 says an
+  unavailable option must not be purchasable, so the cart has to re-check `inStock` and the
+  per-size stock on read, not only at checkout.
 
 **When Blaze is bought and the switch happens**, the checklist is:
 
@@ -536,9 +624,15 @@ wants; do not build both.
   Agree that node with Developer B before section 16 starts.
 - **The database is deliberately empty and stays that way for now.** Do not seed it without
   asking — the storefront is not reading from it yet.
-- **Category URL shape** (section 5) — `?category=` works today and everything links to it.
-  Whether categories also get their own route, and which one is canonical, is Huzaifa's
-  call. Do not build both.
+- ~~Category URL shape~~ — **resolved in section 5.** `/products?category=<slug>` is the one
+  canonical category URL, `/categories` is the index, and `lib/routes.ts` is the only place
+  either is written. There is no `/category/:slug` route, and there should not be one.
+- **`Category.description` is a new OPTIONAL field** in `shared/types.ts`, added in section
+  5. It is additive, so nothing of Developer B's breaks — but **tell him it exists**, so the
+  admin dashboard offers it when it gets to categories.
+- **Category artwork.** The `/categories` index and the category page headers reuse the same
+  generated demo tiles as the landing bento. Real category photography is part of the same
+  ask as the product photography above.
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
 - **Delivery charges** (section 10) — flat rate or per city? Undecided.
 - **Admin dashboard spec** (section 8) — still pending from the client.
