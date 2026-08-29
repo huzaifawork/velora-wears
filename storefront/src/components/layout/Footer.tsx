@@ -10,9 +10,9 @@ import { CATEGORIES, PRODUCTS, categoryPath } from "@/lib/routes";
  * Site footer (requirements section 2 — "a modern footer containing relevant
  * information and useful links"). Shared by every page.
  *
- * Social links, the WhatsApp number and the location are the brand's real
- * accounts, supplied by the client on 2026-08-29 (see context.md). The
- * support email is still a placeholder — the client has not given a real one.
+ * Social links, the WhatsApp number, the location and the support email are
+ * all the brand's real details, supplied by the client on 2026-08-29 (see
+ * context.md) — nothing here is a placeholder any more.
  */
 
 /**
@@ -136,8 +136,8 @@ export function Footer() {
           <h2 className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">Contact</h2>
           <ul className="mt-5 flex flex-col gap-3 text-sm text-ink-soft">
             <li>
-              <a href="mailto:hello@velorawears.pk" className="transition hover:text-accent">
-                hello@velorawears.pk
+              <a href="mailto:wearvelora84@gmail.com" className="transition hover:text-accent">
+                wearvelora84@gmail.com
               </a>
             </li>
             <li>

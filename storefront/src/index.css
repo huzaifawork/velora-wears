@@ -20,18 +20,17 @@
   --color-ink-muted: #9b949f;
 
   /* --- Canvas: page and card surfaces -----------------------------------
-     Warm, not stark white and not dark (client feedback, 2026-08-29, twice:
-     the first pass toward ivory read as barely different from the plain
-     white it replaced — "not the one the client is talking about"). The
-     brief the second round of feedback actually pointed at is the HERO
-     SECTION's own look — a warm base plus soft blurred colour washes, not a
-     flatter or paler swatch of the same idea — so `--glow-*` below and the
-     `body` rule that uses them carry that same treatment onto the rest of
-     the page, and these three tiers are pitched more deliberately warm to
-     match rather than nudged a few percent off white. */
-  --color-canvas: #faf5ee;
-  --color-canvas-alt: #f1e7d8;
-  --color-canvas-deep: #e6d7bf;
+     Chosen from four options laid out side by side in the published
+     "Velora Canvas Study" Artifact (2026-08-29) — option C, Muted Greige:
+     cooler and quieter than the warm-tan default that shipped first, more
+     grey than gold in the mix, letting the plum and gold accent carry the
+     warmth instead of the ground itself. The `--glow-*` wash below and the
+     `body` rule that uses it are unchanged — they work over any of the
+     four options, since they are built from the accent/brand colours, not
+     the canvas tiers. */
+  --color-canvas: #f7f5f1;
+  --color-canvas-alt: #ece7de;
+  --color-canvas-deep: #ddd5c7;
 
   /* The hero's two blurred brand-colour blobs, reused as a fixed, sitewide
      ambient wash (see `body` below) rather than a decoration only the

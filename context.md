@@ -1960,6 +1960,45 @@ presenting the options Huzaifa had asked for the round before.
 
 No schema, Edge Function, or query change. Build, typecheck and lint stayed clean throughout.
 
+### Client changes, 2026-08-29 (fifth round — canvas chosen, developerb.md, real support email)
+
+1. **Canvas option C, Muted Greige, is now live.** `index.css`'s three canvas tokens are
+   `#f7f5f1` / `#ece7de` / `#ddd5c7` — cooler and quieter than the warm-tan default that
+   shipped in round three. The `--glow-*` ambient wash is unchanged (it's built from the
+   accent/brand colours, not the canvas tiers, so it works over any of the seven options in the
+   Artifact). Re-verified with a headless browser after the swap: renders correctly, zero
+   console errors.
+2. **`developerb.md` is new** — a repo-root onboarding document for Developer B, written now
+   that the storefront (sections 1-17, 18-19 audited) is otherwise done and the admin
+   dashboard (section 8) is the one substantial thing left. It compiles what was previously
+   scattered across this file, `admin/README.md` and `Requirements.md` into one place:
+   architecture and why `is_admin()`/RLS mean no service-role key is needed for CRUD; a full
+   table-by-table schema summary; what's already built FOR the dashboard (the `product_summaries`
+   view, live `categories.productCount`, `reviews.hidden` + its policy, the `payment_method`
+   column, `settings`); the migrations applied so far and their status; the shared contract's
+   two mapping gotchas (snake_case↔camelCase, ISO strings↔epoch ms); every requirements
+   section that binds Developer B, quoted in full rather than paraphrased; and a contact email
+   (`wearvelora84@gmail.com`). `admin/README.md` now points to it as the fuller version of
+   itself rather than duplicating it.
+3. **Found while writing that doc — a stale comment, fixed.** `shared/types.ts`'s
+   `Category.productCount` doc comment still said "the admin dashboard must keep it in sync,"
+   left over from the Firebase design. It hasn't been true since the Supabase migration —
+   `supabaseSource.ts`'s `getCategories()` counts related `products` rows live, in the same
+   query. Comment corrected so Developer B doesn't inherit a stale obligation from reading the
+   contract file.
+4. **The support email is real now: `wearvelora84@gmail.com`**, replacing the
+   `hello@velorawears.pk` placeholder in the footer's Contact column — the one placeholder
+   detail from the "fourth round" write-up's still-outstanding list. Nothing else in the
+   footer's contact block was a placeholder any more even before this.
+5. **Three more, deeper canvas directions added to "Velora Canvas Study"** (same Artifact,
+   republished in place, same URL) — Huzaifa asked for darker-leaning options after picking C.
+   E (Cedar Smoke), F (Umber Dusk), G (Plum Mist) sit alongside the original four, all still a
+   light theme rather than a dark one. **Not acted on** — waiting on a pick, same mechanism as
+   before: swap the three canvas hex values (and nothing else) in `index.css` if one of them is
+   chosen over C.
+
+No schema, Edge Function, or query change. Build, typecheck and lint stayed clean throughout.
+
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
@@ -1970,15 +2009,18 @@ No schema, Edge Function, or query change. Build, typecheck and lint stayed clea
   Vercel's CDN: free, fast, no billing, deleted in one commit when real photography arrives.
   Both `thumb` and `full` variants, WebP, known dimensions. **Ask the client for real
   photography — these must be replaced before sign-off.**
-- **Waiting on a canvas/theme pick.** Four background directions are laid out side by side in
-  the published Artifact "Velora Canvas Study" (see the "fourth round" write-up above) — A
-  (Warm Stone, live now), B (Soft Blush), C (Muted Greige), D (Rich Parchment). Ink, brand and
-  accent are unchanged across all four. Swap `--color-canvas`/`-alt`/`-deep` and the two
-  `--glow-*` values in `index.css` if a different one is chosen; nothing else needs editing.
-- ~~Placeholder contact details~~ — **mostly resolved, 2026-08-29.** The footer's Instagram,
-  TikTok, Facebook and WhatsApp links, the WhatsApp number, and the location are the brand's
-  real ones now (see the "Client changes, second round" write-up above). **The support email
-  (`hello@velorawears.pk`) is still invented** — the client has not supplied a real one.
+- ~~Waiting on a canvas/theme pick~~ — **C (Muted Greige) chosen and live, 2026-08-29** (fifth
+  round). **Now waiting on a possible SECOND pick**: three deeper options (E Cedar Smoke, F
+  Umber Dusk, G Plum Mist) were added to the same Artifact, "Velora Canvas Study," afterward.
+  Swap `--color-canvas`/`-alt`/`-deep` in `index.css` if one of those (or A/B/D) is preferred
+  over C instead; the `--glow-*` values never need to change, whichever is picked.
+- **`developerb.md` is new, 2026-08-29** — full admin-dashboard onboarding doc at the repo
+  root. See the "fifth round" write-up above for what it covers. Contact email for Developer B
+  coordination: `wearvelora84@gmail.com`.
+- ~~Placeholder contact details~~ — **fully resolved, 2026-08-29.** The footer's Instagram,
+  TikTok, Facebook and WhatsApp links, the WhatsApp number, the location, and the support email
+  (`wearvelora84@gmail.com`, added in the fifth round) are all the brand's real details now.
+  Nothing in the footer's contact block is a placeholder any more.
 - ~~Blaze plan~~ — **gone with Firebase.** Supabase Edge Functions are on the free tier, so
   nothing is paywalled. There is no billing blocker on this project any more.
 - **Demo data is temporary, and lives in the frontend** (`lib/demoData.ts`), not in the

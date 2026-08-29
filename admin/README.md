@@ -2,6 +2,10 @@
 
 **Owned by the second developer** (Huzaifa's friend). Not built by the storefront developer.
 
+> **Start with [`../developerb.md`](../developerb.md) instead of this file** — it's the full
+> onboarding doc (schema, what's already built for you, the exact requirements text, contact
+> details). This README is kept short on purpose; everything here is covered there too.
+
 This folder is a placeholder so the dashboard can live in the same repository as the
 storefront, sharing one **Supabase** database.
 

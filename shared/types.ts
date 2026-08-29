@@ -102,9 +102,13 @@ export interface Category {
    */
   description?: string;
   /**
-   * Precomputed at write time so a tile can show "6 pieces" without the
-   * storefront counting products (requirements section 19). The admin dashboard
-   * must keep it in sync when a product is created, retired or recategorised.
+   * How many products are in this category. Computed LIVE by a related-row
+   * count in the same query that reads `categories` (`lib/sources/
+   * supabaseSource.ts`) — there is no stored column, so the admin dashboard
+   * does not need to update anything here when a product is created, retired
+   * or recategorised. (Earlier, on the Firebase design, this genuinely was a
+   * denormalised value the admin had to keep in sync — that obligation no
+   * longer exists.)
    */
   productCount: number;
 }
