@@ -419,6 +419,18 @@ where applicable.
 ```
 
 ```
+### Note — optional customer accounts (added 2026-08-29, client request)
+```
+
+```
+Sign-in and sign-up are not in the original brief but are now requested. They
+are OPTIONAL: guest checkout (section 7) remains mandatory and unchanged, and
+an account only lets a customer see past orders and skip re-typing their
+details next time. This is planned alongside the order confirmation animation
+above and is not yet built — see context.md open questions.
+```
+
+```
 After the customer successfully confirms and places an order, they should be
 redirected to an attractive Order Success page.
 ```

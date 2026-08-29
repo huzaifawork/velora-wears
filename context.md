@@ -1322,6 +1322,15 @@ every client write is denied by design (section 2).
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
   Note that checkout does **not** need it: section 7 forbids requiring an account, and the
   storefront has no sign-in anywhere.
+- **Optional customer sign-in/sign-up — new client request, 2026-08-29, not yet built.**
+  Requirements.md section 12 now notes it. It is planned alongside the order confirmation
+  animation. **Guest checkout stays mandatory** — this only ever adds an alternative, never
+  replaces it (§7). `place-order` already accepts an `Authorization` header and
+  `placeOrder(input, accessToken)` already threads one through unused, so linking an order to
+  an account at checkout is a small change once sign-in exists. What is undecided: the
+  provider (same open question as reviews above — settle both at once), and what an account
+  actually unlocks (order history is the obvious one; saved addresses needs its own design).
+  Supabase Auth is the natural choice since the project is already on Supabase.
 - **Delivery charges** (section 10) — the mechanism is built and the admin configures one
   flat charge plus an optional free-delivery threshold, which is what §10 asks for. **Per-city
   rates are still undecided** and would be a schema change (`settings` holds one number), so
