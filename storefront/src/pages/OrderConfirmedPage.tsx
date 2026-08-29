@@ -4,6 +4,7 @@ import { Container } from "@/components/layout/Container";
 import { Image } from "@/components/ui/Image";
 import { buttonClasses } from "@/components/ui/Button";
 import { OrderSuccessAnimation } from "@/features/checkout/OrderSuccessAnimation";
+import { ReviewComposer } from "@/features/reviews/ReviewComposer";
 import { formatPrice } from "@/lib/format";
 import { readReceipt, receiptSubtotal } from "@/lib/orderReceipt";
 import { CART, HOME, PRODUCTS, productPath } from "@/lib/routes";
@@ -97,36 +98,51 @@ export function OrderConfirmedPage() {
 
           <ul className="mt-5 divide-y divide-line border-y border-line">
             {receipt.lines.map((line) => (
-              <li key={`${line.slug}-${line.size}`} className="flex items-center gap-4 py-4">
-                <div className="w-16 shrink-0 overflow-hidden rounded-sm bg-canvas-deep">
-                  {line.thumb ? (
-                    <Image
-                      src={line.thumb}
-                      alt={line.name}
-                      width={600}
-                      height={800}
-                      className="aspect-3/4 w-full object-cover"
-                    />
-                  ) : (
-                    <div className="aspect-3/4 w-full" />
-                  )}
-                </div>
+              <li key={`${line.slug}-${line.size}`} className="flex flex-col gap-4 py-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 shrink-0 overflow-hidden rounded-sm bg-canvas-deep">
+                    {line.thumb ? (
+                      <Image
+                        src={line.thumb}
+                        alt={line.name}
+                        width={600}
+                        height={800}
+                        className="aspect-3/4 w-full object-cover"
+                      />
+                    ) : (
+                      <div className="aspect-3/4 w-full" />
+                    )}
+                  </div>
 
-                <div className="min-w-0 flex-1">
-                  <Link
-                    to={productPath(line.slug)}
-                    className="font-display text-base leading-snug text-ink transition hover:text-accent"
-                  >
-                    {line.name}
-                  </Link>
-                  <p className="mt-1 text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
-                    Size {SIZE_LABELS[line.size]} &middot; Quantity {line.qty}
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      to={productPath(line.slug)}
+                      className="font-display text-base leading-snug text-ink transition hover:text-accent"
+                    >
+                      {line.name}
+                    </Link>
+                    <p className="mt-1 text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
+                      Size {SIZE_LABELS[line.size]} &middot; Quantity {line.qty}
+                    </p>
+                  </div>
+
+                  <p className="shrink-0 text-sm font-medium tabular-nums text-ink">
+                    {formatPrice(line.unitPrice * line.qty)}
                   </p>
                 </div>
 
-                <p className="shrink-0 text-sm font-medium tabular-nums text-ink">
-                  {formatPrice(line.unitPrice * line.qty)}
-                </p>
+                {/* Requirements section 16: "the Order Success page should
+                    offer a direct link or option to review the purchased
+                    product(s)." `reviewToken` is what lets a guest do this
+                    without an account. */}
+                {line.productId && (
+                  <ReviewComposer
+                    productId={line.productId}
+                    productName={line.name}
+                    orderId={receipt.orderId}
+                    identity={{ mode: "token", reviewToken: receipt.reviewToken }}
+                  />
+                )}
               </li>
             ))}
           </ul>

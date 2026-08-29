@@ -16,6 +16,7 @@ import { SizeSelector } from "@/features/products/SizeSelector";
 import { StockBadge } from "@/features/products/StockBadge";
 import { QuantityStepper } from "@/features/cart/QuantityStepper";
 import { ProductReviews } from "@/features/reviews/ProductReviews";
+import { WriteReview } from "@/features/reviews/WriteReview";
 import { useAsync } from "@/hooks/useAsync";
 import { formatPrice, prettifySlug } from "@/lib/format";
 import {
@@ -259,6 +260,7 @@ export function ProductDetailPage() {
         loading={reviews.loading}
         ratingAvg={summary?.ratingAvg ?? 0}
         ratingCount={summary?.ratingCount ?? 0}
+        writeReviewSlot={<WriteReview productId={product.id} productName={product.name} />}
       />
 
       <RelatedProducts

@@ -122,6 +122,7 @@ export function CheckoutPage() {
     // Snapshotted BEFORE the bag is emptied — the confirmation has to list what
     // was bought, and by then the bag will not know.
     const lines: ReceiptLine[] = orderable.map((line) => ({
+      productId: line.item.productId,
       name: line.product?.name ?? "",
       slug: line.item.slug,
       thumb: line.product?.images[0]?.thumb ?? "",

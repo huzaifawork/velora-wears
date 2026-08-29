@@ -3,10 +3,11 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-15 are
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-16 are
 built** — brand, landing, products, product details, categories, the cart, checkout, payment,
 delivery charges, stock and availability, the order success animation, search, filters
-and sorting, and mobile responsiveness.
+and sorting, mobile responsiveness, and reviews and ratings (the customer-facing half —
+**moderation is the admin dashboard's, section 8, and is NOT built here — see the note below**).
 
 **MIGRATED TO SUPABASE on 2026-08-29.** The Firebase project has been deleted by its owner
 and every trace of Firebase is out of this repository. The stack is now Supabase — Postgres,
@@ -21,7 +22,16 @@ optional-customer-accounts note added to it** — sign up, sign in, order histor
 that had been sitting ready and unused since the Supabase migration. **Search and filters and
 sorting (sections 13, 14) are done, and so is section 15 (mobile responsiveness)** — audited
 across four breakpoints on every page, with one real bug found and fixed (the header overflowed
-and hid the mobile menu button below 375px). Section 16 is next. Section 8 is Developer B's.
+and hid the mobile menu button below 375px). **Section 16 (reviews and ratings) is done and
+deployed** — a customer can write, edit and remove a review, signed in or as a guest, and it
+was verified end to end against the live project with a temporary order that was fully cleaned
+up afterward. **What section 16 does NOT include: hiding or removing a review as an admin. That
+is requirements section 16's own "Admin" subsection, which belongs to section 8 — the admin
+dashboard, Developer B's — and nothing about it has been built here.** The database side
+(`hidden` column, the RLS policy that already excludes hidden reviews from every public read)
+was already in place from the initial schema; only the admin UI to set it is missing, and that
+UI is not ours to build. Section 17 (validation and security) still has its one open gap — see
+below. Section 8 (the admin dashboard itself) is Developer B's, in full.
 
 > **The `payment_method` migration IS APPLIED.** `supabase/migrations/20260829000003_payment_method.sql`
 > was applied to the live project on 2026-08-29 via the Management API and verified: the
@@ -142,10 +152,11 @@ Storefront builds, typechecks and lints clean.
 | Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
 | Filters and sorting | **Done (section 14).** Category chips, in-stock filter, four sorts, Load more |
 | Mobile responsiveness | **Audited (section 15).** Every page checked at 375/768/1280/1600px with a headless browser for console errors and horizontal overflow. One real bug found and fixed — see the write-up below |
+| Reviews and ratings | **Done, customer-facing half (section 16).** Write, edit, remove — signed in or guest, verified two ways. `submit-review` Edge Function **deployed**, migration **applied**, both verified end to end. **Admin moderation is NOT built — that's section 8, Developer B's** |
 | Demo catalog | **19 products, 5 categories**, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
-| Product features | Listing, detail, category browsing, the bag, checkout, search, filters and sorting. No auth, review UI, admin |
+| Product features | Listing, detail, category browsing, the bag, checkout, search, filters and sorting, and reviews. No admin |
 | Seed data | **Database is empty — intentionally, and it stays that way.** Mock data is NEVER written to the live database. The catalog comes from `demoData.ts` in the frontend until the admin dashboard exists |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
@@ -177,7 +188,9 @@ storefront/          React + Vite (Developer A)
                            AccountMenu (header) + AccountMobileLink, AuthLayout + FormError
                            (shared shell for the auth pages), OrderHistory
   src/features/categories/ CategoryTile (shared: landing bento + /categories), CategoryNav
-  src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews
+  src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews (read),
+                           ReviewComposer (section 16 - write/edit/remove, reused everywhere),
+                           WriteReview (product page entry point - signed-in lookup or guest verify)
   src/pages/               HomePage, ProductsPage, ProductDetailPage, CategoriesPage,
                            CartPage, CheckoutPage, OrderConfirmedPage, NotFoundPage,
                            AccountPage, SignInPage, SignUpPage
@@ -196,20 +209,27 @@ storefront/          React + Vite (Developer A)
   src/lib/cart.ts          bag rules: validation, mutations, pricing. PURE
   src/lib/placeOrder.ts    the POST to the place-order Edge Function + its error mapping
   src/lib/orderReceipt.ts  the placed order, in sessionStorage - the client cannot read it back
+                           (ReceiptLine now carries productId, for section 16's review link)
+  src/lib/submitReview.ts  the POST to the submit-review Edge Function (section 16)
+  src/lib/reviewLookup.ts  the guest order-number+email lookup RPC + "do I already have a
+                           review here" read - both public, neither goes through the Edge Function
   src/lib/cartStore.ts     the bag as an external store over localStorage
   src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
 supabase/
-  migrations/        THE DATABASE. Schema, RLS policies, place_order().
-                     0001, 0002 and 0003 all deployed and verified.
-                     0003 holds the live place_order() - 0002 is superseded history.
+  migrations/        THE DATABASE. Schema, RLS policies, place_order(), find_order_for_review().
+                     0001-0004 all deployed and verified. 0003 holds the live place_order() -
+                     0002 is superseded history. 0004 is section 16 (reviews).
   functions/
     place-order/     Edge Function (Deno) - validation + the call into place_order()
+    submit-review/   Edge Function (Deno) - section 16: write/edit/remove a review, proves
+                     the reviewer bought the product one of three ways (see context.md)
   config.toml        CLI config
 shared/types.ts      DATA CONTRACT - shared with Developer B
 shared/checkout.ts   CHECKOUT RULES - mirrors the Edge Function's validation exactly
 shared/payment.ts    PAYMENT METHODS (section 9) - the enum and the words for it
 shared/stock.ts       STOCK RULES (section 11) - what "low" means, once
+shared/reviews.ts     REVIEW RULES (section 16) - mirrors submit-review's validation exactly
 ```
 
 npm workspaces cover `storefront` and `shared` only. `supabase/functions/` is Deno, not
@@ -376,7 +396,11 @@ products            id, slug, name, description, price, category_slug FK,
 product_sizes       (product_id, size) PK, stock        <- per-size stock, section 11
 product_images      product_id, position, thumb_url, full_url, width, height
 reviews             product_id, order_id, rating, comment, display_name,
-                    verified_purchase, hidden           <- unique (order_id, product_id)
+                    verified_purchase, hidden, updated_at (section 16)
+                                        <- unique (order_id, product_id). WRITTEN ONLY BY
+                                           submit-review (Edge Function, service role) -
+                                           no insert/update/delete policy for anon/authenticated,
+                                           same as orders
 orders              customer PII, subtotal/delivery/total, payment_method,
                     review_token                                   SERVER-WRITTEN ONLY
 order_items         snapshot of name/slug/thumb/size/qty/unit_price at order time
@@ -385,6 +409,11 @@ settings_private    admin only
 admins              user_id FK auth.users            <- is_admin() reads this
 
 product_summaries   *** A VIEW ***
+
+find_order_for_review(order_number, email)   *** A FUNCTION, not a table ***
+                    SECURITY DEFINER, like is_admin() - lets an anon caller prove they own
+                    a guest order (section 16) without a select policy on orders existing.
+                    Callable directly via PostgREST RPC with the anon key; read-only.
 ```
 
 ### The one thing to understand before writing any data code
@@ -434,8 +463,8 @@ one starts.
 | 13 | Search | **Done** |
 | 14 | Filters and sorting | **Done** |
 | 15 | Mobile responsiveness | **Done.** Audited at 375/768/1280/1600px on every page; one real bug found and fixed. Still worth attention as new sections land |
-| 16 | Reviews and ratings | to do |
-| 17 | Validation and security | checkout is done (shared rules, server re-validation). **Rate limiting is NOT built** |
+| 16 | Reviews and ratings | **Done, customer-facing half.** Write, edit, remove — signed in or guest. **Admin moderation (hide/remove a review) is section 8's "Admin" subsection — Developer B's, not built here** |
+| 17 | Validation and security | checkout AND reviews are done (shared rules, server re-validation). **Rate limiting is NOT built**, on either order placement or review submission |
 | 18 | Stack and component reuse | ongoing, every section |
 | 19 | Performance | ongoing, every section |
 
@@ -1463,6 +1492,136 @@ typecheck and lint are clean.
 stakes, and nothing about it actually broke); support for viewports narrower than 320px, which
 no shipping device uses.
 
+### What section 16 delivered
+
+Reviews and ratings — the customer-facing half. Requirements section 16 asks for four things: a
+review tied to a confirmed purchase rather than an account, so both a signed-in customer AND a
+guest can leave one; a star rating and a comment, shown with a display name and never an email;
+one review per product per order; and the review being editable or removable "within a
+reasonable window." **All four are built and deployed.** The read half — the average, the count,
+the list on the product page — was already built in section 2 and reviewed again in section 11;
+this section is the write path.
+
+**The read side had a real gap that reviewing it here closed first.** The `product_summaries`
+VIEW, the RLS policy hiding non-visible reviews, and `listReviews`/`listTestimonials` were all
+correct already — nothing there needed touching. What did not exist anywhere was a way to WRITE
+one. `reviews` has always had no insert/update/delete policy for anon or authenticated, on
+purpose, for the identical reason `orders` has none: a write that decides money, stock, or — here
+— provenance ("did this person actually buy this?") must not be a client's word for it (section
+17). So this section is, in shape, a second `place-order`: a new Edge Function,
+`submit-review`, holding the service role key, and nothing above it changes.
+
+**The interesting design problem was proving a GUEST owns an order, since a guest has no
+`auth.uid()` for RLS to key off.** Three paths, all resolved server-side, never trusted from a
+client-supplied id alone:
+
+```
+signed in     Authorization header -> the user's own orders, found by user_id
+              (mirrors orders' own RLS policy, just run in the function because
+              the WRITE needs service role regardless of how ownership is found)
+
+guest, fresh  orderId + reviewToken, exactly what place-order handed back and
+              lib/orderReceipt.ts already had sitting in sessionStorage — no
+              new state, just a new use for state that existed since section 7
+
+guest, later  order number + email, which requirements section 16 asks for by
+              name ("the guest should be able to verify with their order
+              number together with the email address used on the order")
+```
+
+The third path needed a genuine new capability: `orders` has no select policy for anon at all, so
+a guest returning days later with no session and no `sessionStorage` cannot be handed anything
+without one. `find_order_for_review(order_number, email)` is a new `SECURITY DEFINER` Postgres
+function — the same trick `is_admin()` already uses to read a table its caller cannot — that
+returns exactly enough to open a review form (`order_id`, `review_token`, and which products were
+in the order) and nothing that touches the customer's name, phone or address. It is called
+straight from the browser over PostgREST's RPC endpoint with the anon key, because it only reads;
+the actual write still goes through the Edge Function regardless of how the order was found.
+
+**One component, `ReviewComposer`, is reused in all three places a customer can write a
+review** (requirements section 18): the order confirmation page (per item, `orderId` +
+`reviewToken` straight from the receipt), order history at `/account` (per item, session
+identity — reuses `listMyOrders()`, the same read the accounts work already built, rather than a
+new query), and the product page itself via a new `WriteReview` wrapper that decides which of the
+three paths applies (signed in with a qualifying order, signed in with none yet, or a guest who
+needs to verify). What differs between the three call sites is only how ownership is proven; the
+form, the validation, the edit/remove state and the star picker are one implementation.
+
+**Editing is an upsert, not a second code path.** `submit-review` looks for an existing row at
+`(order_id, product_id)` — the same unique constraint that has enforced "one review per product
+per order" since the initial schema — and updates it in place if one exists, insert if not. **An
+edit always writes `hidden: false`.** If an admin had hidden an earlier version of a review as
+spam and the customer edits it, that is a new statement and goes back in front of moderation
+rather than staying invisible forever over words that no longer exist; the admin dashboard sees
+it again and can act on the new version if it is still a problem. This function never sets
+`hidden: true` itself — only an admin does, and that UI is section 8's.
+
+**The edit/removal window is thirty days**, a genuinely new decision this section had to make
+(`REVIEW_EDIT_WINDOW_DAYS` in `shared/reviews.ts`) — section 16 says "a reasonable window"
+without naming one. Thirty days comfortably covers the seven-day exchange window already
+advertised on the site, with room for an opinion to settle before it locks. The Edge Function is
+the one that actually enforces it (an expired edit or delete is rejected with `EDIT_WINDOW_EXPIRED`
+regardless of what the client thinks); the client also checks it, only so a customer is not shown
+an "Edit" button that is going to fail.
+
+**Same shape as `shared/checkout.ts` and `shared/payment.ts`, and the same reason: `shared/
+reviews.ts` is the one definition of what a valid review is, and `submit-review/index.ts` cannot
+import it** — Deno, bundled on its own by the Supabase CLI, which only sees `supabase/`. The
+bounds are inlined there with a comment saying so, same as checkout's. **Changing a rule means
+changing both files.**
+
+**Verified against the live project, the same way `place_order` was in the Supabase migration —
+not just built.** `SUPABASE_ACCESS_TOKEN` was available this session, so:
+
+1. `supabase/migrations/20260829000004_reviews.sql` was applied via the Management API — the
+   `reviews.updated_at` column and its `touch_updated_at` trigger, and `find_order_for_review`,
+   confirmed `SECURITY DEFINER` with `EXECUTE` granted to `anon`.
+2. `submit-review` was deployed with `--no-verify-jwt` (guest reviews need to work without a
+   session, the same reasoning `place-order` already documents).
+3. A temporary category, product, order and order item were inserted directly by SQL — the same
+   "seed it, exercise it, delete it" pattern the Supabase migration used to verify `place_order`.
+   Against that fixture: `find_order_for_review` returned the right order for the right
+   order-number-and-email pair and `[]` for a wrong email; the guest token path created a review;
+   calling it again with the same order and product UPDATED the same row rather than creating a
+   second one (`created_at` unchanged, `updated_at` moved, still exactly one row); a wrong
+   `reviewToken` was rejected `403 NOT_PURCHASED`; a too-short comment was rejected `400
+   VALIDATION` with a field-level message; delete removed the row; deleting again correctly
+   404'd. A real test account was then signed up, the fixture order was linked to it, and the
+   SESSION path was exercised the same way — upsert with no `orderId` in the body at all, resolved
+   purely from the `Authorization` header, then deleted.
+4. A direct anon `POST` to `/rest/v1/reviews` was retried and still refused with `42501` — RLS is
+   unchanged, and the Edge Function is still the only way in.
+5. Everything from step 3 was deleted afterward — the review, the order item, the order, the
+   product, the category, and the test auth user — and the counts were confirmed back to zero.
+   **The database was left exactly as this project's convention requires: empty.**
+6. The UI itself was smoke-tested with a headless browser both before and after deployment: before,
+   the guest-verify form and the composer rendered and interacted correctly while surfacing the
+   expected network/CORS failure (nothing was live yet); after, the identical flow against a
+   fabricated order correctly showed the server's own rejection message
+   ("We could not verify this order for this product.") instead of a crash — proving the error
+   path a real customer would hit (an old or mistyped confirmation) renders as words, not a blank
+   screen.
+
+**Not built, deliberately, and why each one is out of scope here:**
+
+- **Admin moderation — hiding or removing a review.** This is requirements section 16's own
+  "Admin" subsection, and section 20's ownership table puts the admin dashboard on Developer B in
+  full (section 8). The database side of this was already done, from the very first migration:
+  the `hidden` column exists, `"visible reviews are public"` already excludes it from every public
+  read, and `submit-review` never touches it either way. The only missing piece is the UI a
+  moderator would click, which belongs in the admin dashboard, not here. **Tell Developer B**: the
+  column and the policy are ready, nothing needs to change on the database side for that feature.
+- **Rate limiting on review submission.** Section 17 asks for it on order placement, review
+  submission, and search alike; order placement's is still not built either (flagged since section
+  7), and this is the same unbuilt gap, now doubled. It has to be solved server-side — in front of
+  the Edge Functions, not in the browser — before the shop takes real traffic.
+- **Sorting or filtering the review list itself** (newest first is what `listReviews` has always
+  done) — section 16 does not ask for it, and the six-review display limit on the product page
+  makes it moot today.
+- **A dedicated "my reviews" page.** A customer's reviews are reachable from where they were
+  written — order history and the product itself — which is what section 16 asks for; a
+  standalone list across every product nobody has asked for.
+
 
 ## 9. Open questions — ask before inventing
 
@@ -1511,8 +1670,18 @@ no shipping device uses.
   and clearing site data empties it. That is a consequence of having no server, not an
   oversight — say so if the client asks. A saved bag needs auth, which §7 explicitly does
   not require.
-- **Nothing is blocked.** Sections 1-14 are done and shipped. Section 16 is next. Section 8
-  is Developer B's.
+- **Nothing is blocked.** Sections 1-16 are done and shipped (16's admin-moderation piece is
+  Developer B's — see the note below). Section 17's remaining gap is rate limiting; sections 18
+  and 19 are ongoing housekeeping, not a discrete build. Section 8 is Developer B's, in full.
+- **Admin review moderation (requirements section 16's own "Admin" subsection) is NOT built,
+  and is not ours to build.** Section 20's ownership table puts the admin dashboard on
+  Developer B (section 8) in full, and "hide or remove a review that is abusive or spam" is
+  admin-dashboard UI. The database is already ready for it — the `hidden` column has existed
+  since the very first migration, and `"visible reviews are public"` already excludes a hidden
+  review from every read the storefront or a customer makes. **Tell Developer B**: nothing needs
+  to change on the database side; the admin dashboard just needs a control that sets
+  `reviews.hidden = true`, which `is_admin()`'s existing `"admins manage reviews"` policy already
+  permits.
 - **The `payment_method` migration is applied and verified.**
   `supabase/migrations/20260829000003_payment_method.sql` was applied to the live project on
   2026-08-29 with `SUPABASE_ACCESS_TOKEN`, and `place_order` was exercised end to end inside a
@@ -1536,10 +1705,17 @@ no shipping device uses.
   disappears on its own when `VITE_DATA_SOURCE` becomes `supabase`. What HAS been exercised
   is everything up to and including the request: the form, its rules, the payload, and every
   error the server can return.
-- **RATE LIMITING ON ORDER PLACEMENT IS NOT BUILT**, and §17 asks for it. The `place-order`
-  Edge Function accepts unlimited requests from anyone. It has to be solved server-side —
-  a client-side limit is not a limit — and it must be in place before the shop takes real
-  orders. The same applies to review submission when section 16 lands.
+- **RATE LIMITING ON ORDER PLACEMENT AND REVIEW SUBMISSION IS NOT BUILT**, and §17 asks for it
+  on both. Neither `place-order` nor `submit-review` limits how many requests one caller can
+  make. It has to be solved server-side — a client-side limit is not a limit — and it must be in
+  place before the shop takes real orders or real reviews.
+- **Section 16 — reviews — is deployed and verified against the live project, 2026-08-29.**
+  `supabase/migrations/20260829000004_reviews.sql` (the `reviews.updated_at` column and
+  `find_order_for_review`) is applied, and `submit-review` is deployed with `--no-verify-jwt`.
+  All three ownership paths (signed-in session, guest token, guest order-number-and-email) were
+  exercised against a temporary order created and then fully deleted — see the section 16
+  write-up above for the full list of what was checked. **The database was confirmed empty
+  afterward.**
 - **No email is sent when an order is placed.** There is no mail service on this project, so
   the confirmation page deliberately does not promise one; it tells the customer to keep
   their order number. If the client wants an order email, that is a new decision — it needs

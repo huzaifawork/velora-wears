@@ -27,6 +27,9 @@ import { paymentMethodOf } from "@shared/payment";
 
 /** One line as it was ordered. Prices are the catalog's at the moment of the order. */
 export interface ReceiptLine {
+  /** Needed to write a review for this piece (section 16) — nothing else on
+   *  the confirmation page needed a product id until now. */
+  productId: string;
   name: string;
   slug: string;
   thumb: string;

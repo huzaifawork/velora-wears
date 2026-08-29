@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { Review } from "@shared/types";
 import { Container } from "@/components/layout/Container";
 import { SectionHeading } from "@/components/ui/SectionHeading";
@@ -15,19 +17,23 @@ import { formatRating } from "@/lib/format";
  * few are fetched, so averaging them would show a different number to the one
  * on the product card (sections 16 and 19).
  *
- * Writing a review is the rest of section 16 — the form, the guest review token
- * from the order, editing and removal. This is the read half.
+ * `writeReviewSlot` is the write half — `<WriteReview>`, passed in by the page
+ * rather than imported here, so this component stays about reading and
+ * rendering a list. It sits between the rating summary and the individual
+ * cards, which is also where it renders while there are no reviews yet.
  */
 export function ProductReviews({
   reviews,
   loading,
   ratingAvg,
   ratingCount,
+  writeReviewSlot,
 }: {
   reviews: Review[] | undefined;
   loading: boolean;
   ratingAvg: number;
   ratingCount: number;
+  writeReviewSlot?: ReactNode;
 }) {
   const shown = reviews?.length ?? 0;
 
@@ -55,14 +61,16 @@ export function ProductReviews({
           </div>
         )}
 
+        {writeReviewSlot && <div className="mt-8">{writeReviewSlot}</div>}
+
         {loading ? (
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-52 w-full" />)}
           </div>
         ) : shown === 0 ? (
           <p className="mt-10 text-sm text-ink-soft">
-            No reviews yet. Once your order is delivered you will be invited to leave the first
-            one.
+            No reviews yet. Reviews can be added as soon as an order is placed — be the first to
+            share what you thought.
           </p>
         ) : (
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

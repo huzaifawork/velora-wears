@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import type { Order } from "@shared/types";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useAuth } from "@/features/account/AuthContext";
+import { ReviewComposer } from "@/features/reviews/ReviewComposer";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate, formatPrice } from "@/lib/format";
 import { listMyOrders } from "@/lib/myOrders";
@@ -18,6 +20,7 @@ import { SIZE_LABELS } from "@/lib/sizes";
  * exactly the orders belonging to the signed-in customer — see that file.
  */
 export function OrderHistory() {
+  const { accessToken } = useAuth();
   const { data: orders, loading, error } = useAsync(() => listMyOrders(), "my-orders");
 
   if (loading) return <OrderHistorySkeleton />;
@@ -61,21 +64,33 @@ export function OrderHistory() {
             </div>
           </div>
 
-          <ul className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+          <ul className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
             {order.items.map((item) => (
-              <li
-                key={`${item.productId}-${item.size}`}
-                className="flex items-baseline justify-between gap-4 text-sm"
-              >
-                <Link
-                  to={productPath(item.slug)}
-                  className="min-w-0 truncate text-ink transition hover:text-accent"
-                >
-                  {item.name}
-                </Link>
-                <span className="shrink-0 text-xs text-ink-muted">
-                  {SIZE_LABELS[item.size]} &middot; Qty {item.qty}
-                </span>
+              <li key={`${item.productId}-${item.size}`} className="flex flex-col gap-3">
+                <div className="flex items-baseline justify-between gap-4 text-sm">
+                  <Link
+                    to={productPath(item.slug)}
+                    className="min-w-0 truncate text-ink transition hover:text-accent"
+                  >
+                    {item.name}
+                  </Link>
+                  <span className="shrink-0 text-xs text-ink-muted">
+                    {SIZE_LABELS[item.size]} &middot; Qty {item.qty}
+                  </span>
+                </div>
+
+                {/* Signed-in customers can review from here too, not only
+                    from the order confirmation page (requirements section
+                    16) — the order id is already known, so there is nothing
+                    to verify. */}
+                {accessToken && (
+                  <ReviewComposer
+                    productId={item.productId}
+                    productName={item.name}
+                    orderId={order.id}
+                    identity={{ mode: "session", accessToken }}
+                  />
+                )}
               </li>
             ))}
           </ul>
