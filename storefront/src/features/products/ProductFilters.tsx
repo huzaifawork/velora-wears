@@ -1,5 +1,6 @@
 import { useId } from "react";
 
+import { Select } from "@/components/ui/Select";
 import { SORT_OPTIONS, type SortOption } from "@/lib/queries";
 
 /**
@@ -10,10 +11,11 @@ import { SORT_OPTIONS, type SortOption } from "@/lib/queries";
  * precomputed, so they cost nothing to offer (section 19 — never compute a
  * rating average at read time).
  *
- * **A native `<select>`, not a custom dropdown.** It is one control, it is
- * keyboard accessible for free, and on a phone it opens the platform picker
- * rather than a list that has to be scrolled inside a scrolling page
- * (section 15). A bespoke menu here would be worse in every way that matters.
+ * **`ui/Select`, not a native `<select>`.** A native control's own popup is
+ * unstyleable — plain browser chrome next to a site that otherwise never
+ * shows one — which is exactly what client feedback on 2026-08-29 flagged.
+ * `Select` rebuilds the keyboard behaviour a native control gave away for
+ * free rather than dropping it; see its own notes.
  *
  * The CATEGORY filter is not in this component — it is `CategoryNav`, built in
  * section 5, which is a row of links rather than a control because a category
@@ -34,7 +36,6 @@ export function ProductFilters({
   onInStockChange: (only: boolean) => void;
   className?: string;
 }) {
-  const sortId = useId();
   const stockId = useId();
 
   return (
@@ -56,24 +57,13 @@ export function ProductFilters({
       </div>
 
       <div className="flex items-center gap-3">
-        <label
-          htmlFor={sortId}
-          className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase"
-        >
-          Sort
-        </label>
-        <select
-          id={sortId}
+        <span className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">Sort</span>
+        <Select<SortOption>
+          label="Sort products"
           value={sort}
-          onChange={(event) => onSortChange(event.target.value as SortOption)}
-          className="h-9 rounded-full border border-line-strong bg-canvas px-4 text-xs text-ink transition hover:border-ink focus:border-ink focus:outline-none"
-        >
-          {SORT_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          options={SORT_OPTIONS}
+          onChange={onSortChange}
+        />
       </div>
     </div>
   );

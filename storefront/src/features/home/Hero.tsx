@@ -6,7 +6,6 @@ import { buttonClasses } from "@/components/ui/Button";
 import { PRODUCTS, categoryPath } from "@/lib/routes";
 import { Image } from "@/components/ui/Image";
 import { Marquee } from "@/components/ui/Marquee";
-import { Rating } from "@/components/ui/Rating";
 import { formatPrice } from "@/lib/format";
 
 /**
@@ -109,18 +108,12 @@ export function Hero({ settings }: { settings: Settings | null | undefined }) {
             className="relative aspect-4/5 w-full rounded-sm object-cover shadow-lift"
           />
 
-          {/* Social proof, floated over the image the way a storefront hero does. */}
-          <figure className="absolute -bottom-6 -left-4 hidden max-w-[15rem] flex-col gap-2 rounded-sm bg-canvas/95 p-5 shadow-lift backdrop-blur-sm sm:flex lg:-left-10">
-            <Rating rating={4.7} />
-            <figcaption className="text-xs leading-relaxed text-ink-soft">
-              &ldquo;The fleece is genuinely thick — not the thin stuff you usually get at this
-              price.&rdquo;
-              <span className="mt-2 block text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
-                Ayesha S. &middot; Lahore
-              </span>
-            </figcaption>
-          </figure>
-
+          {/* The floating review card that used to sit here was cut on client
+              feedback, 2026-08-29 — one testimonial pinned to the hero read as
+              a canned pop-up rather than real social proof, and the same
+              reviews already have a dedicated section further down the page
+              (`Testimonials`), pulled from the actual review data rather than
+              one hardcoded quote. */}
           <span className="absolute top-5 right-5 rounded-full bg-brand/90 px-4 py-2 text-[0.625rem] tracking-eyebrow text-canvas uppercase backdrop-blur-sm">
             Cash on delivery
           </span>

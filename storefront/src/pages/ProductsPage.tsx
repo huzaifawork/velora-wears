@@ -68,14 +68,23 @@ export function ProductsPage() {
    * another's — changing the sort while searching inside a category has to keep
    * the search and the category. Removing a value drops the key entirely rather
    * than leaving `?q=` in the URL.
+   *
+   * `preserveScroll` is for a refinement to a grid the visitor is already
+   * looking at — sort, the in-stock toggle — as opposed to a fresh search,
+   * which reads as a new result set and is allowed to jump to the top the way
+   * a category link does. See `ScrollToTop`'s notes for why this has to be a
+   * `history.state` flag rather than something `ScrollToTop` can infer.
    */
-  const updateParams = (changes: Record<string, string | undefined>) => {
+  const updateParams = (
+    changes: Record<string, string | undefined>,
+    options?: { preserveScroll?: boolean },
+  ) => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(changes)) {
       if (value) next.set(key, value);
       else next.delete(key);
     }
-    setParams(next);
+    setParams(next, options?.preserveScroll ? { state: { preserveScroll: true } } : undefined);
   };
 
   /**
@@ -226,10 +235,15 @@ export function ProductsPage() {
               <ProductFilters
                 sort={sort}
                 onSortChange={(next) =>
-                  updateParams({ sort: next === DEFAULT_SORT ? undefined : next })
+                  updateParams(
+                    { sort: next === DEFAULT_SORT ? undefined : next },
+                    { preserveScroll: true },
+                  )
                 }
                 inStockOnly={inStockOnly}
-                onInStockChange={(only) => updateParams({ stock: only ? "in" : undefined })}
+                onInStockChange={(only) =>
+                  updateParams({ stock: only ? "in" : undefined }, { preserveScroll: true })
+                }
               />
             </div>
 

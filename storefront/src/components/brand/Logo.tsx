@@ -71,10 +71,14 @@ export function Logo({ variant = "full", className = "", title = "Velora Wears" 
     >
       <LogoMark className={markSizes[variant]} />
       <span className={`flex flex-col leading-none ${stacked ? "items-center" : "items-start"}`}>
-        {/* The trailing letter-space each word inherits from its tracking is
-            trimmed off, so the glyphs - not the invisible gap - stay aligned. */}
-        <span className="-mr-[0.24em] font-display text-xl tracking-wordmark">VELORA</span>
-        <span className="mt-1.5 -mr-[0.3em] text-[0.6875rem] font-medium tracking-eyebrow text-accent">
+        {/* Both words are the same size and weight — client feedback, 2026-08-29:
+            "Wears" read as an afterthought caption under a big "Velora". They are
+            one wordmark now, split only by colour (ink vs. the antique-gold
+            accent), the way a two-line fashion lockup usually earns its second
+            line. The trailing letter-space each word inherits from its tracking
+            is trimmed off, so the glyphs - not the invisible gap - stay aligned. */}
+        <span className="-mr-[0.24em] font-display text-lg tracking-wordmark">VELORA</span>
+        <span className="-mr-[0.24em] font-display text-lg tracking-wordmark text-accent">
           WEARS
         </span>
       </span>

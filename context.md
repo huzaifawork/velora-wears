@@ -1862,6 +1862,71 @@ No schema, Edge Function, or query change — everything here is presentation an
 data. Build, typecheck and lint stayed clean throughout; re-verified after each change, not
 just at the end.
 
+### Client changes, 2026-08-29 (third round — design)
+
+The client's reaction to round two: the theme still was not right, the sort dropdown looked
+like a plain browser control, the header looked broken, and "Wears" should match "Velora," not
+just be bigger than it was. Plus one bug Huzaifa found by using the site: toggling a filter on
+`/products` jumped the page back to the top. Handled as five fixes, verified with a headless
+browser at every step rather than assumed from reading the CSS:
+
+1. **The theme, properly this time.** The first attempt (a flat, barely-off-white ivory) missed
+   what the client actually meant — round three's own feedback pointed at the **hero section's**
+   look specifically: a warm base plus soft blurred colour washes, an atmosphere, not a flatter
+   swatch of the same near-white idea. `index.css`'s `body` rule now carries two fixed,
+   low-opacity `radial-gradient`s built from the hero's own two decorative blobs
+   (`--glow-accent`, `--glow-brand`) sitewide, so the whole page reads like one continuous warm
+   room instead of the hero having an effect no other section gets. The three canvas tiers were
+   also pitched more deliberately warm (`#faf5ee` / `#f1e7d8` / `#e6d7bf`) rather than nudged a
+   few percent off white.
+2. **The sort dropdown is a themed control now, not the browser's.** A native `<select>`'s own
+   popup cannot be restyled — that was always true, and section 14's original notes accepted it
+   on purpose for the keyboard support and the phone's native picker sheet it gave up nothing
+   for. The client's reaction was that an unstyled white-and-blue popup stood out badly on a
+   site that never shows one anywhere else. `components/ui/Select.tsx` is new: a hand-built
+   `role="listbox"` popover following the WAI-ARIA "listbox with button" pattern, rebuilding
+   (not dropping) arrow-key navigation, Home/End, Enter/Space, Escape, and closing on an outside
+   click. `ProductFilters` is its only caller today; anywhere else a themed dropdown is needed
+   should use it rather than a second native `<select>` (section 18).
+3. **The header is solid, not translucent.** It was `bg-canvas/85 backdrop-blur-md` — a
+   semi-opaque sticky header lets whatever is scrolled underneath tint it unevenly, which is
+   most visible right at the top of the page where the hero's own colour washes sit directly
+   behind it. Reported as the header "not covering the complete width"; a DOM measurement
+   during this fix confirmed the header genuinely spans full width with no layout gap, so the
+   report was about colour consistency, not a sizing bug. Now a flat `bg-canvas` with
+   `shadow-card`. **The browser's own scrollbar was the other half of that same complaint** —
+   Windows Chrome/Edge draws an unstyled grey scrollbar that reads as a mismatched seam against
+   a now-warm page; it is themed via `scrollbar-color` (Firefox) and `::-webkit-scrollbar*`
+   (Chromium) in `index.css`.
+4. **"Velora" and "Wears" are the same size now**, not a headline over a caption.
+   `components/brand/Logo.tsx` sets both lines to `font-display text-lg tracking-wordmark`,
+   split only by colour (ink vs. the antique-gold accent) — one two-line wordmark rather than a
+   word and a footnote. Re-checked at 320px/375px/768px (the widths section 15's own audit
+   used) for overflow: none, and the mark-only fallback below 375px is unaffected since it never
+   renders the wordmark at all.
+5. **The hero's floating review card is gone**, on the client's own call ("the review should not
+   show"). One hardcoded quote pinned over the hero image duplicated what the real
+   `Testimonials` section below already does properly, from actual review data rather than one
+   fixed string — cutting it also declutters the hero now that the page's warmth comes from the
+   background itself rather than needing a card to add visual interest.
+6. **Bug: toggling a products-page filter scrolled to the top.** `ScrollToTop` resets scroll on
+   any change to the URL's `search`, which is correct for a category link or a fresh search but
+   wrong for refining a grid the visitor is already partway down — sort and the in-stock
+   checkbox go through the identical `setSearchParams` call a category change does, so
+   `ScrollToTop` could not tell them apart from the URL alone. Fixed with a `history.state` flag
+   (`preserveScroll`) that `ProductsPage.updateParams` sets only for the sort and in-stock
+   callers; a real navigation still carries no state and still jumps to the top as before.
+   Verified live: toggling sort at a fixed scroll position left `scrollY` exactly unchanged;
+   toggling the in-stock filter changed it only because filtering shrinks the grid's height
+   (the browser's own scroll clamping, not a reset — confirmed by checking sort, which does not
+   change item count, landed on the identical pixel).
+
+No schema, Edge Function, or query change. Build, typecheck and lint stayed clean throughout,
+and every fix was checked against the running dev server with a headless Playwright browser —
+console errors, horizontal overflow at 320/375/768/1440px, the dropdown actually opening and
+receiving keyboard focus, the scroll position across a filter toggle — not just read as CSS and
+assumed to look right.
+
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are

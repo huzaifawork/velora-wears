@@ -20,14 +20,24 @@
   --color-ink-muted: #9b949f;
 
   /* --- Canvas: page and card surfaces -----------------------------------
-     Warm ivory, not stark white (client feedback, 2026-08-29: the theme
-     should read as light without being flat or clinical). Cards and the
-     page base still sit close to white for contrast against ink text and
-     product photography; the two darker tiers carry the actual warmth so
-     alternating sections still read as distinct steps, not a colour swap. */
-  --color-canvas: #fdfbf7;
-  --color-canvas-alt: #f6f0e8;
-  --color-canvas-deep: #ede3d5;
+     Warm, not stark white and not dark (client feedback, 2026-08-29, twice:
+     the first pass toward ivory read as barely different from the plain
+     white it replaced — "not the one the client is talking about"). The
+     brief the second round of feedback actually pointed at is the HERO
+     SECTION's own look — a warm base plus soft blurred colour washes, not a
+     flatter or paler swatch of the same idea — so `--glow-*` below and the
+     `body` rule that uses them carry that same treatment onto the rest of
+     the page, and these three tiers are pitched more deliberately warm to
+     match rather than nudged a few percent off white. */
+  --color-canvas: #faf5ee;
+  --color-canvas-alt: #f1e7d8;
+  --color-canvas-deep: #e6d7bf;
+
+  /* The hero's two blurred brand-colour blobs, reused as a fixed, sitewide
+     ambient wash (see `body` below) rather than a decoration only the
+     landing page gets. */
+  --glow-accent: color-mix(in oklab, var(--color-accent-soft) 26%, transparent);
+  --glow-brand: color-mix(in oklab, var(--color-brand) 6%, transparent);
 
   /* --- Brand: the signature deep plum ---------------------------------- */
   --color-brand: #241d33;
@@ -178,14 +188,54 @@
 html {
   -webkit-text-size-adjust: 100%;
   scroll-behavior: smooth;
+  /* Firefox's scrollbar theming; Chromium ignores this and uses the
+     `::-webkit-scrollbar*` rules below instead (client feedback, 2026-08-29
+     — see the comment there). */
+  scrollbar-color: var(--color-line-strong) var(--color-canvas-alt);
 }
 
 body {
-  background: var(--color-canvas);
+  /* The same soft, blurred colour washes the landing hero has always used,
+     stretched across the whole page instead of stopping at its section
+     (client feedback, 2026-08-29: the rest of the site should read like the
+     hero does). Fixed, so it reads as one continuous atmosphere behind the
+     page rather than repeating or scrolling with each section; each
+     section's own `bg-canvas*` still paints over it wherever one is set, so
+     this only shows through on the plain canvas in between them. */
+  background-color: var(--color-canvas);
+  background-image:
+    radial-gradient(48rem 48rem at -10% -15%, var(--glow-accent), transparent 60%),
+    radial-gradient(40rem 40rem at 110% 25%, var(--glow-brand), transparent 60%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* A themed scrollbar, so the browser's own UI does not read as a mismatched
+   grey seam cutting into a warm page (client feedback, 2026-08-29 — reported
+   as the header "not covering the full width"; Chrome/Edge on Windows draws
+   an unstyled system scrollbar that is exactly that kind of seam). This is
+   Chromium's side of it; Firefox's is the `scrollbar-color` line on `html`
+   above — neither engine honours the other's syntax. */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-canvas-alt);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-line-strong);
+  border-radius: 999px;
+  border: 3px solid var(--color-canvas-alt);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-accent);
 }
 
 /* Headings carry the display serif - set once, not repeated per page. */
