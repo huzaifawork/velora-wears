@@ -4,7 +4,7 @@
 This file is the *state of the work*; `Requirements.md` is the spec.
 
 Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-17 are
-built** — brand, landing, products, product details, categories, the cart, checkout, payment,
+built, and sections 18-20 are audited** — brand, landing, products, product details, categories, the cart, checkout, payment,
 delivery charges, stock and availability, the order success animation, search, filters
 and sorting, mobile responsiveness, reviews and ratings (the customer-facing half —
 **moderation is the admin dashboard's, section 8, and is NOT built here — see the note below**),
@@ -38,7 +38,11 @@ Unicode stripped before storing, on both the checkout form and reviews); and pub
 reads tightened to stop exposing `user_id`/`order_id`. **Rate limiting on search is the one
 thing section 17 asks for that is NOT built, and it stays that way deliberately — see the
 write-up below for why the architecture makes it impractical without a redesign nothing has
-asked for.** Section 8 (the admin dashboard itself) is Developer B's, in full.
+asked for.** Section 8 (the admin dashboard itself) is Developer B's, in full. **Sections 18
+(component reuse) and 19 (performance) were then audited end to end against the finished
+tree** — one real gap, a missing index behind the order-history read, was found and a migration
+written for it (not yet applied — see below); everything else held. **Section 20 (team and
+ownership) is a responsibilities document, not code — confirmed honest, nothing to build.**
 
 > **The `payment_method` migration IS APPLIED.** `supabase/migrations/20260829000003_payment_method.sql`
 > was applied to the live project on 2026-08-29 via the Management API and verified: the
@@ -478,8 +482,9 @@ one starts.
 | 15 | Mobile responsiveness | **Done.** Audited at 375/768/1280/1600px on every page; one real bug found and fixed. Still worth attention as new sections land |
 | 16 | Reviews and ratings | **Done, customer-facing half.** Write, edit, remove — signed in or guest. **Admin moderation (hide/remove a review) is section 8's "Admin" subsection — Developer B's, not built here** |
 | 17 | Validation and security | **Done.** Checkout and review validation (shared rules, server re-validation), rate limiting on `place-order` and `submit-review`, text sanitisation, and public review reads tightened to exclude `user_id`/`order_id`. **Rate limiting on search is NOT built — architecturally out of reach with this design, not an oversight. See the write-up** |
-| 18 | Stack and component reuse | ongoing, every section |
-| 19 | Performance | ongoing, every section |
+| 18 | Stack and component reuse | **Audited, 2026-08-29.** Cross-cutting, not a discrete build — held throughout sections 1-17. This pass checked the whole tree for drift; see the write-up below |
+| 19 | Performance | **Audited, 2026-08-29.** One real gap found and fixed — a missing index. See the write-up below |
+| 20 | Team, ownership and the shared contract | **Not ours to build — Developer B's, with us.** It is a responsibilities document, not a feature. See the write-up below for what it obliges us to keep true |
 
 > **The section write-ups below are a HISTORICAL LOG.** Sections 1-6, 13 and 14 were built
 > against Firebase, and the notes still name `firebaseSource`, `database.rules.json`,
@@ -1748,6 +1753,67 @@ volume, since each key is upserted in place rather than inserted fresh per reque
 minor housekeeping item rather than an unbounded-growth risk, worth revisiting only if it
 actually becomes one.
 
+### What the section 18/19/20 audit delivered
+
+Sections 18 and 19 are not features — they are the standards every section from 1 to 17 was
+already built against, restated in the requirements as their own numbered sections. With 1-17
+done, this was a dedicated pass across the finished tree checking whether that held, the same
+kind of audit section 15 did for responsiveness rather than new work. Section 20 is a
+responsibilities document, not code — there is nothing to build, only to confirm this side of
+the contract is honest.
+
+**Section 19 (performance): one real gap, found and fixed.** Every index requirements section
+19 asks for ("Any column used for filtering or ordering needs an index") was checked against
+every read in the codebase, migration by migration. Four of `orders`' five read paths already
+had one — `orders_created`, `orders_status`, `orders_email` cover search, moderation and the
+guest review lookup. The fifth did not: `lib/myOrders.ts` (`listMyOrders()`, the order-history
+read the optional-accounts work built) selects from `orders` ordered by `created_at desc`, and
+is filtered entirely by the RLS policy `user_id = auth.uid()` rather than by an explicit
+`.eq()` in application code — which is exactly why it was missed the first time around: it
+never showed up in a grep for `.eq(` or `.order(` in `myOrders.ts` itself, because the filter
+lives in the policy, not the query. `supabase/migrations/20260829000006_orders_user_index.sql`
+adds `orders_user on orders (user_id, created_at desc) where user_id is not null` — partial,
+because a guest order's `user_id` is always null and this policy never matches those rows, so
+indexing them would be pure waste. **Written and committed; NOT yet applied to the live
+project** — same state section 9's `payment_method` migration sat in before a session had
+`SUPABASE_ACCESS_TOKEN` to apply it with. Nothing breaks meanwhile: the query is already
+correct, only slower than it needs to be, and no real customer has enough orders yet for it to
+be felt. Apply it the next time the token is available, the same way as any other migration
+(section 4).
+
+Everything else checked out clean: every list view already reads `product_summaries`, never
+the full `products` table (§19's list/detail split); the `Image` component makes `width`/
+`height` compulsory and defaults every image to `loading="lazy"`/`decoding="async"`, with
+`eager` as the deliberate opt-in used only for the hero and the gallery's first frame; the
+production build still shows one chunk per route plus `react` and `supabase` split into their
+own vendor chunks (confirmed by re-running `npm run build` for this audit, not assumed from an
+old note); and `lib/queries.ts`'s cache plus `useCatalogRealtime`'s invalidation are unchanged
+and still the only data-fetching path.
+
+**Section 18 (component reuse): nothing found.** Checked for the specific failure mode this
+section exists to prevent — the same visual pattern written twice instead of shared. No
+hardcoded hex/rgb colour literal exists anywhere under `storefront/src` outside `index.css`'s
+token definitions (grepped, not eyeballed). The handful of raw `<button>` elements outside
+`components/ui/Button.tsx` (the size selector's chips, the quantity stepper, star pickers, icon
+buttons in the header and cart drawer) are not instances of the shared button being redrawn —
+each is a distinct control with its own layout that `Button`'s API was never meant to cover,
+which is the same reasoning section 1's `buttonClasses()` note already draws around
+link-buttons. Build, typecheck and lint stayed clean throughout (re-run for this audit, not
+assumed).
+
+**Section 20: a responsibilities table, not a build — confirmed honest rather than "built."**
+Its two obligations on us are that `shared/types.ts` and `supabase/migrations/` stay the joint
+source of truth and that a change to either is flagged for Developer B, and that "whoever
+writes a new query adds the matching index in the same migration" — which is precisely the rule
+this audit just found one exception to and fixed. Every additive contract change made across
+sections 1-17 (`Category.description`, the `payment_method` column and enum, the `reviews.hidden`
+column and its RLS policy) is already flagged in the open questions below with an explicit
+"tell Developer B" note; nothing new needs adding there. **There is no admin-dashboard code to
+write here** — section 20's ownership table puts it on Developer B in full, same as section 8.
+
+**Not built, deliberately:** anything resembling admin-dashboard scaffolding. Section 20 assigns
+that to Developer B "in full," and building placeholder admin UI on spec would be guessing at a
+spec section 8 says is still pending from the client.
 
 ## 9. Open questions — ask before inventing
 
@@ -1798,8 +1864,14 @@ actually becomes one.
   not require.
 - **Nothing is blocked.** Sections 1-17 are done and shipped (16's admin-moderation piece is
   Developer B's — see the note below; 17's one gap, rate limiting on search, is architectural,
-  not a to-do — see its write-up). Sections 18 and 19 are ongoing housekeeping, not a discrete
-  build. Section 8 is Developer B's, in full.
+  not a to-do — see its write-up). Sections 18 and 19 are audited (see their write-up) rather
+  than a discrete build, and section 20 is a responsibilities document, confirmed rather than
+  built. Section 8 is Developer B's, in full.
+- **`orders_user` index migration is written but NOT applied.**
+  `supabase/migrations/20260829000006_orders_user_index.sql`, found by the section 18/19 audit:
+  `listMyOrders()` reads `orders` filtered by RLS on `user_id` with no index behind that column.
+  Apply it via the Management API the next time `SUPABASE_ACCESS_TOKEN` is available (section
+  4) — nothing is broken meanwhile, the query is just slower than it needs to be.
 - **Admin review moderation (requirements section 16's own "Admin" subsection) is NOT built,
   and is not ours to build.** Section 20's ownership table puts the admin dashboard on
   Developer B (section 8) in full, and "hide or remove a review that is abusive or spam" is
