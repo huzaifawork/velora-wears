@@ -3,17 +3,22 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-6, 13 and 14 are
-built** — brand, landing, products, product details, categories, the cart, search, and
-filters and sorting.
+Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-7, 13 and 14 are
+built** — brand, landing, products, product details, categories, the cart, checkout, search,
+and filters and sorting.
 
 **MIGRATED TO SUPABASE on 2026-08-29.** The Firebase project has been deleted by its owner
 and every trace of Firebase is out of this repository. The stack is now Supabase — Postgres,
 Supabase Realtime, and Edge Functions. Read section 2 and section 4 before touching data code.
 
 **Nothing is blocked any more.** Edge Functions are on the Supabase free tier, so the Blaze
-paywall that blocked checkout is gone. Section 7 (checkout), section 12 and section 16 are
-all now buildable. Section 8 is Developer B's.
+paywall that blocked checkout is gone. Section 9 (payment) and section 10 (delivery charges)
+were delivered inside section 7; sections 11, 12 and 16 are next. Section 8 is Developer B's.
+
+**Checkout cannot be completed end to end yet, and that is a sequencing fact, not a bug.**
+The storefront still reads the demo catalog, whose product ids do not exist in the database,
+so `place_order()` refuses every order. The checkout page says so on screen. It resolves when
+the admin dashboard creates real products and `VITE_DATA_SOURCE` flips to `supabase`.
 
 > **Working agreement:** we build in `Requirements.md` **section order**, one section at a
 > time. Huzaifa reviews each section and says when to start the next. Do not run ahead.
@@ -102,7 +107,7 @@ Storefront builds, typechecks and lints clean.
 | Area | State |
 | --- | --- |
 | Storefront | React 19 + Vite 7 + TS + Tailwind v4, **builds clean** |
-| Routing | react-router-dom, `/`, `/products`, `/products/:slug`, `/categories` and `/cart`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
+| Routing | react-router-dom, `/`, `/products`, `/products/:slug`, `/categories`, `/cart`, `/checkout` and `/order/confirmed`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
 | Supabase client | `lib/supabase.ts`, anon key in `storefront/.env.local` and on Vercel |
 | Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
 | Data source | `VITE_DATA_SOURCE=demo`. Switches to `supabase` when the admin dashboard can create real products |
@@ -117,12 +122,13 @@ Storefront builds, typechecks and lints clean.
 | Product details | **Done (section 4).** `/products/:slug` — gallery, size selection, reviews, related |
 | Categories | **Done (section 5).** `/categories` index, the category view on `/products?category=`, category chips, data-driven header and footer nav |
 | Shopping cart | **Done (section 6).** `/cart`, a mini-bag drawer, quantity and removal, live re-pricing against the catalog. **localStorage — there is no server** |
+| Checkout | **Done (section 7).** `/checkout` — guest-only form, shared validation rules, COD, delivery charge, and `/order/confirmed`. **No order can complete while the catalog is demo data** |
 | Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
 | Filters and sorting | **Done (section 14).** Category chips, in-stock filter, four sorts, Load more |
 | Demo catalog | **19 products, 5 categories**, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
-| Product features | Listing, detail, category browsing, the bag, search, filters and sorting. No checkout UI, auth, review UI, admin |
+| Product features | Listing, detail, category browsing, the bag, checkout, search, filters and sorting. No auth, review UI, admin |
 | Seed data | **Database is empty — intentionally, and it stays that way.** Mock data is NEVER written to the live database. The catalog comes from `demoData.ts` in the frontend until the admin dashboard exists |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
@@ -135,7 +141,8 @@ storefront/          React + Vite (Developer A)
   public/banners/          DEMO hero and promo art (throwaway)
   public/categories/       DEMO category tiles (throwaway)
   src/components/brand/    Logo.tsx - the ONLY definition of the logo
-  src/components/ui/       Button, Badge, Rating, Image, Marquee, SectionHeading, Skeleton
+  src/components/ui/       Button, Badge, Field, Rating, Image, Marquee, SectionHeading,
+                           Skeleton
   src/components/layout/   Container, PageHeader, Breadcrumbs, ValueProps, ScrollToTop,
                            Header (mobile nav + announcement), Footer
   src/features/home/       landing sections - Hero, CategoryStrip, FeaturedProducts,
@@ -147,10 +154,11 @@ storefront/          React + Vite (Developer A)
   src/features/cart/       CartContext + CartProvider, CartButton, CartDrawer (lazy host),
                            CartDrawerPanel, CartLineRow, CartSummary, QuantityStepper,
                            useCartContents - the hook that prices the bag
+  src/features/checkout/   CheckoutForm - the section 7 form and when it reports an error
   src/features/categories/ CategoryTile (shared: landing bento + /categories), CategoryNav
   src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews
   src/pages/               HomePage, ProductsPage, ProductDetailPage, CategoriesPage,
-                           CartPage, NotFoundPage
+                           CartPage, CheckoutPage, OrderConfirmedPage, NotFoundPage
   src/lib/supabase.ts      client init - anon key only, NEVER the service role key
   src/lib/queries.ts       read layer + cache + THE SOURCE SWITCH
   src/lib/sources/         CatalogSource (the interface), supabaseSource, demoSource
@@ -160,6 +168,8 @@ storefront/          React + Vite (Developer A)
   src/lib/sizes.ts         SIZES + SIZE_LABELS - the order sizes are shown in
   src/lib/routes.ts        EVERY internal URL - the one definition of a category link
   src/lib/cart.ts          bag rules: validation, mutations, pricing. PURE
+  src/lib/placeOrder.ts    the POST to the place-order Edge Function + its error mapping
+  src/lib/orderReceipt.ts  the placed order, in sessionStorage - the client cannot read it back
   src/lib/cartStore.ts     the bag as an external store over localStorage
   src/hooks/useAsync.ts    the one data-loading hook
 admin/               Developer B's dashboard - placeholder + contract notes
@@ -169,6 +179,7 @@ supabase/
     place-order/     Edge Function (Deno) - validation + the call into place_order()
   config.toml        CLI config
 shared/types.ts      DATA CONTRACT - shared with Developer B
+shared/checkout.ts   CHECKOUT RULES - mirrors the Edge Function's validation exactly
 ```
 
 npm workspaces cover `storefront` and `shared` only. `supabase/functions/` is Deno, not
@@ -383,17 +394,17 @@ one starts.
 | 4 | Product details — gallery, size selection | **Done** |
 | 5 | Categories | **Done** |
 | 6 | Shopping cart | **Done** |
-| 7 | Checkout — guest + signed in | **Next** — no longer blocked; the Edge Function is live |
+| 7 | Checkout — guest + signed in | **Done** |
 | 8 | *Admin dashboard — **Developer B**, not us* | not ours |
-| 9 | Payment — COD only | to do |
-| 10 | Delivery charges | to do |
-| 11 | Stock and availability | to do |
+| 9 | Payment — COD only | **Done in section 7** — COD is stated on the form and the confirmation |
+| 10 | Delivery charges | **Done in section 7** — admin-configured, shown in the bag, at checkout and on the confirmation; the SERVER applies it |
+| 11 | Stock and availability | mostly done — badges, per-size gating, and checkout blocked on an unfulfillable bag. **Next** |
 | 12 | Order success animation | to do |
 | 13 | Search | **Done** |
 | 14 | Filters and sorting | **Done** |
 | 15 | Mobile responsiveness | ongoing, every section |
 | 16 | Reviews and ratings | to do |
-| 17 | Validation and security | to do |
+| 17 | Validation and security | checkout is done (shared rules, server re-validation). **Rate limiting is NOT built** |
 | 18 | Stack and component reuse | ongoing, every section |
 | 19 | Performance | ongoing, every section |
 
@@ -918,40 +929,131 @@ products in a real category, every referenced image file present on disk, all fi
 names carrying the new fit and none still carrying a fabric word, and search still finding
 both an old and a new product by name.
 
-### The next task — section 7, checkout
+### What section 7 delivered
 
-**No longer blocked.** Supabase Edge Functions are on the free tier, and `place-order` is
-already deployed and working. What is missing is only the UI.
+Checkout: `/checkout` and `/order/confirmed`. A guest fills in where the order is going, the
+form refuses to submit while anything required is missing or invalid, the `place-order` Edge
+Function writes the order, and a confirmation page shows the number and what was bought.
+Sections 9 (cash on delivery) and 10 (delivery charges) fell out of it and are done too.
 
-What section 7 asks for: guest checkout with **no mandatory authentication**, the field list
-in §7 as clarified by §17 (postal code is OPTIONAL), validation that blocks confirmation
-while anything required is missing or invalid, and an order that lands in the admin
-dashboard.
+**There is no sign-in on the page and no way to reach one.** Section 7 makes checkout without
+authentication mandatory, so a guest and a signed-in customer take the identical path; an
+email address is contact detail here, not an identity. The only thing an account would change
+is that the Edge Function links the order to it, and that is decided by an `Authorization`
+header — `placeOrder(input, accessToken)` already takes one, and passing it is all that
+sign-in will have to do here.
 
-What already exists:
+**`shared/checkout.ts` is the new file that matters, and it exists because of one failure
+mode.** A client that validates more loosely than the server lets a customer fill in the
+whole form, press the button, and be rejected by a machine for a reason the form never
+mentioned. So the rules — the patterns, the length bounds, the normalisation and *the exact
+wording of every message* — are written once and the storefront uses them. Nothing is
+validated on the client that the server does not also check; §17's "letters and common name
+characters" is deliberately NOT enforced, because the server enforces no charset and a
+client-only rule would reject the apostrophes and dots in real Pakistani names.
 
-1. **The Edge Function is done.** `POST /functions/v1/place-order` with
-   `{ items: [{productId, size, qty}], customer: {...} }`. It returns
-   `{ orderId, orderNumber, reviewToken, total }`, or `{ error: { code, message, fields? } }`.
-   The `fields` object is keyed by form field name, ready to drive inline errors.
-   Error codes: `VALIDATION`, `INVALID_ITEMS`, `OUT_OF_STOCK`, `PRODUCT_UNAVAILABLE`,
-   `EMPTY_CART`, `ORDER_FAILED`.
-2. **The bag is ready to hand over.** A stored `CartItem` is a superset of
-   `PlaceOrderInput["items"]` — drop `slug` and it is the payload. `buildCart` already knows
-   which lines are orderable.
-3. `CHECKOUT` is already in `lib/routes.ts` and already linked from the bag.
+> **The Edge Function cannot import that file, so it carries the same constants inline.**
+> It is Deno, deployed on its own by the Supabase CLI, which bundles only what is under
+> `supabase/`. **Changing a rule means changing both files.** The verification harness below
+> reads `supabase/functions/place-order/index.ts` as text and asserts that every pattern,
+> every bound and every message string in `shared/checkout.ts` appears in it — so drift is
+> caught rather than hoped against. Re-run it if you touch either side.
 
-Before writing anything:
+**When an error appears is its own decision.** §17 asks for validation "both as the customer
+fills the form and again when they submit", which cannot mean marking a field wrong the
+moment it is focused — every field is empty and therefore invalid before it is typed in. A
+field starts silent, begins reporting once it has been LEFT (blur) or once submit has been
+pressed, and from then on re-validates on every keystroke so the message clears the instant
+the value is fixed. A failed submit moves focus to the first invalid field, because on a
+phone the offending field is a screen away from the button.
 
-- **Client validation must mirror the Edge Function's rules exactly**, or a customer will
-  pass the form and be rejected by the server. The server's rules are the authority and are
-  in `supabase/functions/place-order/index.ts` — consider lifting the shared regexes into
-  `shared/` so the two cannot drift.
-- **The catalog is still demo data.** `VITE_DATA_SOURCE=demo`, so product ids are
-  `demo-01`-style strings that do not exist in the database. A real order therefore cannot
-  be placed end to end until the admin dashboard has created real products. Build the form
-  and wire the call; say plainly that the happy path is untestable until then.
-- **Section 12's success animation** needs a real order, so it is in the same position.
+**The server's field errors outrank the local ones, but only until the field changes.** The
+Edge Function returns `fields` keyed by form field name; `CheckoutForm` shows those in place,
+and retires each one as soon as the customer edits the value it objected to — a complaint
+about a value that is no longer there is noise.
+
+**`lib/placeOrder.ts` uses `fetch`, not the Supabase SDK.** `functions.invoke` would do the
+same job and pull the SDK into the bundle; the build still reports the `supabase` chunk as
+**empty**, so reaching checkout in demo mode downloads nothing extra. The function is
+deployed `--no-verify-jwt`, so a plain POST with the anon key is all it needs. **No
+`Authorization` header is sent for a guest** — the function reads one only to link an order
+to an account, and sending the anon key there would make it spend a round trip looking up a
+user that cannot exist.
+
+**Nothing is retried.** A POST that timed out on the way back may or may not have placed an
+order, and an order is not a safe thing to guess about — the customer is told what happened
+and decides. The one 200-shaped failure (a success with a body that has no order number in
+it) says so explicitly rather than showing a confirmation with a blank reference.
+
+**The confirmation page reads a receipt, not the database.** The storefront *cannot* read an
+order back: `orders` holds the customer's name, phone and address, and RLS makes it invisible
+to the anon key (§17). The response to `place-order` is the only moment the browser ever sees
+the order, so it goes into `sessionStorage` — which means a refresh still works, and a tab
+opened tomorrow correctly knows nothing. That is also why `/order/confirmed` carries **no
+order number in the URL**: a shared or bookmarked link could not load anything. The receipt
+deliberately does **not** store the name, phone or address.
+
+The page shows the **server's** total as the figure to pay, and derives the subtotal and
+delivery from it — printing the breakdown only when the arithmetic reconciles, so a price
+that moved mid-checkout can never print two numbers that do not add up to the third. **It
+promises no email**, because there is no mail service on this project.
+
+**Three guards decide whether checkout may be attempted at all**, and none of them is
+trusted — the server re-validates, re-prices and re-checks stock inside one transaction
+regardless. They exist so the customer finds out early, in words: an empty bag says so
+instead of showing a form that cannot be submitted; a bag with an unfulfillable line
+disables the form (§11) while leaving the summary's "remove them and continue" control
+working, so the way out is on the screen they are already on; and the lines are re-priced
+against the live catalog on every render, so a piece that sells out while the form is being
+filled in blocks the button before the server has to.
+
+**Four things were shared rather than duplicated (§18):**
+
+- **`components/ui/Field.tsx`** is new and is the only form control in the app — label,
+  error, hint, `aria-invalid`, `aria-describedby` and a real `maxLength`. Seven fields would
+  otherwise have been seven copies of that wiring, and section 16's review form an eighth.
+  It marks the OPTIONAL fields rather than the required ones: most of the form is required,
+  so asterisks everywhere would say nothing.
+- **`CartLineRow` gained `readOnly`** and **`CartSummary` gained `showActions`**, so checkout
+  restates the bag using the same two components the cart page and the drawer render. Editing
+  stays in the bag — a quantity stepper beside the confirm button invites a change that
+  silently moves the total the customer is about to agree to.
+- **The bag's caps moved into `shared/checkout.ts`** (`MAX_ORDER_LINES`, `MAX_QTY_PER_LINE`).
+  They were declared in `lib/cart.ts` with a comment saying the server has the same two
+  numbers; now there is one declaration and the comment is unnecessary.
+
+**Verified with 153 assertions**: the drift check against the Edge Function's source
+(patterns, bounds, messages, normalisation, both caps); every required field blocking the
+order when blank AND when whitespace-only; the postal code being optional but format-checked;
+five real spellings of a Pakistani mobile accepted and six wrong ones rejected; email
+acceptance and rejection; oversized input; punctuation in names; the request carrying only
+id, size and quantity and **no price, total or Authorization header**; every server error
+code mapping through, including an unknown code, a bodyless 500, a network drop and a 200
+with an unreadable body; the receipt's round trip, its rejection of corrupt storage and its
+derived subtotal; and what the form, the `Field` primitive, the confirmation page and the
+checkout page actually render. All pass. The harness is not committed — it needs storage
+stubs, a `fetch` stub and a browser-free React render, which is still not worth a test runner
+in the repo.
+
+**Not built, deliberately:** section 12's success animation (its own section — it replaces
+the mark at the top of the confirmation page and leaves everything below it alone), the
+review link on the confirmation (section 16 — the `reviewToken` is already stored for it),
+sign-in (section 7 forbids requiring it, and nothing else needs it yet), and saved addresses,
+which need an account.
+
+**Not done, and it is the server's job:** §17 asks for **rate limiting on order placement**.
+The Edge Function has none. It belongs there, or in front of it, not in the browser — a
+client-side limit is not a limit. Raise it before the shop takes real orders.
+
+### The next task — section 11, stock and availability
+
+Most of it is already standing: `StockBadge`, per-size gating on the product page, the bag's
+three problem states, and checkout refusing an unfulfillable bag. What is left is a review of
+the whole surface against §11 — the badge thresholds, whether the available quantity should
+be shown anywhere else, and the out-of-stock states on the grid and in search.
+
+Then section 12 (the order animation) and section 16 (reviews). **Both need a real order**,
+so both sit behind the same demo-catalog fact as the happy path of checkout.
 
 ## 9. Open questions — ask before inventing
 
@@ -1000,11 +1102,27 @@ Before writing anything:
   and clearing site data empties it. That is a consequence of having no server, not an
   oversight — say so if the client asks. A saved bag needs auth, which §7 explicitly does
   not require.
-- **Nothing is blocked.** Sections 1-6, 13 and 14 are done and shipped; section 7 (checkout)
-  is next and its server side is already deployed. Section 8 is Developer B's.
+- **Nothing is blocked.** Sections 1-7, 9, 10, 13 and 14 are done and shipped. Section 11 is
+  next; sections 12 and 16 follow. Section 8 is Developer B's.
 - **The happy path of checkout cannot be tested end to end yet**, because the storefront is
-  still on demo data whose product ids do not exist in the database. That is a sequencing
-  fact, not a bug — it resolves when the admin dashboard creates real products.
+  still on demo data whose product ids do not exist in the database, so `place_order()`
+  refuses every order. That is a sequencing fact, not a bug — it resolves when the admin
+  dashboard creates real products. **The checkout page says so on screen**, in a notice that
+  disappears on its own when `VITE_DATA_SOURCE` becomes `supabase`. What HAS been exercised
+  is everything up to and including the request: the form, its rules, the payload, and every
+  error the server can return.
+- **RATE LIMITING ON ORDER PLACEMENT IS NOT BUILT**, and §17 asks for it. The `place-order`
+  Edge Function accepts unlimited requests from anyone. It has to be solved server-side —
+  a client-side limit is not a limit — and it must be in place before the shop takes real
+  orders. The same applies to review submission when section 16 lands.
+- **No email is sent when an order is placed.** There is no mail service on this project, so
+  the confirmation page deliberately does not promise one; it tells the customer to keep
+  their order number. If the client wants an order email, that is a new decision — it needs
+  a provider, and it belongs in the Edge Function.
+- **Checkout validation is defined in TWO files that must agree**: `shared/checkout.ts` and
+  `supabase/functions/place-order/index.ts`. The Edge Function cannot import the shared one
+  (the Supabase CLI bundles only what is under `supabase/`). Change one, change the other,
+  and re-run the drift check described in the section 7 notes above.
 - ~~Search is prefix-only~~ — **fixed by the migration.** Postgres `ilike` over a trigram
   index does substring matching, so "shirt" now finds "Oxford Shirt". The demo source still
   matches on prefix only, so search feels narrower in demo mode than it will in production;
@@ -1015,7 +1133,12 @@ Before writing anything:
   summary, so filtering by it needs a denormalised field agreed with Developer B rather than
   reading full products for a grid (§19).
 - **Auth provider** for reviews (section 16) — email/password, Google, or phone? Undecided.
-- **Delivery charges** (section 10) — flat rate or per city? Undecided.
+  Note that checkout does **not** need it: section 7 forbids requiring an account, and the
+  storefront has no sign-in anywhere.
+- **Delivery charges** (section 10) — the mechanism is built and the admin configures one
+  flat charge plus an optional free-delivery threshold, which is what §10 asks for. **Per-city
+  rates are still undecided** and would be a schema change (`settings` holds one number), so
+  agree it with the client and Developer B before building it.
 - **Admin dashboard spec** (section 8) — still pending from the client.
 
 ---
