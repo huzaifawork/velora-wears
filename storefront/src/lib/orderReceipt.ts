@@ -1,4 +1,5 @@
-import type { Size } from "@shared/types";
+import type { PaymentMethod, Size } from "@shared/types";
+import { paymentMethodOf } from "@shared/payment";
 
 /**
  * The receipt — what the confirmation page knows about the order that was just
@@ -45,6 +46,13 @@ export interface OrderReceipt {
    * is not shown on the page.
    */
   reviewToken: string;
+  /**
+   * How the order is paid, as the SERVER recorded it (section 9). The page
+   * could hardcode "cash on delivery" — it is the only method in version one —
+   * but then it would be describing an assumption rather than the order, and
+   * would go on saying it after a second method is added.
+   */
+  paymentMethod: PaymentMethod;
   /** Where the order is going — the city only, for a line of reassurance. */
   city: string;
   /** Where the confirmation was sent. Shown so a typo is noticed immediately. */
@@ -87,7 +95,10 @@ export function readReceipt(): OrderReceipt | null {
       return null;
     }
 
-    return receipt as OrderReceipt;
+    // A receipt stored by an older build has no payment method on it, and a
+    // confirmation is not worth discarding over that: it reads as the default,
+    // which is what that order was.
+    return { ...receipt, paymentMethod: paymentMethodOf(receipt.paymentMethod) } as OrderReceipt;
   } catch {
     return null;
   }

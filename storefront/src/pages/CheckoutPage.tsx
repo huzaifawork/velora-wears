@@ -102,6 +102,7 @@ export function CheckoutPage() {
         orderNumber: result.orderNumber,
         total: result.total,
         reviewToken: result.reviewToken,
+        paymentMethod: result.paymentMethod,
         city: customer.city,
         email: customer.email,
         lines,

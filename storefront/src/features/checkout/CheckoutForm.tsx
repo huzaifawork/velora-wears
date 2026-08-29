@@ -11,6 +11,7 @@ import {
   type CheckoutErrors,
   type CheckoutField,
 } from "@shared/checkout";
+import { DEFAULT_PAYMENT_METHOD, PAYMENT_METHOD_COPY } from "@shared/payment";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { formatPrice } from "@/lib/format";
@@ -46,6 +47,15 @@ import { formatPrice } from "@/lib/format";
  * storage, which is a poor trade for a step the customer has little reason to
  * leave — the bag is shown beside the form precisely so they do not have to.
  */
+
+/**
+ * Version one takes one method and does not ask which (section 9), so this is
+ * resolved once at module level rather than being state the form carries.
+ * When a second method exists it becomes a choice, and this is the line that
+ * changes.
+ */
+const payment = PAYMENT_METHOD_COPY[DEFAULT_PAYMENT_METHOD];
+
 export function CheckoutForm({
   total,
   submitting,
@@ -184,7 +194,14 @@ export function CheckoutForm({
 
       {/* Requirements section 9 — cash on delivery is the only method in v1, so
           this is a statement rather than a choice. A single radio button
-          pretending to be a decision is worse than saying what happens. */}
+          pretending to be a decision is worse than saying what happens.
+
+          The words come from `shared/payment.ts` rather than being written
+          here, because the confirmation page and the admin dashboard describe
+          the same order and must not describe it differently (§18). The method
+          itself is NOT submitted with the form: the server decides it, and a
+          browser that could name how an order is paid could declare one paid
+          (§17). */}
       <section aria-labelledby="payment-heading">
         <h2
           id="payment-heading"
@@ -194,11 +211,8 @@ export function CheckoutForm({
         </h2>
 
         <div className="mt-6 rounded-sm border border-line bg-canvas-alt p-5">
-          <p className="font-display text-lg text-ink">Cash on delivery</p>
-          <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-            Pay the courier in cash when your order arrives. Nothing is charged now, and no card
-            details are ever asked for.
-          </p>
+          <p className="font-display text-lg text-ink">{payment.label}</p>
+          <p className="mt-2 text-sm leading-relaxed text-ink-soft">{payment.blurb}</p>
         </div>
       </section>
 
@@ -208,8 +222,7 @@ export function CheckoutForm({
         </Button>
 
         <p className="mt-4 text-center text-xs leading-relaxed text-ink-soft">
-          No account needed. By placing this order you agree to pay the courier in cash on
-          delivery.
+          No account needed. {payment.agreement}
         </p>
       </div>
     </form>

@@ -7,6 +7,7 @@ import { formatPrice } from "@/lib/format";
 import { readReceipt, receiptSubtotal } from "@/lib/orderReceipt";
 import { CART, HOME, PRODUCTS, productPath } from "@/lib/routes";
 import { SIZE_LABELS } from "@/lib/sizes";
+import { paymentMethodCopy } from "@shared/payment";
 
 /**
  * The order success page (requirements section 7 — "an order confirmation
@@ -44,6 +45,13 @@ export function OrderConfirmedPage() {
    * charge that do not add up to the total underneath them.
    */
   const breakdownAdvisable = delivery >= 0 && subtotal > 0;
+  /**
+   * How the order is paid, as the STORE recorded it, not as this page assumed
+   * (section 9). Version one has one method, so today this always resolves to
+   * cash on delivery — the point is that the page reads the order rather than
+   * hardcoding a sentence that would quietly become wrong.
+   */
+  const payment = paymentMethodCopy(receipt.paymentMethod);
 
   return (
     <Container className="py-16 sm:py-24">
@@ -145,7 +153,7 @@ export function OrderConfirmedPage() {
 
             <div className="flex items-baseline justify-between gap-4 border-t border-line pt-4">
               <dt className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
-                To pay on delivery
+                {payment.amountLabel}
               </dt>
               <dd className="text-xl font-medium tabular-nums text-ink">
                 {formatPrice(receipt.total)}
@@ -153,10 +161,7 @@ export function OrderConfirmedPage() {
             </div>
           </dl>
 
-          <p className="mt-4 text-xs leading-relaxed text-ink-soft">
-            Cash on delivery. This is the amount the courier will collect, and it is the figure our
-            store calculated — not one sent from your browser.
-          </p>
+          <p className="mt-4 text-xs leading-relaxed text-ink-soft">{payment.confirmation}</p>
         </section>
 
         <div className="mt-12 flex flex-wrap justify-center gap-3">

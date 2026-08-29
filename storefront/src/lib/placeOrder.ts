@@ -1,4 +1,5 @@
 import type { PlaceOrderInput, PlaceOrderResult } from "@shared/types";
+import { paymentMethodOf } from "@shared/payment";
 import type { CheckoutErrors } from "@shared/checkout";
 
 /**
@@ -162,5 +163,12 @@ export async function placeOrder(
     orderNumber: result.orderNumber,
     reviewToken: result.reviewToken ?? "",
     total: result.total,
+    /**
+     * The method the STORE recorded, not one this file assumed. It is missing
+     * only from an order placed against a database that predates the column, and
+     * `paymentMethodOf` reads that as cash on delivery — which it was, because
+     * nothing else has ever been offered (section 9).
+     */
+    paymentMethod: paymentMethodOf(result.paymentMethod),
   };
 }
