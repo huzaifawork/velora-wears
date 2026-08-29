@@ -2008,6 +2008,20 @@ or legibility issues at a glance across body text, nav, badges and buttons.
 
 No schema, Edge Function, or query change. Build, typecheck and lint stayed clean throughout.
 
+### Client changes, 2026-08-29 (seventh round — canvas G chosen)
+
+**Option G, Plum Mist, is now live**, superseding E from the previous round — Huzaifa changed
+his mind after seeing E live. `index.css`'s three canvas tokens are `#e8e3e2` / `#d6cbcd` /
+`#bcabb0`, the one option of the seven built from the brand's own plum rather than the gold
+family. Verified more thoroughly than the last two swaps, since the ask was explicitly to
+confirm the colour was really applying, not just edited in source: `grep`'d the new hex values
+into the actual built CSS output (`storefront/dist/assets/*.css`, not just `index.css`), then
+loaded the running dev server and read `getComputedStyle` on `document.documentElement` and
+`document.body` directly — both resolved to the new colour, not a stale or cached one — before
+screenshotting the home page, `/products` and the footer to confirm the render itself matches.
+
+No schema, Edge Function, or query change. Build, typecheck and lint stayed clean throughout.
+
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
@@ -2018,11 +2032,10 @@ No schema, Edge Function, or query change. Build, typecheck and lint stayed clea
   Vercel's CDN: free, fast, no billing, deleted in one commit when real photography arrives.
   Both `thumb` and `full` variants, WebP, known dimensions. **Ask the client for real
   photography — these must be replaced before sign-off.**
-- ~~Waiting on a canvas/theme pick~~ — **resolved, 2026-08-29.** C (Muted Greige) shipped in
-  the fifth round, then superseded by **E (Cedar Smoke), live now**, in the sixth. All seven
-  options are still laid out in the published Artifact "Velora Canvas Study" if a different one
-  is wanted later — swap `--color-canvas`/`-alt`/`-deep` in `index.css`; `--glow-*` never needs
-  to change.
+- ~~Waiting on a canvas/theme pick~~ — **resolved, 2026-08-29**, through three rounds: C (Muted
+  Greige) → E (Cedar Smoke) → **G (Plum Mist), live now**. All seven options are still laid out
+  in the published Artifact "Velora Canvas Study" if a different one is wanted later — swap
+  `--color-canvas`/`-alt`/`-deep` in `index.css`; `--glow-*` never needs to change.
 - **`developerb.md` is new, 2026-08-29** — full admin-dashboard onboarding doc at the repo
   root. See the "fifth round" write-up above for what it covers. Contact email for Developer B
   coordination: `wearvelora84@gmail.com`.

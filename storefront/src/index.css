@@ -21,16 +21,18 @@
 
   /* --- Canvas: page and card surfaces -----------------------------------
      Chosen from the seven options laid out side by side in the published
-     "Velora Canvas Study" Artifact (2026-08-29) — option E, Cedar Smoke:
-     the first of the "darker, not too dark" batch added after C shipped.
-     Smoky and grey-warm, deeper and moodier than C without leaning as hard
-     into one hue as the other new options did. The `--glow-*` wash below
-     and the `body` rule that uses it are unchanged — they work over any of
-     the seven options, since they are built from the accent/brand colours,
-     not the canvas tiers. */
-  --color-canvas: #e7e1d8;
-  --color-canvas-alt: #d3c7b4;
-  --color-canvas-deep: #b8a688;
+     "Velora Canvas Study" Artifact (2026-08-29) — option G, Plum Mist: the
+     only one of the seven not built from the gold family. A faint plum
+     undertone instead, tying the ground to the brand's own ink/plum rather
+     than always leaning on the gold accent — quieter and more
+     fashion-editorial than E or C, which is what Huzaifa picked it over
+     after both were already live. The `--glow-*` wash below and the `body`
+     rule that uses it are unchanged — they work over any of the seven
+     options, since they are built from the accent/brand colours, not the
+     canvas tiers. */
+  --color-canvas: #e8e3e2;
+  --color-canvas-alt: #d6cbcd;
+  --color-canvas-deep: #bcabb0;
 
   /* The hero's two blurred brand-colour blobs, reused as a fixed, sitewide
      ambient wash (see `body` below) rather than a decoration only the
