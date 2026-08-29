@@ -1815,6 +1815,53 @@ write here** — section 20's ownership table puts it on Developer B in full, sa
 that to Developer B "in full," and building placeholder admin UI on spec would be guessing at a
 spec section 8 says is still pending from the client.
 
+### Client changes, 2026-08-29 (second round)
+
+Five small requests relayed from the client, applied on top of the finished sections 1-20:
+
+1. **Real social links and contact details, replacing the placeholders sections 2 and 5's
+   notes flagged.** The footer's social row now links to the brand's real Instagram
+   (`instagram.com/velora_wear_closet`), TikTok (new — a fourth icon added, matching the
+   existing hand-drawn stroke-icon style of the other three) and Facebook, plus the real
+   WhatsApp number as a `wa.me` link (`WHATSAPP_NUMBER` in `Footer.tsx`, `923379370312`). The
+   Contact column's phone line became a labelled WhatsApp link (that is the one number the
+   client gave; there is no separate landline), and the invented "Lahore, Pakistan" became "Wah
+   Cantt, Pakistan" — the brand's real location. **The landing page's Instagram strip
+   (`features/home/InstagramStrip.tsx`) had the identical placeholder handle hardcoded a
+   second time** — its own "NOTE FOR HUZAIFA" flagged it since section 2 — and is fixed too, so
+   the two Instagram links on the site cannot disagree. The support email
+   (`hello@velorawears.pk`) is still a placeholder; the client did not supply a real one.
+2. **A "Buy now" button beside "Add to bag"** on the product detail page
+   (`pages/ProductDetailPage.tsx`) — the only add-to-cart control in the app (product cards
+   link to the detail page, they never had their own). Same size/stock gate, same cart write;
+   "Add to bag" still opens the drawer and keeps the visitor on the page, "Buy now" (`accent`
+   variant — the gold used sparingly for emphasis, matching `index.css`'s own description of
+   that token) skips the drawer and calls `useNavigate()` straight to `/checkout`, which reads
+   the bag exactly as it does from the drawer or the cart page — nothing about checkout itself
+   changed. Verified with a headless browser: selecting a size and clicking "Buy now" landed on
+   `/checkout` with the item already priced in the order summary.
+3. **The wordmark's "WEARS" line was too small under "VELORA."** `components/brand/Logo.tsx`
+   sizes it in one place, reused everywhere the logo appears (header, footer, favicon share
+   image) — bumped from `text-[0.5rem]` to `text-[0.6875rem]`. Still visibly the secondary word
+   under the display-serif "VELORA," just no longer near-illegible at header size.
+4. **The base canvas was pure white (`#ffffff`), not the "soft cream canvas" `index.css`'s own
+   brand-direction comment already claimed it was** — the client's "not too light, not too
+   dark" note was really flagging that mismatch. `--color-canvas` is now a warm ivory
+   (`#fdfbf7`), and `--color-canvas-alt` / `--color-canvas-deep` were deepened slightly
+   alongside it (`#f6f0e8`, `#ede3d5`) so the three tiers still read as distinct steps rather
+   than converging into one shade. Nothing else in the palette moved — ink, brand plum and the
+   antique-gold accent were already the "premium, editorial" read the brand direction asks for;
+   this was specifically about the background reading as sterile white rather than warm.
+   **Verified visually**, not just by reading hex values: a headless Playwright browser
+   screenshotted the home page, the product page and the footer against the live dev server
+   before calling this done.
+5. **Not requested, found while doing #1**: nothing else — the audit above only turned up the
+   one duplicate Instagram handle, already fixed as part of #1.
+
+No schema, Edge Function, or query change — everything here is presentation and static contact
+data. Build, typecheck and lint stayed clean throughout; re-verified after each change, not
+just at the end.
+
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
@@ -1825,9 +1872,10 @@ spec section 8 says is still pending from the client.
   Vercel's CDN: free, fast, no billing, deleted in one commit when real photography arrives.
   Both `thumb` and `full` variants, WebP, known dimensions. **Ask the client for real
   photography — these must be replaced before sign-off.**
-- **Placeholder contact details, still to be replaced.** The footer's Instagram, WhatsApp and
-  Facebook links, `hello@velorawears.pk`, `+92 000 0000000`, and the `@velorawears` handle in
-  the Instagram strip are invented. Get the brand's real accounts from the client.
+- ~~Placeholder contact details~~ — **mostly resolved, 2026-08-29.** The footer's Instagram,
+  TikTok, Facebook and WhatsApp links, the WhatsApp number, and the location are the brand's
+  real ones now (see the "Client changes, second round" write-up above). **The support email
+  (`hello@velorawears.pk`) is still invented** — the client has not supplied a real one.
 - ~~Blaze plan~~ — **gone with Firebase.** Supabase Edge Functions are on the free tier, so
   nothing is paywalled. There is no billing blocker on this project any more.
 - **Demo data is temporary, and lives in the frontend** (`lib/demoData.ts`), not in the

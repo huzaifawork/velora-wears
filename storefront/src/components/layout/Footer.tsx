@@ -10,9 +10,9 @@ import { CATEGORIES, PRODUCTS, categoryPath } from "@/lib/routes";
  * Site footer (requirements section 2 — "a modern footer containing relevant
  * information and useful links"). Shared by every page.
  *
- * NOTE FOR HUZAIFA: the social handles and the contact details below are
- * placeholders. Replace them with the brand's real Instagram, WhatsApp number
- * and support email before the client sees the finished site.
+ * Social links, the WhatsApp number and the location are the brand's real
+ * accounts, supplied by the client on 2026-08-29 (see context.md). The
+ * support email is still a placeholder — the client has not given a real one.
  */
 
 /**
@@ -28,20 +28,28 @@ const care = [
   "Every order checked before dispatch",
 ];
 
+/** The brand's real WhatsApp number, in `wa.me` format (no `+`, no spaces). */
+const WHATSAPP_NUMBER = "923379370312";
+
 const socials = [
   {
     label: "Instagram",
-    href: "https://instagram.com/velorawears",
+    href: "https://www.instagram.com/velora_wear_closet?utm_source=qr",
     path: "M12 8.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2zM16.9 7.1h.01M4.5 8A3.5 3.5 0 0 1 8 4.5h8A3.5 3.5 0 0 1 19.5 8v8a3.5 3.5 0 0 1-3.5 3.5H8A3.5 3.5 0 0 1 4.5 16z",
   },
   {
+    label: "TikTok",
+    href: "https://www.tiktok.com/@velora_wear_closet?_r=1&_t=ZN-99AYK21h9d8",
+    path: "M14 4v10.3a3.2 3.2 0 1 1-2.6-3.14M14 4c.35 2.2 1.9 3.9 4.2 4.2v2.9c-1.5 0-3-.45-4.2-1.3",
+  },
+  {
     label: "WhatsApp",
-    href: "https://wa.me/920000000000",
+    href: `https://wa.me/${WHATSAPP_NUMBER}`,
     path: "M4.5 19.5l1.1-3.7A7.5 7.5 0 1 1 8.4 18.4zM9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.2-1.8-1-.8.8a4.6 4.6 0 0 1-2.5-2.5l.8-.8-1-1.8z",
   },
   {
     label: "Facebook",
-    href: "https://facebook.com/velorawears",
+    href: "https://www.facebook.com/share/1EXCx1UfEs/?mibextid=wwXIfr",
     path: "M13.5 21v-8h2.6l.4-3h-3V8.2c0-.9.3-1.5 1.6-1.5H16.6V4.1A22 22 0 0 0 14.3 4c-2.3 0-3.8 1.4-3.8 3.9V10H8v3h2.5v8z",
   },
 ];
@@ -133,11 +141,16 @@ export function Footer() {
               </a>
             </li>
             <li>
-              <a href="tel:+920000000000" className="transition hover:text-accent">
-                +92 000 0000000
+              <a
+                href={`https://wa.me/${WHATSAPP_NUMBER}`}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="transition hover:text-accent"
+              >
+                WhatsApp: +92 337 9370312
               </a>
             </li>
-            <li className="leading-relaxed">Lahore, Pakistan</li>
+            <li className="leading-relaxed">Wah Cantt, Pakistan</li>
             <li className="leading-relaxed">Support: 11am - 8pm, Mon to Sat</li>
           </ul>
         </div>

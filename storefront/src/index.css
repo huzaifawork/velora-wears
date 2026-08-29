@@ -19,10 +19,15 @@
   --color-ink-soft: #6b6573;
   --color-ink-muted: #9b949f;
 
-  /* --- Canvas: page and card surfaces ---------------------------------- */
-  --color-canvas: #ffffff;
-  --color-canvas-alt: #faf7f3;
-  --color-canvas-deep: #f1ebe4;
+  /* --- Canvas: page and card surfaces -----------------------------------
+     Warm ivory, not stark white (client feedback, 2026-08-29: the theme
+     should read as light without being flat or clinical). Cards and the
+     page base still sit close to white for contrast against ink text and
+     product photography; the two darker tiers carry the actual warmth so
+     alternating sections still read as distinct steps, not a colour swap. */
+  --color-canvas: #fdfbf7;
+  --color-canvas-alt: #f6f0e8;
+  --color-canvas-deep: #ede3d5;
 
   /* --- Brand: the signature deep plum ---------------------------------- */
   --color-brand: #241d33;

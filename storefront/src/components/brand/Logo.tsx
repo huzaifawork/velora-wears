@@ -74,7 +74,7 @@ export function Logo({ variant = "full", className = "", title = "Velora Wears" 
         {/* The trailing letter-space each word inherits from its tracking is
             trimmed off, so the glyphs - not the invisible gap - stay aligned. */}
         <span className="-mr-[0.24em] font-display text-xl tracking-wordmark">VELORA</span>
-        <span className="mt-1.5 -mr-[0.3em] text-[0.5rem] font-medium tracking-eyebrow text-accent">
+        <span className="mt-1.5 -mr-[0.3em] text-[0.6875rem] font-medium tracking-eyebrow text-accent">
           WEARS
         </span>
       </span>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { Size } from "@shared/types";
 import { FALLBACK_LOW_STOCK_THRESHOLD, availableSizes, joinNames, stockInSize } from "@shared/stock";
@@ -28,7 +28,7 @@ import {
   listReviews,
 } from "@/lib/queries";
 import { SIZE_LABELS } from "@/lib/sizes";
-import { CATEGORIES, HOME, PRODUCTS, categoryPath } from "@/lib/routes";
+import { CATEGORIES, CHECKOUT, HOME, PRODUCTS, categoryPath } from "@/lib/routes";
 
 /**
  * The product detail page (requirements section 4) — name, price, description,
@@ -55,6 +55,7 @@ const RELATED_LIMIT = 8;
 
 export function ProductDetailPage() {
   const slug = useParams().slug ?? "";
+  const navigate = useNavigate();
 
   const { add, openDrawer } = useCart();
 
@@ -138,6 +139,21 @@ export function ProductDetailPage() {
     openDrawer();
   };
 
+  /**
+   * "Buy now" — the client's request alongside the existing add-to-bag button:
+   * the same size/stock gate and the same cart write, but it skips the drawer
+   * and takes the visitor straight to `/checkout` instead of leaving them on
+   * the product page. Nothing about `/checkout` itself changes; it reads
+   * whatever is in the bag exactly as it does when reached from the drawer or
+   * the cart page (section 6).
+   */
+  const buyNow = () => {
+    if (!size || availableInSize === 0) return;
+    add({ productId: product.id, slug: product.slug, size }, qty, availableInSize);
+    setChosen({ slug, size, qty: 1 });
+    navigate(CHECKOUT);
+  };
+
   return (
     <>
       <Breadcrumbs
@@ -211,14 +227,27 @@ export function ProductDetailPage() {
                 </div>
               )}
 
-              <Button
-                size="lg"
-                disabled={soldOut || !size}
-                onClick={addToBag}
-                className="w-full sm:w-auto"
-              >
-                {soldOut ? "Sold out" : "Add to bag"}
-              </Button>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Button
+                  size="lg"
+                  disabled={soldOut || !size}
+                  onClick={addToBag}
+                  className="w-full sm:w-auto"
+                >
+                  {soldOut ? "Sold out" : "Add to bag"}
+                </Button>
+                {!soldOut && (
+                  <Button
+                    variant="accent"
+                    size="lg"
+                    disabled={!size}
+                    onClick={buyNow}
+                    className="w-full sm:w-auto"
+                  >
+                    Buy now
+                  </Button>
+                )}
+              </div>
 
               <p className="text-sm text-ink-soft">
                 Cash on delivery. Nothing is reserved until an order is placed.

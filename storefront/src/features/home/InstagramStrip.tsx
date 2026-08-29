@@ -13,12 +13,12 @@ import { Skeleton } from "@/components/ui/Skeleton";
  * (section 19). When the brand's real feed is available this becomes the only
  * component that changes.
  *
- * NOTE FOR HUZAIFA: the handle below is a placeholder — swap it for the brand's
- * real Instagram before the client sees the finished site.
+ * The handle and profile URL are the brand's real Instagram, supplied by the
+ * client on 2026-08-29 (see context.md and the footer's social links).
  */
 
-const HANDLE = "velorawears";
-const PROFILE_URL = `https://instagram.com/${HANDLE}`;
+const HANDLE = "velora_wear_closet";
+const PROFILE_URL = "https://www.instagram.com/velora_wear_closet?utm_source=qr";
 const TILE_IMAGE = { width: 600, height: 800 } as const;
 
 function InstagramIcon({ className }: { className: string }) {
