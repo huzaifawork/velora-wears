@@ -1,4 +1,5 @@
 import type { Product, Settings, Size } from "@shared/types";
+import { MAX_ORDER_LINES, MAX_QTY_PER_LINE } from "@shared/checkout";
 import { SIZES } from "@/lib/sizes";
 
 /**
@@ -43,10 +44,11 @@ const STORAGE_KEY = "velora.cart.v1";
  * Caps. A bag is a shopping list, not a bulk order channel, and these are the
  * client half of the reject-oversized-input rule (section 17). The server
  * applies the SAME two limits independently, in the place-order Edge Function
- * and in `place_order()` — if you change one here, change them there too.
+ * and in `place_order()`, so they now live in `shared/checkout.ts` with the
+ * rest of the order payload contract rather than being declared twice.
  */
-export const MAX_QTY_PER_LINE = 10;
-export const MAX_LINES = 20;
+export { MAX_QTY_PER_LINE };
+export const MAX_LINES = MAX_ORDER_LINES;
 
 /** Two lines are the same line when they are the same product in the same size. */
 function sameLine(a: CartItem, b: { productId: string; size: Size }): boolean {

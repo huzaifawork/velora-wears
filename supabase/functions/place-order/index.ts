@@ -45,6 +45,13 @@ const fail = (code: string, message: string, status = 400) =>
  * These rules are the SERVER's own. The storefront applies the same ones for
  * the customer's benefit, but client validation is a convenience and is never
  * the thing that decides whether an order is accepted.
+ *
+ * THE STOREFRONT'S COPY IS `shared/checkout.ts`, and the two must stay
+ * identical — patterns, bounds and messages — or a customer passes the form
+ * and is rejected here for a reason the form never mentioned. This file cannot
+ * import that one: it is Deno, deployed on its own by the Supabase CLI, which
+ * bundles only what is under `supabase/`. So CHANGING A RULE MEANS CHANGING
+ * BOTH FILES. See the section 7 notes in `context.md` for the drift check.
  * ------------------------------------------------------------------------ */
 
 const SIZES = ["S", "M", "L"];
