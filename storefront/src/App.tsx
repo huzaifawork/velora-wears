@@ -30,6 +30,12 @@ const CartPage = lazy(() =>
 const ProductDetailPage = lazy(() =>
   import("@/pages/ProductDetailPage").then((m) => ({ default: m.ProductDetailPage })),
 );
+const CheckoutPage = lazy(() =>
+  import("@/pages/CheckoutPage").then((m) => ({ default: m.CheckoutPage })),
+);
+const OrderConfirmedPage = lazy(() =>
+  import("@/pages/OrderConfirmedPage").then((m) => ({ default: m.OrderConfirmedPage })),
+);
 const NotFoundPage = lazy(() =>
   import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
 );
@@ -73,8 +79,11 @@ export default function App() {
               <Route path="/products" element={<ProductsPage />} />
               <Route path="/products/:slug" element={<ProductDetailPage />} />
               <Route path="/cart" element={<CartPage />} />
-              {/* /checkout is section 7 and needs the placeOrder function, so it
-                  falls through to the catch-all, which explains itself. */}
+              {/* Checkout and its confirmation (requirements section 7). No
+                  authentication guards either of them — guest checkout is
+                  mandatory, so there is nothing here to be signed in for. */}
+              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/order/confirmed" element={<OrderConfirmedPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Routes>
           </Suspense>
