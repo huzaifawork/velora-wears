@@ -1,4 +1,11 @@
-import type { Category, Product, ProductSummary, Review, Settings } from "@shared/types";
+import type {
+  Category,
+  Product,
+  ProductSummary,
+  Review,
+  Settings,
+  SiteImage,
+} from "@shared/types";
 import { DEFAULT_SORT, normaliseSearch } from "@/lib/sources/CatalogSource";
 import type {
   CatalogSource,
@@ -140,4 +147,28 @@ export function listReviews(productId: string, limit = 20): Promise<Review[]> {
 /** Verified customer reviews for the landing page (requirements sections 2 and 16). */
 export function listTestimonials(limit = 6): Promise<Review[]> {
   return cached(`testimonials:${limit}`, async () => (await source()).listTestimonials(limit));
+}
+
+/**
+ * The landing page's featured strip (requirements section 8).
+ *
+ * Chosen and ordered by the admin dashboard. When nothing has been chosen the
+ * source falls back to the newest N — which is what this strip always showed
+ * before the admin could pick — so the section is never empty and nothing about
+ * the page changes for a shop that has not used the feature.
+ */
+export function listFeatured(limit = 8): Promise<ProductSummary[]> {
+  return cached(`featured:${limit}`, async () => (await source()).listFeatured(limit));
+}
+
+/**
+ * The hero images and promo banners the admin has uploaded (section 8).
+ *
+ * ONE read for both slots, because the landing page renders both and they live
+ * in one table — two reads would be two round trips for one screen. An empty
+ * array is the normal answer for a shop that has not uploaded anything, and
+ * every component that takes these keeps its own default image and copy.
+ */
+export function listSiteImages(): Promise<SiteImage[]> {
+  return cached("site-images", async () => (await source()).listSiteImages());
 }

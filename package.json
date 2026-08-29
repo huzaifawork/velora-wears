@@ -2,7 +2,8 @@
   "name": "velora-wears",
   "version": "0.1.0",
   "private": true,
-  "description": "Velora Wears - e-commerce clothing store. Storefront (React + Vite) and admin dashboard share one Supabase Postgres database.",
+  "type": "module",
+  "description": "Velora Wears - e-commerce clothing store. One React + Vite application: the storefront and the admin dashboard (admin/src, mounted at /admin), over one Supabase Postgres database.",
   "workspaces": [
     "storefront",
     "shared"
@@ -11,7 +12,7 @@
     "dev": "npm run dev --workspace storefront",
     "build": "npm run build --workspace storefront",
     "preview": "npm run preview --workspace storefront",
-    "lint": "npm run lint --workspace storefront",
+    "lint": "eslint .",
     "typecheck": "npm run typecheck --workspace storefront",
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked > shared/database.types.ts",

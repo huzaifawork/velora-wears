@@ -64,3 +64,17 @@ export function searchPath(term: string): string {
 export const ACCOUNT = "/account";
 export const SIGN_IN = "/account/sign-in";
 export const SIGN_UP = "/account/sign-up";
+
+/**
+ * The admin dashboard (requirements section 8).
+ *
+ * It lives in this application rather than in a second one, because a Supabase
+ * session belongs to ONE ORIGIN — two deployments would mean two sessions, and
+ * therefore two sign-in forms, which is the thing this project deliberately
+ * does not have. Signing in on `/account/sign-in` and being an administrator
+ * are the only two conditions for reaching it.
+ *
+ * Everything below it is addressed by `admin/src/lib/routes.ts`; the shop only
+ * needs to know the way in.
+ */
+export const ADMIN = "/admin";

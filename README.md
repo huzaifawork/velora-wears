@@ -15,6 +15,7 @@ E-commerce storefront for **Velora Wears**, a Pakistani fashion and clothing bra
 | Layer | Choice |
 | --- | --- |
 | Storefront | React 19 + Vite 7 + TypeScript |
+| Admin dashboard | The same application, mounted at `/admin` — one build, one origin, one login |
 | Styling | Tailwind CSS v4 |
 | Routing | React Router |
 | Data | **Supabase Postgres**, read with the anon key under row level security |
@@ -25,16 +26,22 @@ E-commerce storefront for **Velora Wears**, a Pakistani fashion and clothing bra
 ## Repository layout
 
 ```
-storefront/            React + Vite storefront
-admin/                 Admin dashboard - owned by the second developer
+storefront/            THE application - React + Vite
+admin/src/             the admin dashboard, compiled into it and served at /admin
 supabase/
   migrations/          THE DATABASE - schema, RLS policies, place_order()
   functions/place-order/   Edge Function - trusted server-side code
 shared/                Shared TypeScript types - the data contract
 ```
 
-`storefront` and `shared` are npm workspaces. `supabase/functions/` is Deno, not Node — it
-has no `package.json` and is deployed by the Supabase CLI.
+`storefront` and `shared` are npm workspaces. **`admin/` is not** — it has no `package.json`
+and no build of its own; `storefront/vite.config.ts` aliases `@admin` at `admin/src` and
+compiles it in. `supabase/functions/` is Deno, not Node — it is deployed by the Supabase CLI.
+
+The dashboard is part of this application rather than a second one for one reason: **a
+Supabase session belongs to a single origin.** Two deployments would mean two sessions and
+therefore two login forms, and this project has exactly one. See
+[`admin/README.md`](admin/README.md).
 
 ## Architecture
 
@@ -74,22 +81,50 @@ npm install                       # storefront + shared workspaces
 cp storefront/.env.example storefront/.env.local
 # fill in from Supabase dashboard -> Project Settings -> API
 
-npm run dev                       # Vite dev server, default port 5173
+npm run dev                       # http://localhost:5173        - the shop
+                                  # http://localhost:5173/admin  - the dashboard
 ```
 
-The catalog is served from demo data in the frontend (`VITE_DATA_SOURCE=demo`) until the
-admin dashboard exists to create real products. **The live database is deliberately empty;
-mock data is never written to it.**
+The catalog is still served from demo data in the frontend (`VITE_DATA_SOURCE=demo`). Flip it
+to `supabase` once real products exist in the database — the admin dashboard is what creates
+them. **The live database is deliberately empty; mock data is never written to it.**
+
+The dashboard needs `supabase/migrations/20260830000001_admin_dashboard.sql` applied, and your
+Supabase Auth user id present in the `admins` table. See [`admin/README.md`](admin/README.md).
+
+## Signing in
+
+**There is one sign-in form**, at `/account/sign-in`, and one kind of account. An
+administrator is a customer account whose user id appears in the `admins` table — so the same
+email and password that buy a hoodie open the dashboard, if that row exists.
+
+After a successful sign-in the app asks the database `is_admin()` and routes on the answer:
+an administrator lands on `/admin`, everyone else on their account (or on `?next=`, if they
+were sent to sign in from somewhere specific — that always wins, so "sign in to check out"
+still returns an admin to checkout).
+
+Guest checkout (requirements section 7) is untouched by all of this and still requires no
+account at all.
+
+**Signing up creates a row in `public.profiles`**, written by a database trigger on
+`auth.users` rather than by the form — so it cannot be skipped, forged or lost if the tab is
+closed mid-flow. That table is what makes a customer visible to anything: `auth.users` is
+never exposed over the API, and the name Supabase stores in user metadata is writable by the
+user themselves, so neither could serve as a record. A customer edits their name and phone on
+`/account`; an admin reads the directory at `/admin/customers`.
+
+An order still keeps its own snapshot of the name, phone and address it was placed with.
+Correcting a profile must never rewrite an address on a delivery already dispatched.
 
 ## Scripts
 
 | Command | Description |
 | --- | --- |
-| `npm run dev` | Storefront dev server |
+| `npm run dev` | Dev server (5173) — shop and dashboard |
 | `npm run build` | Production build |
 | `npm run preview` | Serve the production build |
-| `npm run typecheck` | TypeScript, no emit |
-| `npm run lint` | ESLint |
+| `npm run typecheck` | TypeScript, no emit — covers `admin/src` too |
+| `npm run lint` | ESLint — covers `admin/src` too |
 | `npm run functions:deploy` | Deploy the `place-order` Edge Function |
 | `npm run db:types` | Regenerate `shared/database.types.ts` from the live schema |
 
@@ -102,6 +137,11 @@ Two developers share this repository and one database:
 
 - **Developer A** — storefront, Edge Functions, order flow.
 - **Developer B** — admin dashboard (see [`admin/README.md`](admin/README.md)).
+
+The two halves now ship together, so the boundary is a code boundary rather than a deployment
+one: `admin/src` imports the storefront only for the auth context, the shop's routes and the
+Supabase client, and the storefront imports `admin/src` only to lazily mount it at `/admin`.
+Everything else they share goes through [`shared/`](shared/).
 
 [`supabase/migrations/`](supabase/migrations/) is the source of truth for the database, and
 [`shared/types.ts`](shared/types.ts) for the shape the applications pass around. Changing

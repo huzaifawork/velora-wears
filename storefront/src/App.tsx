@@ -50,6 +50,19 @@ const NotFoundPage = lazy(() =>
   import("@/pages/NotFoundPage").then((m) => ({ default: m.NotFoundPage })),
 );
 
+/**
+ * The admin dashboard (requirements section 8), lazily imported like every
+ * other route — so a customer who never visits `/admin` downloads none of it.
+ *
+ * It lives at `admin/src/` and is compiled into THIS application rather than
+ * deployed as a second one. That is what makes a single sign-in possible: a
+ * Supabase session belongs to one origin, so two deployments would mean two
+ * sessions and, inevitably, two login forms.
+ */
+const AdminApp = lazy(() =>
+  import("@admin/AdminApp").then((m) => ({ default: m.AdminApp })),
+);
+
 /** Shown only while a route chunk downloads — never a blank screen. */
 function RouteFallback() {
   return (
@@ -60,57 +73,88 @@ function RouteFallback() {
   );
 }
 
+/**
+ * The application.
+ *
+ * Two shells, chosen by the first path segment. `/admin` renders the dashboard
+ * with none of the shop's furniture — no header, no footer, no bag — because it
+ * is a tool rather than a shop window; everything else renders the storefront.
+ *
+ * The SESSION spans both, and that is the point of them being one application:
+ * `AuthProvider` sits above the split, so signing in on the shop's form is
+ * signing in to the dashboard, and there is exactly one login in this project
+ * (requirements section 8, and section 12's optional accounts).
+ */
 export default function App() {
+  return (
+    <AuthProvider>
+      <ScrollToTop />
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          {/* The guard lives inside — signed out sends you to the shop's one
+              sign-in form, and signed in but not an administrator gets an
+              explanation rather than a 404. See `admin/src/AdminApp.tsx`. */}
+          <Route path="/admin/*" element={<AdminApp />} />
+          <Route path="*" element={<Storefront />} />
+        </Routes>
+      </Suspense>
+    </AuthProvider>
+  );
+}
+
+/** The customer-facing shop: its chrome, its bag, and its routes. */
+function Storefront() {
   /**
    * One Supabase Realtime subscription for the whole tab. When the catalog
    * changes in the database — an admin edits a price, someone buys the last
    * Medium — the read cache is dropped and the mounted pages re-read, so stock
    * badges, prices and the bag's total correct themselves without a refresh.
    * In demo mode it does nothing and the SDK is never downloaded.
+   *
+   * Mounted HERE rather than at the root, so the dashboard does not hold a
+   * catalog subscription it has no use for — it runs its own, on orders.
    */
   useCatalogRealtime();
 
   return (
-    /* The bag is the one piece of global client state in the app, and it
+    /* The bag is the one piece of global client state in the shop, and it
        wraps everything because the header badge, the drawer and the cart
-       page all read the same one (requirements section 6). */
-    <AuthProvider>
-      <CartProvider>
-        <div className="flex min-h-screen flex-col">
-          <ScrollToTop />
-          <Header />
-          <main className="flex-1">
-            <Suspense fallback={<RouteFallback />}>
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/categories" element={<CategoriesPage />} />
-                {/* The category LISTING is /products?category=<slug> — the catalog
-                    and a single category are the same page in two states, so there
-                    is one canonical URL per category. See lib/routes.ts. */}
-                <Route path="/products" element={<ProductsPage />} />
-                <Route path="/products/:slug" element={<ProductDetailPage />} />
-                <Route path="/cart" element={<CartPage />} />
-                {/* Checkout and its confirmation (requirements section 7). No
-                    authentication guards either of them — guest checkout is
-                    mandatory, so there is nothing here to be signed in for. */}
-                <Route path="/checkout" element={<CheckoutPage />} />
-                <Route path="/order/confirmed" element={<OrderConfirmedPage />} />
-                {/* Optional customer accounts — the note added to section 12.
-                    Nothing above this line requires being signed in. */}
-                <Route path="/account" element={<AccountPage />} />
-                <Route path="/account/sign-in" element={<SignInPage />} />
-                <Route path="/account/sign-up" element={<SignUpPage />} />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Suspense>
-          </main>
-          <Footer />
+       page all read the same one (requirements section 6). The dashboard is
+       outside it: an admin has no shopping bag. */
+    <CartProvider>
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1">
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/categories" element={<CategoriesPage />} />
+              {/* The category LISTING is /products?category=<slug> — the catalog
+                  and a single category are the same page in two states, so there
+                  is one canonical URL per category. See lib/routes.ts. */}
+              <Route path="/products" element={<ProductsPage />} />
+              <Route path="/products/:slug" element={<ProductDetailPage />} />
+              <Route path="/cart" element={<CartPage />} />
+              {/* Checkout and its confirmation (requirements section 7). No
+                  authentication guards either of them — guest checkout is
+                  mandatory, so there is nothing here to be signed in for. */}
+              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/order/confirmed" element={<OrderConfirmedPage />} />
+              {/* Optional customer accounts — the note added to section 12.
+                  Nothing above this line requires being signed in. */}
+              <Route path="/account" element={<AccountPage />} />
+              <Route path="/account/sign-in" element={<SignInPage />} />
+              <Route path="/account/sign-up" element={<SignUpPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Routes>
+          </Suspense>
+        </main>
+        <Footer />
 
-          {/* Outside <main> and rendered once: it is a sheet over the whole app,
-              not part of any one page. */}
-          <CartDrawer />
-        </div>
-      </CartProvider>
-    </AuthProvider>
+        {/* Outside <main> and rendered once: it is a sheet over the whole shop,
+            not part of any one page. */}
+        <CartDrawer />
+      </div>
+    </CartProvider>
   );
 }

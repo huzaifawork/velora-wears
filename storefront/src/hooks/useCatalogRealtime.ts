@@ -56,6 +56,9 @@ export function useCatalogRealtime(onChange?: () => void): void {
         .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, invalidate)
         .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, invalidate)
         .on("postgres_changes", { event: "*", schema: "public", table: "settings" }, invalidate)
+        // The landing page's hero and banners (section 8). An admin swapping the
+        // hero photograph updates every open tab, exactly as a price edit does.
+        .on("postgres_changes", { event: "*", schema: "public", table: "site_images" }, invalidate)
         .subscribe();
 
       teardown = () => void supabase.removeChannel(channel);
