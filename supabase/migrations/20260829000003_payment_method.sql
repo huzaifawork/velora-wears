@@ -1,31 +1,47 @@
 -- ---------------------------------------------------------------------------
--- SUPERSEDED. The live definition of place_order() is in
--- 20260829000003_payment_method.sql — a Postgres function cannot be patched
--- in place, so adding the payment method meant restating the whole body
--- there. EDIT THAT FILE, not this one; a change made here would apply on a
--- fresh database and then be overwritten by the later migration.
--- The reasoning below still holds and is still worth reading.
+-- payment_method — recording HOW an order is paid (requirements section 9).
+--
+-- Section 9 allows exactly one method in version one, cash on delivery, and
+-- says online payment "may be added in the future if required". The orders
+-- table did not record the method at all, which is fine while there is only
+-- one answer and ambiguous the moment there are two: every row written before
+-- a second method existed would become a guess, and section 8 requires the
+-- admin dashboard to show every confirmed order for management.
+--
+-- So: an enum with one value, and a column that defaults to it. Adding a
+-- method later is `alter type public.payment_method add value 'card'` plus
+-- whatever collects it — not a backfill over live orders.
+--
+-- THE BROWSER CANNOT SET THIS. `place_order` writes the value itself and the
+-- Edge Function has no parameter for it. A client that could name its own
+-- payment method could mark an order paid (requirements section 17).
 -- ---------------------------------------------------------------------------
 
+create type public.payment_method as enum ('cod');
+
+alter table public.orders
+  add column payment_method public.payment_method not null default 'cod';
+
+-- The admin dashboard lists orders by status and date (section 8), and "which
+-- COD orders are still awaiting a courier" is the obvious next question it
+-- asks. A new filter column gets its index in the same migration.
+create index orders_payment_method on public.orders (payment_method, created_at desc);
+
 -- ---------------------------------------------------------------------------
--- place_order — the only way an order is ever written.
+-- place_order, restated.
 --
--- This replaces the Firebase `placeOrder` Cloud Function, and it lives in SQL
--- rather than in the Edge Function for one reason: ATOMICITY. Requirements
--- section 17 demands that stock be re-checked "at the moment of confirmation",
--- and section 11 that a size which sold out mid-checkout cannot be ordered.
--- Reading stock in TypeScript and then writing it back leaves a window where
--- two customers both pass the check and both buy the last shirt. A single SQL
--- function runs in one transaction, and `for update` locks the stock rows for
--- the duration, so the second caller waits and then correctly fails.
+-- A Postgres function cannot be patched in place — `create or replace` takes
+-- the whole body — so this file now holds the LIVE definition and
+-- 20260829000002_place_order.sql is history. Edit this one.
 --
--- The Edge Function in supabase/functions/place-order does the field
--- validation and shapes the response; everything that touches money or stock
--- happens here.
---
--- WHAT THE CLIENT SENDS: product ids, sizes and quantities. Nothing else.
--- Prices, the delivery charge and the total are read from the database, never
--- from the request (requirements section 17).
+-- Two changes from that file, both marked below:
+--   * the insert names payment_method explicitly rather than leaning on the
+--     column default, so the value an order is written with is visible in the
+--     function that writes it rather than in a table definition three files
+--     away;
+--   * the result carries paymentMethod back, so the confirmation page states
+--     what the STORE recorded instead of the browser assuming it — the same
+--     reason it shows the server's total and not its own arithmetic.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.place_order(
@@ -52,6 +68,9 @@ declare
   v_order_number    text;
   v_review_token    uuid;
   v_line_count      integer := 0;
+  -- Section 9: cash on delivery is the only method in version one, and it is
+  -- decided HERE. Nothing in the request is consulted for it.
+  v_payment_method  public.payment_method := 'cod';
 begin
   if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
     raise exception 'EMPTY_CART' using errcode = 'check_violation';
@@ -80,6 +99,7 @@ begin
     id, order_number, status,
     full_name, email, phone, address, city, postal_code, notes,
     subtotal, delivery_charge, total,
+    payment_method,
     is_guest, user_id, review_token
   ) values (
     v_order_id, v_order_number, 'pending',
@@ -91,6 +111,7 @@ begin
     nullif(btrim(coalesce(p_customer ->> 'postalCode', '')), ''),
     nullif(btrim(coalesce(p_customer ->> 'notes', '')), ''),
     0, 0, 0,
+    v_payment_method,
     p_user_id is null, p_user_id, v_review_token
   );
 
@@ -174,7 +195,8 @@ begin
     'orderId', v_order_id,
     'orderNumber', v_order_number,
     'reviewToken', v_review_token,
-    'total', v_subtotal + v_delivery
+    'total', v_subtotal + v_delivery,
+    'paymentMethod', v_payment_method
   );
 end;
 $$;

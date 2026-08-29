@@ -198,6 +198,13 @@ Deno.serve(async (request: Request) => {
     userId = data?.user?.id ?? null;
   }
 
+  /**
+   * Only items and the customer are forwarded. There is deliberately no
+   * payment-method parameter: section 9 allows one method, and `place_order`
+   * writes it itself. A `paymentMethod` in the request body is ignored the same
+   * way a price is — a browser that could name how an order is paid could
+   * declare one paid (section 17).
+   */
   const { data, error } = await supabase.rpc("place_order", {
     p_items: items,
     p_customer: customer,
