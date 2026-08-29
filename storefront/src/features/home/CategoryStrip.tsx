@@ -2,82 +2,26 @@ import { Link } from "react-router-dom";
 
 import type { Category } from "@shared/types";
 import { Container } from "@/components/layout/Container";
-import { Image } from "@/components/ui/Image";
+import { buttonClasses } from "@/components/ui/Button";
 import { SectionHeading } from "@/components/ui/SectionHeading";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { CategoryTile, CategoryTileSkeleton } from "@/features/categories/CategoryTile";
+import { CATEGORIES } from "@/lib/routes";
 
 /**
- * The categories section (requirements sections 2 and 5).
+ * The categories section on the landing page (requirements sections 2 and 5).
  *
  * Laid out as an editorial bento: the first category takes a tall feature tile
  * and the rest stack beside it, so the grid reads as a considered lookbook
- * rather than three identical boxes. Each tile links into the products page
- * filtered by that category — the same URL the header navigation and the
- * filters in section 14 use.
+ * rather than three identical boxes. The tile itself lives in
+ * `features/categories/CategoryTile` and is shared with the /categories index —
+ * this component owns the LAYOUT, not the tile (section 18).
+ *
+ * The bento only has room for the first three categories, which is why it links
+ * on to the full index rather than growing a fourth row when the admin adds a
+ * category.
  */
 
-const CATEGORY_IMAGE = { width: 800, height: 1000 } as const;
-
-function CategoryTile({
-  category,
-  index,
-  feature,
-}: {
-  category: Category;
-  index: number;
-  feature: boolean;
-}) {
-  return (
-    <Link
-      to={`/products?category=${category.slug}`}
-      className={`group relative isolate overflow-hidden rounded-sm bg-canvas-deep ${
-        feature ? "sm:row-span-2" : ""
-      }`}
-    >
-      {category.thumb && (
-        <Image
-          src={category.thumb}
-          alt={`${category.name} at Velora Wears`}
-          width={CATEGORY_IMAGE.width}
-          height={CATEGORY_IMAGE.height}
-          className={`w-full object-cover transition duration-700 ease-brand group-hover:scale-[1.06] ${
-            feature ? "aspect-4/5 sm:h-full" : "aspect-16/10 sm:aspect-3/2"
-          }`}
-        />
-      )}
-
-      {/* Ink scrim, so the label stays readable over any image. */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-linear-to-t from-ink/80 via-ink/20 to-transparent transition duration-500 group-hover:from-ink/90"
-      />
-
-      <span className="absolute top-5 left-5 font-display text-xs text-canvas/60">
-        {String(index + 1).padStart(2, "0")}
-      </span>
-
-      <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-3 p-5 sm:p-6">
-        <div>
-          <h3 className={`text-canvas ${feature ? "text-3xl sm:text-4xl" : "text-2xl"}`}>
-            {category.name}
-          </h3>
-          <p className="mt-1.5 text-[0.625rem] tracking-eyebrow text-canvas/70 uppercase">
-            {category.productCount} {category.productCount === 1 ? "piece" : "pieces"}
-          </p>
-        </div>
-        <span className="flex items-center gap-2 text-[0.625rem] tracking-eyebrow text-accent-soft uppercase">
-          Shop
-          <span
-            aria-hidden="true"
-            className="inline-block transition duration-300 ease-brand group-hover:translate-x-1"
-          >
-            &rarr;
-          </span>
-        </span>
-      </div>
-    </Link>
-  );
-}
+const SHOWN = 3;
 
 export function CategoryStrip({
   categories,
@@ -86,6 +30,11 @@ export function CategoryStrip({
   categories: Category[] | undefined;
   loading: boolean;
 }) {
+  const shown = categories?.slice(0, SHOWN);
+
+  // Nothing to show — omit the section rather than leaving an empty heading.
+  if (!loading && (!shown || shown.length === 0)) return null;
+
   return (
     <section className="py-20 sm:py-28">
       <Container>
@@ -93,22 +42,32 @@ export function CategoryStrip({
           eyebrow="Shop by category"
           title="Three things you wear constantly"
           description="Shirts you can wear to work, hoodies for the cold months, and the plain essentials that quietly do the most work in a wardrobe."
+          action={
+            <Link
+              to={CATEGORIES}
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
+              All categories
+            </Link>
+          }
         />
 
         <div className="mt-12 grid gap-4 sm:auto-rows-fr sm:grid-cols-2">
           {loading
-            ? Array.from({ length: 3 }, (_, i) => (
-                <Skeleton
+            ? Array.from({ length: SHOWN }, (_, i) => (
+                <CategoryTileSkeleton
                   key={i}
-                  className={i === 0 ? "aspect-4/5 w-full sm:row-span-2" : "aspect-3/2 w-full"}
+                  variant={i === 0 ? "feature" : "compact"}
+                  className={i === 0 ? "sm:row-span-2" : ""}
                 />
               ))
-            : categories?.map((category, i) => (
+            : shown?.map((category, i) => (
                 <CategoryTile
                   key={category.slug}
                   category={category}
+                  variant={i === 0 ? "feature" : "compact"}
                   index={i}
-                  feature={i === 0}
+                  className={i === 0 ? "sm:row-span-2" : ""}
                 />
               ))}
         </div>
