@@ -59,6 +59,8 @@ export interface SiteImageInput {
   body?: string;
   ctaLabel?: string;
   ctaHref?: string;
+  cta2Label?: string;
+  cta2Href?: string;
   active?: boolean;
 }
 
@@ -73,6 +75,8 @@ function toRow(input: SiteImageInput) {
     body: nullable(input.body),
     cta_label: nullable(input.ctaLabel),
     cta_href: nullable(input.ctaHref),
+    cta2_label: nullable(input.cta2Label),
+    cta2_href: nullable(input.cta2Href),
     ...(input.active === undefined ? {} : { active: input.active }),
   };
 }

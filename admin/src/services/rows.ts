@@ -420,6 +420,8 @@ export interface SiteImageRow {
   body: string | null;
   cta_label: string | null;
   cta_href: string | null;
+  cta2_label: string | null;
+  cta2_href: string | null;
   position: number;
   active: boolean;
   created_at: string;
@@ -428,7 +430,7 @@ export interface SiteImageRow {
 
 export const SITE_IMAGE_COLUMNS =
   "id, slot, thumb_url, full_url, alt, width, height, eyebrow, title, body, " +
-  "cta_label, cta_href, position, active, created_at, updated_at";
+  "cta_label, cta_href, cta2_label, cta2_href, position, active, created_at, updated_at";
 
 export function toSiteImage(row: SiteImageRow): SiteImage {
   return {
@@ -444,6 +446,8 @@ export function toSiteImage(row: SiteImageRow): SiteImage {
     body: opt(row.body),
     ctaLabel: opt(row.cta_label),
     ctaHref: opt(row.cta_href),
+    cta2Label: opt(row.cta2_label),
+    cta2Href: opt(row.cta2_href),
     position: row.position,
     active: row.active,
     createdAt: epoch(row.created_at),

@@ -1,6 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-export type ButtonVariant = "primary" | "secondary" | "accent" | "ghost";
+export type ButtonVariant = "primary" | "secondary" | "accent" | "ghost" | "onDark";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const variants: Record<ButtonVariant, string> = {
@@ -11,6 +11,11 @@ const variants: Record<ButtonVariant, string> = {
   secondary: "bg-canvas text-ink border border-line-strong hover:bg-canvas-alt",
   accent: "bg-accent text-ink shadow-card hover:bg-accent-soft hover:shadow-lift",
   ghost: "text-ink hover:bg-canvas-alt",
+  // For the dark sections — the hero. `secondary` is a solid white pill, which
+  // next to the gold fill on a photograph reads as a second PRIMARY rather than
+  // a quieter alternative. A hairline pill in the canvas colour keeps the
+  // hierarchy the accent fill is there to establish.
+  onDark: "border border-canvas/35 text-canvas hover:border-canvas/70 hover:bg-canvas/10",
 };
 
 const sizes: Record<ButtonSize, string> = {
