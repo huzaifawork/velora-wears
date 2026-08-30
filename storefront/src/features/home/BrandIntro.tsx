@@ -26,20 +26,20 @@ const pillars = [
 
 export function BrandIntro() {
   return (
-    <section className="bg-brand py-20 text-canvas sm:py-24">
+    <section className="bg-band py-20 text-ink sm:py-24">
       <Container>
         {/* A left/right editorial split rather than a centered stack — the
             brand statement earns the left column, the pillar list is its
             own column rather than a row of three centered underneath it. */}
         <div className="grid gap-14 lg:grid-cols-[1fr_0.9fr] lg:gap-20">
           <div>
-            <LogoMark className="h-12 w-12 text-canvas" />
+            <LogoMark className="h-12 w-12 text-ink" />
             <SectionHeading
               className="mt-6"
               eyebrow="Who we are"
-              title={<span className="text-canvas">A Pakistani label for everyday clothes</span>}
+              title={<span className="text-ink">A Pakistani label for everyday clothes</span>}
               description={
-                <span className="text-canvas/70">
+                <span className="text-ink-soft">
                   Velora Wears started with a simple frustration: buying a plain shirt or a decent
                   hoodie online here usually means guessing at the fabric and hoping about the
                   fit. We make a small, tightly edited collection instead — shirts, winter layers
@@ -50,14 +50,14 @@ export function BrandIntro() {
             />
           </div>
 
-          <div className="flex flex-col gap-8 border-t border-canvas/15 pt-10 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-14">
+          <div className="flex flex-col gap-8 border-t border-band-line pt-10 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-14">
             {pillars.map((pillar, i) => (
               <div key={pillar.title}>
                 <p className="font-display text-sm text-accent">
                   {String(i + 1).padStart(2, "0")}
                 </p>
-                <h3 className="mt-3 text-xl text-canvas">{pillar.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed text-canvas/70">{pillar.body}</p>
+                <h3 className="mt-3 text-xl text-ink">{pillar.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-ink-soft">{pillar.body}</p>
               </div>
             ))}
           </div>
