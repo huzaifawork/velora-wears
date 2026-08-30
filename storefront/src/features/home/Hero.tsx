@@ -141,7 +141,13 @@ export function Hero({
             width={w}
             height={h}
             eager={i === 0}
-            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-brand ${
+            // Biased toward the top rather than dead-centre: these are
+            // portrait photographs of people, cropped wide for the banner,
+            // and centre-cropping a person shot tends to land on their
+            // chest rather than their face. `20%` keeps the face in frame
+            // on the tallest (narrowest) viewports without cutting heads
+            // off on the widest ones.
+            className={`absolute inset-0 h-full w-full object-cover object-[center_20%] transition-opacity duration-1000 ease-brand ${
               i === current ? "opacity-100" : "opacity-0"
             }`}
           />
