@@ -1,4 +1,11 @@
-import type { Category, Product, ProductSummary, Review, Settings } from "@shared/types";
+import type {
+  Category,
+  Product,
+  ProductSummary,
+  Review,
+  Settings,
+  SiteImage,
+} from "@shared/types";
 
 /**
  * The catalog read contract.
@@ -70,6 +77,28 @@ export interface CatalogSource {
   listReviews(productId: string, limit: number): Promise<Review[]>;
   /** Recent reviews for the landing page testimonials (sections 2 and 16). */
   listTestimonials(limit: number): Promise<Review[]>;
+  /**
+   * The featured strip on the landing page (requirements section 8).
+   *
+   * Added 2026-08-30, when the admin dashboard gained control of it. Before
+   * that the strip was "the newest eight", which is what BOTH implementations
+   * still fall back to when nothing has been marked featured — so a shop whose
+   * admin has not used the feature looks exactly as it did, rather than showing
+   * an empty section.
+   */
+  listFeatured(limit: number): Promise<ProductSummary[]>;
+  /**
+   * Admin-managed landing page imagery — the hero and the promo banners
+   * (requirements section 8).
+   *
+   * BOTH SLOTS IN ONE CALL, split by the page. The landing page needs both and
+   * they live in one table; two reads would be two round trips for one screen.
+   *
+   * An EMPTY array is the normal, valid answer, and every component that takes
+   * these keeps its own default image and copy. So the shop renders exactly as
+   * it always has until an admin uploads something.
+   */
+  listSiteImages(): Promise<SiteImage[]>;
 }
 
 /** Normalised the same way on both sources, and by the page that builds the URL. */

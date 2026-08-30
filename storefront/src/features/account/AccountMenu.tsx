@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { useAuth } from "@/features/account/AuthContext";
-import { ACCOUNT, SIGN_IN } from "@/lib/routes";
+import { ACCOUNT, ADMIN, SIGN_IN } from "@/lib/routes";
 
 /**
  * The account entry in the header — "add login/signup in the header", the
@@ -58,31 +58,44 @@ export function AccountMenu() {
  * (requirements section 15).
  */
 export function AccountMobileLink({ onNavigate }: { onNavigate: () => void }) {
-  const { status, user, signOut } = useAuth();
+  const { status, user, isAdmin, signOut } = useAuth();
 
   if (status === "loading") return null;
 
   if (status === "signed-in") {
     return (
-      <div className="flex items-center justify-between border-b border-line py-4 last:border-0">
-        <Link
-          to={ACCOUNT}
-          onClick={onNavigate}
-          className="text-xs font-medium tracking-eyebrow text-ink uppercase"
-        >
-          {user?.fullName || "Your account"}
-        </Link>
-        <button
-          type="button"
-          onClick={() => {
-            onNavigate();
-            void signOut();
-          }}
-          className="text-xs text-ink-soft underline underline-offset-4 transition hover:text-accent"
-        >
-          Sign out
-        </button>
-      </div>
+      <>
+        <div className="flex items-center justify-between border-b border-line py-4 last:border-0">
+          <Link
+            to={ACCOUNT}
+            onClick={onNavigate}
+            className="text-xs font-medium tracking-eyebrow text-ink uppercase"
+          >
+            {user?.fullName || "Your account"}
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              onNavigate();
+              void signOut();
+            }}
+            className="text-xs text-ink-soft underline underline-offset-4 transition hover:text-accent"
+          >
+            Sign out
+          </button>
+        </div>
+
+        {/* Only for the accounts that can open it — see `AccountPage`. */}
+        {isAdmin === true && (
+          <Link
+            to={ADMIN}
+            onClick={onNavigate}
+            className="block border-b border-line py-4 text-xs font-medium tracking-eyebrow text-accent uppercase last:border-0"
+          >
+            Store manager
+          </Link>
+        )}
+      </>
     );
   }
 

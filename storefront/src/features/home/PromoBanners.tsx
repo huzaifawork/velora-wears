@@ -1,21 +1,43 @@
 import { Link } from "react-router-dom";
 
+import type { SiteImage } from "@shared/types";
 import { Container } from "@/components/layout/Container";
 import { buttonClasses } from "@/components/ui/Button";
 import { categoryPath } from "@/lib/routes";
 import { Image } from "@/components/ui/Image";
 
 /**
- * Promotional banners (requirements section 2). Two editorial panels that push
- * into the two categories the brand actually wants to sell this season.
+ * Promotional banners (requirements section 2, now also section 8).
  *
- * The copy lives here rather than in the catalog: these are marketing slots the
- * brand edits, not product records the admin dashboard writes.
+ * Two editorial panels that push into the categories the brand wants to sell
+ * this season. They are marketing slots rather than product records — which is
+ * why the copy was written here rather than read from the catalog.
+ *
+ * ---------------------------------------------------------------------------
+ * THE ADMIN CAN NOW REPLACE THEM (section 8)
+ * ---------------------------------------------------------------------------
+ * `banners` is whatever the admin has uploaded into the `promo` slot. Upload
+ * nothing and this section renders the two panels below exactly as it always
+ * has; upload one and it replaces them; upload four and there are four. Each
+ * uploaded record's copy is optional and falls back to the DEFAULTS below
+ * position by position, so a photograph swap does not mean retyping a headline.
  */
 
 const BANNER_IMAGE = { width: 1200, height: 800 } as const;
 
-const banners = [
+interface Banner {
+  image: string;
+  alt: string;
+  eyebrow: string;
+  title: string;
+  body: string;
+  to: string;
+  cta: string;
+  /** True for an uploaded banner whose link may point outside the shop. */
+  external?: boolean;
+}
+
+const DEFAULT_BANNERS: Banner[] = [
   {
     image: "/banners/promo-shirts.webp",
     alt: "Velora Wears linen shirt in warm sand",
@@ -36,13 +58,39 @@ const banners = [
   },
 ];
 
-export function PromoBanners() {
+export function PromoBanners({ banners }: { banners?: SiteImage[] }) {
+  const uploaded = banners ?? [];
+
+  const shown: Banner[] =
+    uploaded.length > 0
+      ? uploaded.map((image, index) => {
+          // The default at the same position supplies anything the admin left
+          // empty, so an uploaded photograph with no words still reads as a
+          // finished panel rather than an untitled picture.
+          const fallback = DEFAULT_BANNERS[index % DEFAULT_BANNERS.length];
+          const href = image.ctaHref ?? fallback.to;
+
+          return {
+            image: image.full,
+            alt: image.alt ?? fallback.alt,
+            eyebrow: image.eyebrow ?? fallback.eyebrow,
+            title: image.title ?? fallback.title,
+            body: image.body ?? fallback.body,
+            to: href,
+            cta: image.ctaLabel ?? fallback.cta,
+            external: !href.startsWith("/"),
+          };
+        })
+      : DEFAULT_BANNERS;
+
   return (
     <section className="py-20 sm:py-24">
-      <Container className="grid gap-6 lg:grid-cols-2">
-        {banners.map((banner) => (
+      <Container
+        className={`grid gap-6 ${shown.length === 1 ? "" : "lg:grid-cols-2"}`}
+      >
+        {shown.map((banner) => (
           <article
-            key={banner.title}
+            key={`${banner.title}-${banner.image}`}
             className="group relative overflow-hidden rounded-sm bg-canvas-deep"
           >
             <Image
@@ -68,9 +116,26 @@ export function PromoBanners() {
               </h3>
               <p className="text-sm leading-relaxed text-canvas/80">{banner.body}</p>
               <div>
-                <Link to={banner.to} className={buttonClasses({ variant: "accent", size: "sm" })}>
-                  {banner.cta}
-                </Link>
+                {/* An uploaded banner may link anywhere; a path stays inside
+                    react-router, a full URL is a real anchor that leaves the
+                    shop. The admin only ever types where they want it to go. */}
+                {banner.external ? (
+                  <a
+                    href={banner.to}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={buttonClasses({ variant: "accent", size: "sm" })}
+                  >
+                    {banner.cta}
+                  </a>
+                ) : (
+                  <Link
+                    to={banner.to}
+                    className={buttonClasses({ variant: "accent", size: "sm" })}
+                  >
+                    {banner.cta}
+                  </Link>
+                )}
               </div>
             </div>
           </article>

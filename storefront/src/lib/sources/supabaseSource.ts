@@ -5,6 +5,7 @@ import type {
   ProductSummary,
   Review,
   Settings,
+  SiteImage,
   Size,
   SizeStock,
 } from "@shared/types";
@@ -404,6 +405,120 @@ async function listTestimonials(limit: number): Promise<Review[]> {
   return (data ?? []).map((row) => toReview(row as ReviewRow));
 }
 
+/* ---------------------------------------------------------------------------
+ * The landing page's admin-managed content (requirements section 8).
+ *
+ * Both reads below FALL BACK RATHER THAN THROW, and that is a deliberate
+ * decision about what a landing page should do when something is wrong.
+ *
+ * These two features are newer than the deployed schema — they need
+ * `20260830000001_admin_dashboard.sql`, which adds `products.featured` and the
+ * `site_images` table. A shop running the storefront against a database where
+ * that migration has not been applied yet would, without these fallbacks, show
+ * a hard error where its shop window ought to be. With them it shows the
+ * landing page it has always shown. The same catch covers the ordinary case of
+ * an admin who simply has not used the feature.
+ * ------------------------------------------------------------------------ */
+
+interface SiteImageRow {
+  id: string;
+  slot: SiteImage["slot"];
+  thumb_url: string;
+  full_url: string;
+  alt: string | null;
+  width: number | null;
+  height: number | null;
+  eyebrow: string | null;
+  title: string | null;
+  body: string | null;
+  cta_label: string | null;
+  cta_href: string | null;
+  position: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+function toSiteImage(row: SiteImageRow): SiteImage {
+  return {
+    id: row.id,
+    slot: row.slot,
+    thumb: row.thumb_url,
+    full: row.full_url,
+    alt: row.alt ?? undefined,
+    width: row.width ?? undefined,
+    height: row.height ?? undefined,
+    eyebrow: row.eyebrow ?? undefined,
+    title: row.title ?? undefined,
+    body: row.body ?? undefined,
+    ctaLabel: row.cta_label ?? undefined,
+    ctaHref: row.cta_href ?? undefined,
+    position: row.position,
+    active: row.active,
+    createdAt: epoch(row.created_at),
+    updatedAt: epoch(row.updated_at),
+  };
+}
+
+/**
+ * The featured strip, in the order the admin arranged it.
+ *
+ * One query over the `products_featured` partial index. When nothing is
+ * featured this falls through to the newest N — which is exactly what the strip
+ * showed before an admin could choose, so the section is never empty.
+ */
+async function listFeatured(limit: number): Promise<ProductSummary[]> {
+  const newest = () =>
+    listProducts({ inStockOnly: false, sort: "newest", limit });
+
+  try {
+    const { data, error } = await getSupabase()
+      .from("product_summaries")
+      .select(SUMMARY_COLUMNS)
+      .eq("active", true)
+      .eq("featured", true)
+      .order("featured_position", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) throw new Error(error.message);
+
+    const rows = (data ?? []).map(toSummary);
+    return rows.length > 0 ? rows : await newest();
+  } catch {
+    // Nothing featured, or a database that predates the column. Either way the
+    // landing page gets the strip it has always had.
+    return newest();
+  }
+}
+
+/**
+ * The hero images and the promo banners, active only, in display order.
+ *
+ * One request for both slots: the landing page needs them together and they
+ * live in one table, so splitting the read would be two round trips to draw one
+ * screen. Row level security already limits this to the active rows.
+ */
+async function listSiteImages(): Promise<SiteImage[]> {
+  try {
+    const { data, error } = await getSupabase()
+      .from("site_images")
+      .select(
+        "id, slot, thumb_url, full_url, alt, width, height, eyebrow, title, body, " +
+          "cta_label, cta_href, position, active, created_at, updated_at",
+      )
+      .eq("active", true)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) throw new Error(error.message);
+    return (data ?? []).map((row) => toSiteImage(row as unknown as SiteImageRow));
+  } catch {
+    // No table yet, or nothing uploaded. The landing page keeps its own art.
+    return [];
+  }
+}
+
 export const supabaseSource: CatalogSource = {
   listProducts,
   getProductBySlug,
@@ -412,4 +527,6 @@ export const supabaseSource: CatalogSource = {
   getSettings,
   listReviews,
   listTestimonials,
+  listFeatured,
+  listSiteImages,
 };

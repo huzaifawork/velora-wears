@@ -1,4 +1,11 @@
-import type { Category, Product, ProductSummary, Review, Settings } from "@shared/types";
+import type {
+  Category,
+  Product,
+  ProductSummary,
+  Review,
+  Settings,
+  SiteImage,
+} from "@shared/types";
 import {
   demoCategories,
   demoProducts,
@@ -102,6 +109,36 @@ async function listTestimonials(limit: number): Promise<Review[]> {
     .slice(0, limit);
 }
 
+/**
+ * The featured strip.
+ *
+ * The demo catalog has no admin and therefore nothing marked featured, so this
+ * is the newest N — exactly what the landing page showed before the featured
+ * feature existed. That is not a stub: it is the same fallback the live source
+ * applies when a real shop has not chosen anything yet, so demo mode and an
+ * un-configured live shop look the same, which is the point of this file.
+ */
+async function listFeatured(limit: number): Promise<ProductSummary[]> {
+  const rows = applyFilters(demoSummaries, {
+    inStockOnly: false,
+    sort: "newest",
+    limit,
+  });
+  return sortSummaries(clone(rows), "newest").slice(0, limit);
+}
+
+/**
+ * Admin-managed landing page imagery.
+ *
+ * Always EMPTY here, deliberately. There is no admin dashboard behind the demo
+ * catalog, and every component that reads these keeps its own committed default
+ * image and copy — so returning nothing is what makes demo mode render the
+ * landing page precisely as it did before this method existed.
+ */
+async function listSiteImages(): Promise<SiteImage[]> {
+  return [];
+}
+
 export const demoSource: CatalogSource = {
   listProducts,
   getProductBySlug,
@@ -110,4 +147,6 @@ export const demoSource: CatalogSource = {
   getSettings,
   listReviews,
   listTestimonials,
+  listFeatured,
+  listSiteImages,
 };
