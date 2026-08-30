@@ -141,13 +141,16 @@ export function Hero({
             width={w}
             height={h}
             eager={i === 0}
-            // Biased toward the top rather than dead-centre: these are
-            // portrait photographs of people, cropped wide for the banner,
-            // and centre-cropping a person shot tends to land on their
-            // chest rather than their face. `20%` keeps the face in frame
-            // on the tallest (narrowest) viewports without cutting heads
-            // off on the widest ones.
-            className={`absolute inset-0 h-full w-full object-cover object-[center_20%] transition-opacity duration-1000 ease-brand ${
+            // `object-contain`, not `object-cover`: this banner's shape
+            // changes a lot between a tall phone screen and a wide desktop
+            // window, and no single crop of a fixed photograph can fill
+            // both without cutting a very different part of it away each
+            // time -- which is exactly what read as "zoomed in." Containing
+            // shows the WHOLE uploaded photograph on every screen, full
+            // stop; the dark ground (`bg-ink` on the section, the scrim
+            // below) is what's behind it on wider or narrower screens where
+            // the photo's own aspect ratio doesn't fill every edge.
+            className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ease-brand ${
               i === current ? "opacity-100" : "opacity-0"
             }`}
           />
