@@ -53,11 +53,16 @@ row-level security is written around one function:
 create or replace function public.is_admin()
 returns boolean
 language sql stable security definer set search_path = public
-as $$ select exists (select 1 from public.admins where user_id = auth.uid()) $$;
+as $$ select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin') $$;
 ```
 
+> **Updated 2026-08-30** (`20260830000003_profile_roles.sql`): admin access moved from a
+> separate `admins` table onto `profiles.role`. The function above and every policy that calls
+> it are unaffected by the rename — nothing else in this document that says "the `admins`
+> table" is still literally true; read it as "`profiles.role = 'admin'`".
+
 Every admin-facing policy in the schema calls `is_admin()`. A signed-in Supabase Auth user
-whose `id` exists in the `admins` table can read and write everything the dashboard needs,
+whose `profiles.role` is `'admin'` can read and write everything the dashboard needs,
 through the ordinary anon/authenticated Supabase client — **no service role key, no server
 of your own, required for CRUD.** (Order *placement* is the one exception — see section 4.)
 
@@ -65,7 +70,7 @@ of your own, required for CRUD.** (Order *placement* is the one exception — se
 Admin's browser (whatever framework you choose)
    |
    +-- supabase-js, signs in via Supabase Auth
-   |     the signed-in user's id must be in `admins` (see section 6 to add yourself)
+   |     the signed-in user's profiles.role must be 'admin' (see section 6 to add yourself)
    |
    +-- supabase-js, authenticated client --read/write--> Postgres (via PostgREST)
    |     RLS policies check is_admin() and allow full CRUD on products,
@@ -88,7 +93,7 @@ you add something that must run with elevated privilege beyond what `is_admin()`
 This is the part worth reading closely — several things that would normally be your work are
 already done, because the storefront's own build touched them first.
 
-- **`is_admin()` and the `admins` table** — see section 2. Add yourself with one `insert` (see
+- **`is_admin()` and `profiles.role`** — see section 2. Promote yourself with one `update` (see
   section 6).
 - **`product_summaries` is a database VIEW**, not a table you write to. `in_stock` /
   `low_stock` / `total_stock` are summed live from `product_sizes`; `rating_avg` /
@@ -273,10 +278,9 @@ A (wearvelora84@gmail.com) for:
   auth flow your dashboard implements and Developer A (or you, with `SUPABASE_ACCESS_TOKEN`)
   runs:
   ```sql
-  insert into public.admins (user_id, email)
-  values ('<your-uuid-from-auth.users>', 'you@example.com');
+  update public.profiles set role = 'admin' where id = '<your-uuid-from-auth.users>';
   ```
-  Nothing you build works until your account exists in `admins` — every write and every
+  Nothing you build works until your `profiles.role` is `'admin'` — every write and every
   admin-only read is gated on `is_admin()`.
 - **You do not need the service role key** for anything described in this document. If you
   find yourself thinking you do, stop and ask first — it very likely means the right answer is
@@ -370,9 +374,13 @@ reviews                id, product_id (FK), order_id (FK, nullable), rating (1-5
                       submit-review Edge Function — you never need to insert one, only
                       moderate (hidden) or delete.
 
-admins                 user_id (PK, FK auth.users), email, created_at
-                      RLS: you can read the list (to see fellow admins); nobody can self-
-                      insert — Developer A or a session with SUPABASE_ACCESS_TOKEN adds rows.
+profiles.role          text enum ('user','admin') on the customer_profiles table (section 8
+                      below has the full shape). RLS: you can read every profile, including
+                      the role column, to see fellow admins; the column has no UPDATE grant
+                      for anon/authenticated at all — only a session with
+                      SUPABASE_ACCESS_TOKEN (or the Table Editor) can promote an account.
+                      (The old, separate `admins` table this section used to describe was
+                      retired 2026-08-30 — see `20260830000003_profile_roles.sql`.)
 
 rate_limits            internal to the storefront's two Edge Functions. Not yours to read or
                       write; RLS has no policies for it at all (closed to every client).

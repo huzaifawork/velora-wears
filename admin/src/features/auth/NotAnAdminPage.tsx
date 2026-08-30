@@ -61,17 +61,17 @@ export function NotAnAdminPage() {
 
           <p className="mt-4 text-sm leading-relaxed text-ink-soft">
             If you are supposed to be here: every screen in the dashboard reads
-            and writes through row level security, and those policies check that
-            your user id exists in the{" "}
-            <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">admins</code>{" "}
-            table. Until it does, nothing will load — that is the database
-            protecting the shop, not a fault in the dashboard. An existing
-            administrator can grant access by running:
+            and writes through row level security, and those policies check
+            that your <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">profiles</code>{" "}
+            row has <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">role = &apos;admin&apos;</code>.
+            Until it does, nothing will load — that is the database protecting
+            the shop, not a fault in the dashboard. Set it from the Supabase
+            Table Editor, or run:
           </p>
 
           <pre className="mt-3 overflow-x-auto rounded-lg bg-brand-deep p-4 text-xs leading-relaxed text-white/85">
-            {`insert into public.admins (user_id, email)
-values ('<your-user-id>', '<your-email>');`}
+            {`update public.profiles set role = 'admin'
+where id = '<your-user-id>';`}
           </pre>
 
           {identifier && (

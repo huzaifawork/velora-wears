@@ -34,7 +34,7 @@ import { hasSupabaseConfig } from "@/lib/env";
  * ---------------------------------------------------------------------------
  * Added 2026-08-30, when the admin dashboard was merged into this application
  * so that both halves could share ONE sign-in. An administrator is not a second
- * kind of account — they are a customer whose user id is in the `admins` table
+ * kind of account — they are a customer whose `profiles.role` is `'admin'`
  * — so the same provider that holds the session holds the answer.
  *
  * The check is `is_admin()`, the same function the database's own policies
@@ -52,8 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    *
    * A JWT can carry claims, and this project puts none in it — deliberately. A
    * claim minted at sign-in is a second copy of the truth that goes stale the
-   * moment somebody is added to or removed from `admins`, and it would have to
-   * be kept in step with a table that the database is already reading directly.
+   * moment somebody's `role` is changed on `profiles`, and it would have to
+   * be kept in step with a column the database is already reading directly.
    *
    * A failure resolves to `false` rather than throwing: the honest reading of
    * "we could not establish that you are an administrator" is that the

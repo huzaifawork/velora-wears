@@ -90,13 +90,13 @@ to `supabase` once real products exist in the database — the admin dashboard i
 them. **The live database is deliberately empty; mock data is never written to it.**
 
 The dashboard needs `supabase/migrations/20260830000001_admin_dashboard.sql` applied, and your
-Supabase Auth user id present in the `admins` table. See [`admin/README.md`](admin/README.md).
+Supabase Auth account's `profiles.role` set to `'admin'`. See [`admin/README.md`](admin/README.md).
 
 ## Signing in
 
 **There is one sign-in form**, at `/account/sign-in`, and one kind of account. An
-administrator is a customer account whose user id appears in the `admins` table — so the same
-email and password that buy a hoodie open the dashboard, if that row exists.
+administrator is a customer account whose `profiles.role` is `'admin'` — so the same
+email and password that buy a hoodie open the dashboard, if that's set.
 
 After a successful sign-in the app asks the database `is_admin()` and routes on the answer:
 an administrator lands on `/admin`, everyone else on their account (or on `?next=`, if they

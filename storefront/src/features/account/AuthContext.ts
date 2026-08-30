@@ -50,7 +50,7 @@ export interface AuthApi {
    * THERE IS ONE KIND OF ACCOUNT, NOT TWO
    * ---------------------------------------------------------------------------
    * An administrator is not a separate login. They are an ordinary customer
-   * account whose user id happens to appear in the `admins` table — so the same
+   * account whose `profiles.role` happens to be `'admin'` — so the same
    * form signs in both, and this flag is the only thing that differs
    * afterwards. That is why there is one sign-in page in this project and not
    * two: two forms would mean two ways to be wrong about which one to use, and
@@ -93,8 +93,9 @@ export interface AuthApi {
   /**
    * Re-ask the database whether this account is an administrator.
    *
-   * For exactly one situation: somebody has just been added to `admins` in
-   * another window and wants in without signing out and back in.
+   * For exactly one situation: somebody's `profiles.role` was just set to
+   * `'admin'` in another window and they want in without signing out and back
+   * in.
    */
   recheckAdmin: () => Promise<void>;
   /**

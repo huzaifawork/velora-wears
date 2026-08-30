@@ -69,6 +69,20 @@ demo mode, clearly marked `DEMO-` so it can never be mistaken for a real one.
 > it just builds the same commit a second time. The client's link never changes, so every
 > section lands on the same URL: <https://velora-wears.vercel.app>
 
+> **2026-08-30, later the same day — admin access reconciled.** The live database already had
+> a `user_role` enum and `profiles.role`, with `is_admin()` re-pointed at it and the old
+> `admins` table dropped — done by hand, directly against the project, with no migration and no
+> note here. `20260830000003_profile_roles.sql` writes that change down (idempotent — it is a
+> no-op against the live project, a real change on a fresh one), and every place in `admin/`,
+> `storefront/` and the docs that still said "the `admins` table" now says `profiles.role`. An
+> admin account for Huzaifa (`mhuzaifatariq7@gmail.com`) was created and promoted (`role =
+> 'admin'`), verified end to end — signed in, `is_admin()` returned `true`. **Promoting anyone
+> to admin is still not something either application can do to itself:** `role` has no UPDATE
+> grant for `anon`/`authenticated`, only a direct database edit (Table Editor or SQL) can set
+> it, same as `admins` required. **Next:** real products still need to exist before
+> `VITE_DATA_SOURCE` can flip off `demo` — Huzaifa is adding them himself through the now-usable
+> admin dashboard rather than the catalog being seeded with invented data.
+
 ---
 
 ## 1. The project

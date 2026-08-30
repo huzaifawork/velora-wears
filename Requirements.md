@@ -869,5 +869,5 @@ Because the two applications share one database, the boundary between them must 
   is now impossible.
 - **The admin dashboard must write both image variants** (`thumb_url` and `full_url`) when
   uploading product images, per section 19.
-- Admin write access is granted through Supabase Auth: the admin's user id must exist in the
-  `admins` table. Row level security checks it via the `is_admin()` function.
+- Admin write access is granted through Supabase Auth: the admin's `profiles.role` must be
+  `'admin'`. Row level security checks it via the `is_admin()` function.

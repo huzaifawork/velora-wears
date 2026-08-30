@@ -8,8 +8,8 @@
  * nothing about their real cause:
  *
  *   - a `42501` / "new row violates row-level security policy" almost always
- *     means the signed-in account is not in the `admins` table, not that
- *     anything is wrong with the data;
+ *     means the signed-in account's `profiles.role` is not `'admin'`, not
+ *     that anything is wrong with the data;
  *   - a foreign key violation on `products_category_slug_fkey` means "that
  *     category was deleted while this form was open".
  *
@@ -53,7 +53,7 @@ export function describeError(value: unknown): string {
     error.code === "42501" ||
     /row-level security|violates row level security/i.test(raw)
   ) {
-    return "Your account is not permitted to make this change. An administrator has to add your user id to the `admins` table before the dashboard can write anything.";
+    return "Your account is not permitted to make this change. An administrator has to set your profiles.role to 'admin' before the dashboard can write anything.";
   }
 
   // A unique or foreign key violation, matched on the constraint name that

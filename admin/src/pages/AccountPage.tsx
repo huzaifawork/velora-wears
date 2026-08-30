@@ -21,11 +21,11 @@ import { Skeleton } from "@admin/components/ui/Skeleton";
  *     project can offer, since a reset-by-email flow needs an email provider
  *     the project does not have configured (the storefront has the same gap,
  *     for the same reason).
- *  3. WHO ELSE can manage the shop, read from the `admins` table. The list is
- *     readable by an admin and writable by nobody through this application:
- *     granting access is a database insert, deliberately, so that the ability
- *     to create administrators is not itself something a compromised admin
- *     session can do.
+ *  3. WHO ELSE can manage the shop, read from `profiles` where `role =
+ *     'admin'`. The list is readable by an admin and writable by nobody
+ *     through this application: granting access is a database edit,
+ *     deliberately, so that the ability to create administrators is not
+ *     itself something a compromised admin session can do.
  */
 export function AccountPage() {
   const { user, signOut } = useAuth();
@@ -63,8 +63,9 @@ export function AccountPage() {
 
           <p className="mt-5 border-t border-line pt-4 text-xs leading-relaxed text-ink-muted">
             Everything you can do here is decided by the database, not by this
-            page: your user id is in the <code>admins</code> table, and every
-            policy in the schema checks it before allowing a read or a write.
+            page: your <code>profiles</code> row has <code>role = &apos;admin&apos;</code>,
+            and every policy in the schema checks that before allowing a read
+            or a write.
           </p>
         </Card>
 
@@ -115,12 +116,12 @@ export function AccountPage() {
           <div className="mt-5 rounded-lg border border-line bg-surface-raised p-4">
             <p className="text-sm leading-relaxed text-ink-soft">
               Administrators cannot be added or removed from this dashboard, on
-              purpose. Access is a row in the <code>admins</code> table, written
-              directly against the database:
+              purpose. Access is the <code>role</code> column on their{" "}
+              <code>profiles</code> row, written directly against the database:
             </p>
             <pre className="mt-3 overflow-x-auto rounded-lg bg-brand-deep p-3 text-xs leading-relaxed text-white/85">
-              {`insert into public.admins (user_id, email)
-values ('<their-user-id>', '<their-email>');`}
+              {`update public.profiles set role = 'admin'
+where id = '<their-user-id>';`}
             </pre>
             <p className="mt-3 text-xs leading-relaxed text-ink-muted">
               Keeping it there means that gaining an admin session is not the

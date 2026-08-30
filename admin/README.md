@@ -35,7 +35,7 @@ only one in the project:
                 /admin      /account (or ?next=)
 ```
 
-An administrator **is a customer account** whose user id appears in the `admins` table.
+An administrator **is a customer account** whose `profiles` row has `role = 'admin'`.
 Same email, same password, same form. The only thing that differs afterwards is where they
 land and what the database will let them do.
 
@@ -52,8 +52,7 @@ every write is refused, because `is_admin()` is evaluated by Postgres (requireme
 ### You cannot use it until your account is an admin
 
 ```sql
-insert into public.admins (user_id, email)
-values ('<the-uuid-from-auth.users>', 'admin@example.com');
+update public.profiles set role = 'admin' where id = '<the-uuid-from-auth.users>';
 ```
 
 Sign in first; if you are not an admin the screen shows your user id with a copy button.
