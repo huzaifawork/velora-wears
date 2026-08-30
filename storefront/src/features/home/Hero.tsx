@@ -114,6 +114,23 @@ export function Hero({
   const title = hasUpload ? slide?.title : DEFAULT_TITLE;
   const body = hasUpload ? slide?.body : DEFAULT_BODY;
 
+  /**
+   * The shape of the banner — see the long note on the stage in the markup
+   * below. The TALLEST slide wins (the smallest width/height), so a set of
+   * mixed-shape uploads all fit whole rather than the widest one deciding
+   * the box and cropping the rest. Slides that record no dimensions fall
+   * back to the bootstrap image's, which is the same thing the `<Image>`
+   * below does for them.
+   */
+  const stage = (hasUpload ? uploaded : []).reduce<{ width: number; height: number }>(
+    (tallest, option) => {
+      const width = option.width ?? DEFAULT_IMAGE.width;
+      const height = option.height ?? DEFAULT_IMAGE.height;
+      return height / width > tallest.height / tallest.width ? { width, height } : tallest;
+    },
+    { width: DEFAULT_IMAGE.width, height: DEFAULT_IMAGE.height },
+  );
+
   const promises = [
     "Cash on delivery",
     threshold ? `Free delivery over ${formatPrice(threshold)}` : "Nationwide delivery",
@@ -124,65 +141,78 @@ export function Hero({
 
   return (
     <section className="relative isolate overflow-hidden bg-ink">
-      {/* Every slide's photograph is stacked and crossfaded by opacity —
-          simpler and smoother than mounting/unmounting, and it means the
-          NEXT slide's image is already decoded before it needs to be seen.
-          ---------------------------------------------------------------
-          TWO COPIES OF THE SAME PHOTO, NOT ONE
-          ---------------------------------------------------------------
-          `object-cover` alone cropped the photo differently (and too far)
-          on a tall phone screen than on a wide desktop window — reading as
-          "zoomed in." `object-contain` alone fixed that but left flat empty
-          bars either side, which read as broken. This is the standard fix
-          for a banner whose shape doesn't match its photograph: a blurred,
-          scaled-up copy of the SAME image fills the section edge to edge
-          (so there is never empty space), and the real, complete,
-          UNCROPPED photo sits on top of it, contained. Same `src`, so the
-          second copy costs no extra network request — only a second
-          decode of an image the browser already has. */}
-      {(hasUpload ? uploaded : [null]).map((option, i) => {
-        const src = option?.full ?? DEFAULT_IMAGE.src;
-        const alt = option?.alt ?? DEFAULT_IMAGE.alt;
-        const w = option?.width ?? DEFAULT_IMAGE.width;
-        const h = option?.height ?? DEFAULT_IMAGE.height;
-        const eager = i === 0;
+      {/*
+        THE BANNER TAKES THE PHOTOGRAPH'S SHAPE — the photograph is not
+        forced into the banner's.
 
-        return (
-          <div
-            key={option?.id ?? "default"}
-            className={`absolute inset-0 transition-opacity duration-1000 ease-brand ${
-              i === current ? "opacity-100" : "opacity-0"
-            }`}
-          >
+        This used to be a fixed `86vh`/`90vh` tall box, which is what made
+        every attempt at fitting the image look wrong: a wide photograph in
+        a viewport-tall box has to be blown up to cover it (the "zoomed in"
+        crop) or sit in it with empty bars. Neither is fixable by changing
+        how the image fits, because the box was the wrong shape to begin
+        with.
+
+        So the stage below is given the ASPECT RATIO OF THE IMAGE ITSELF,
+        inline, from the dimensions the admin's upload recorded. The photo
+        then fills it exactly — edge to edge, no crop, no bars, at every
+        width — and the section is as tall as a full-width photograph of
+        that shape naturally is.
+
+        The ratio is taken from the TALLEST slide (smallest width/height)
+        so that a set of mixed-shape uploads all still fit whole; with a
+        uniform set, which is the normal case, it is simply their shared
+        ratio. It's fixed for the whole carousel rather than per-slide, so
+        the page never jumps height mid-rotation.
+      */}
+      <div className="relative w-full" style={{ aspectRatio: `${stage.width} / ${stage.height}` }}>
+        {/* Every slide's photograph is stacked and crossfaded by opacity —
+            simpler and smoother than mounting/unmounting, and it means the
+            NEXT slide's image is already decoded before it needs to be
+            seen. `object-contain` guarantees the whole photograph is
+            visible even for an odd-shaped upload the stage ratio could not
+            match exactly. */}
+        {(hasUpload ? uploaded : [null]).map((option, i) => {
+          const src = option?.full ?? DEFAULT_IMAGE.src;
+          const alt = option?.alt ?? DEFAULT_IMAGE.alt;
+          const w = option?.width ?? DEFAULT_IMAGE.width;
+          const h = option?.height ?? DEFAULT_IMAGE.height;
+
+          return (
             <Image
-              src={src}
-              alt=""
-              width={w}
-              height={h}
-              eager={eager}
-              className="absolute inset-0 h-full w-full scale-110 object-cover object-center opacity-60 blur-2xl saturate-75"
-            />
-            <Image
+              key={option?.id ?? "default"}
               src={src}
               alt={alt}
               width={w}
               height={h}
-              eager={eager}
-              className="relative h-full w-full object-contain"
+              eager={i === 0}
+              className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ease-brand ${
+                i === current ? "opacity-100" : "opacity-0"
+              }`}
             />
-          </div>
-        );
-      })}
+          );
+        })}
 
-      {/* Bottom-up scrim so the overlaid copy stays legible over ANY
-          uploaded photograph, not just the ones dark enough at the bottom
-          on their own. */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 bg-linear-to-t from-ink via-ink/35 to-ink/5"
-      />
+        {/* The scrim only exists where the copy actually sits ON the
+            photograph. Below `lg` the copy is its own block underneath, so
+            darkening the picture there would dim it for no reason. */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 hidden bg-linear-to-t from-ink via-ink/40 to-transparent lg:block"
+        />
+      </div>
 
-      <Container className="relative flex min-h-[86vh] flex-col justify-end pt-32 pb-16 sm:min-h-[90vh] sm:pb-20 lg:pb-24">
+      {/*
+        The copy: a block beneath the photograph on phones and tablets,
+        lifted onto it as an overlay from `lg` up.
+
+        ONE element, positioned two ways — not two copies of the markup.
+        A full-width photograph on a narrow screen is only a few hundred
+        pixels tall, which cannot hold a headline and two buttons legibly,
+        so on a phone the words belong under the picture rather than
+        squeezed over it. On a wide screen there is room, and the overlay
+        is what makes it read as a banner.
+      */}
+      <Container className="relative pt-10 pb-14 lg:absolute lg:inset-x-0 lg:bottom-0 lg:pt-0 lg:pb-20">
         {/* `key` restarts the rise-in animation on every slide change, which
             reads as the copy changing WITH the photograph rather than a
             static caption sitting over a background that happens to move. */}
@@ -239,12 +269,15 @@ export function Hero({
         </div>
 
         {/* Slide dots — only when there is more than one to choose between.
-            A click both jumps the slide and restarts the auto-advance timer
-            (the effect above re-runs from `SLIDE_MS` because `index` isn't
-            one of its dependencies — it always counts from the last change,
+            They sit in the flow under the copy on a phone and move to the
+            right-hand end of the same row from `lg`, which is where the
+            copy becomes an overlay and there is room beside it. A click
+            both jumps the slide and restarts the auto-advance timer (the
+            effect above re-runs from `SLIDE_MS` because `index` isn't one
+            of its dependencies — it always counts from the last change,
             manual or automatic). */}
         {uploaded.length > 1 && (
-          <div className="mt-10 flex items-center gap-2 sm:absolute sm:right-8 sm:bottom-8 sm:mt-0 lg:right-12 lg:bottom-12">
+          <div className="mt-8 flex items-center gap-2 lg:absolute lg:right-8 lg:bottom-20 lg:mt-0">
             {uploaded.map((option, i) => (
               <button
                 key={option.id}
