@@ -17,12 +17,12 @@ import { HOME } from "@/lib/routes";
  * session. That is not a hole — row level security refuses every read and every
  * write to them regardless — but it does mean this screen is reached by
  * ordinary customers who followed a link, as well as by administrators-to-be
- * whose row has not been added yet.
+ * whose role is still `user`.
  *
  * So it says two things at once, and neither is an error message: the shop is
  * that way, and if you are supposed to be here, this is the statement that
- * grants it. The user id is shown because the SQL needs precisely that value,
- * and nothing else on this screen could tell them what it is.
+ * grants it — pre-filled with their own email, because that is what the
+ * statement needs and retyping it is where a typo would come from.
  *
  * A 404 would have been easier and would have been wrong: it would tell an
  * administrator whose access has not been granted yet that the dashboard does
@@ -62,16 +62,28 @@ export function NotAnAdminPage() {
           <p className="mt-4 text-sm leading-relaxed text-ink-soft">
             If you are supposed to be here: every screen in the dashboard reads
             and writes through row level security, and those policies check that
-            your user id exists in the{" "}
-            <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">admins</code>{" "}
-            table. Until it does, nothing will load — that is the database
-            protecting the shop, not a fault in the dashboard. An existing
-            administrator can grant access by running:
+            your account&rsquo;s{" "}
+            <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">role</code>{" "}
+            is <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">admin</code>.
+            Every account starts as a{" "}
+            <code className="rounded bg-surface-sunken px-1 py-0.5 text-xs">user</code>.
+            Until yours is changed, nothing here will load — that is the database
+            protecting the shop, not a fault in the dashboard.
+          </p>
+
+          <p className="mt-4 text-sm leading-relaxed text-ink-soft">
+            {/*
+              The SQL editor, not this dashboard, and not by an admin through
+              the API — `guard_profile_role` refuses a role change from any
+              signed-in session. Whoever owns the Supabase project runs:
+            */}
+            Whoever owns the Supabase project can grant it from the SQL editor:
           </p>
 
           <pre className="mt-3 overflow-x-auto rounded-lg bg-brand-deep p-4 text-xs leading-relaxed text-white/85">
-            {`insert into public.admins (user_id, email)
-values ('<your-user-id>', '<your-email>');`}
+            {`update public.profiles
+   set role = 'admin'
+ where email = '${user?.email ?? "<your-email>"}';`}
           </pre>
 
           {identifier && (

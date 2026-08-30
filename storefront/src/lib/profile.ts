@@ -24,6 +24,7 @@ import type { Profile } from "@shared/types";
 
 interface ProfileRow {
   id: string;
+  role: Profile["role"];
   email: string | null;
   full_name: string | null;
   phone: string | null;
@@ -31,11 +32,12 @@ interface ProfileRow {
   updated_at: string;
 }
 
-const COLUMNS = "id, email, full_name, phone, created_at, updated_at";
+const COLUMNS = "id, role, email, full_name, phone, created_at, updated_at";
 
 function toProfile(row: ProfileRow): Profile {
   return {
     id: row.id,
+    role: row.role,
     email: row.email ?? undefined,
     fullName: row.full_name ?? undefined,
     phone: row.phone ?? undefined,

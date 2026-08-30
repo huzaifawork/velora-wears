@@ -21,6 +21,11 @@ import { DEFAULT_PAGE_SIZE } from "@admin/services/products";
  *    grants update on those two columns to the account that owns the row and to
  *    nobody else — an admin cannot rewrite a person's own details, which is
  *    correct and is also the reason there is no edit form on this screen.
+ *  - A customer's ROLE is shown here and cannot be changed from here. The
+ *    database refuses any role change made from a session that has an
+ *    `auth.uid()`, which is every request this dashboard can make — so an admin
+ *    session cannot promote anybody, including itself. Roles are changed in the
+ *    Supabase SQL or table editor by whoever owns the project.
  *
  * So this is a directory: who has an account, how to reach them, and what they
  * have bought.
@@ -54,6 +59,7 @@ function escapeLike(term: string): string {
 
 interface CustomerRow {
   id: string;
+  role: CustomerSummary["role"];
   email: string | null;
   full_name: string | null;
   phone: string | null;
@@ -64,11 +70,12 @@ interface CustomerRow {
 }
 
 const COLUMNS =
-  "id, email, full_name, phone, created_at, order_count, total_spent, last_order_at";
+  "id, role, email, full_name, phone, created_at, order_count, total_spent, last_order_at";
 
 function toCustomer(row: CustomerRow): CustomerSummary {
   return {
     id: row.id,
+    role: row.role,
     email: row.email ?? undefined,
     fullName: row.full_name ?? undefined,
     phone: row.phone ?? undefined,

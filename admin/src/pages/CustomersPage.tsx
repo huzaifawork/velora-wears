@@ -71,11 +71,16 @@ export function CustomersPage() {
       primary: true,
       cell: (customer) => (
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-ink">
-            {customer.fullName || (
-              <span className="text-ink-muted italic">No name given</span>
-            )}
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="truncate text-sm font-medium text-ink">
+              {customer.fullName || (
+                <span className="text-ink-muted italic">No name given</span>
+              )}
+            </p>
+            {/* Shown, not editable. The database refuses a role change from any
+                signed-in session — see `services/admins.ts`. */}
+            {customer.role === "admin" && <Badge tone="accent">Administrator</Badge>}
+          </div>
           <p className="mt-0.5 truncate text-xs text-ink-muted">{customer.email}</p>
         </div>
       ),

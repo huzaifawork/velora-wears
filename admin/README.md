@@ -35,28 +35,45 @@ only one in the project:
                 /admin      /account (or ?next=)
 ```
 
-An administrator **is a customer account** whose user id appears in the `admins` table.
-Same email, same password, same form. The only thing that differs afterwards is where they
-land and what the database will let them do.
+An administrator **is a customer account** whose `profiles.role` is `'admin'`. Same email,
+same password, same form. The only thing that differs afterwards is where they land and what
+the database will let them do.
 
 - Signed out at `/admin` → sent to the sign-in form with `?next=`, and returned here after.
 - Signed in but not an admin → [`NotAnAdminPage`](src/features/auth/NotAnAdminPage.tsx),
   which points at the shop and, for someone who *should* be an admin, prints the exact SQL
-  and their user id.
+  pre-filled with their own email.
 - Signed out anywhere → signed out of both. There was only ever one session.
 
 **The guard decides what to render. It is not the security.** Row level security is: anyone
 who defeated the client-side check would reach screens where every read returns zero rows and
 every write is refused, because `is_admin()` is evaluated by Postgres (requirements §25).
 
-### You cannot use it until your account is an admin
+### Roles
+
+Every account is created with `profiles.role = 'user'`. Promotion is one column:
 
 ```sql
-insert into public.admins (user_id, email)
-values ('<the-uuid-from-auth.users>', 'admin@example.com');
+-- make someone an administrator
+update public.profiles set role = 'admin' where email = 'them@example.com';
+
+-- and back to an ordinary customer
+update public.profiles set role = 'user'  where email = 'them@example.com';
 ```
 
-Sign in first; if you are not an admin the screen shows your user id with a copy button.
+**Run it in the Supabase SQL editor** — not from either application. `guard_profile_role`
+refuses any role change made from a session that has an `auth.uid()`, and `role` is outside
+the column grant that lets a customer edit their own name and phone. So an admin session
+cannot promote anybody, including itself: taking over an administrator's browser must not be
+the same as gaining the ability to create administrators.
+
+A promoted account picks it up on its **next sign-in** — the app asks `is_admin()` once per
+session, not per page. Faster: the "check again" button on the screen they land on at
+`/admin`, which re-asks without signing out.
+
+A demotion is instant where it counts. Their browser may keep rendering the dashboard until
+they reload, but every read returns nothing and every write is refused from the moment the
+column changes, because Postgres evaluates `is_admin()` per statement.
 
 ---
 
@@ -99,6 +116,11 @@ It also needs [`../supabase/migrations/20260830000002_customer_profiles.sql`](..
 which adds `public.profiles` — one row per customer account, created by a trigger on
 `auth.users` at sign-up — plus the `customer_summaries` view behind the Customers screen.
 
+And [`../supabase/migrations/20260830000003_profile_roles.sql`](../supabase/migrations/20260830000003_profile_roles.sql),
+which moves authorization onto `profiles.role` (default `'user'`), repoints `is_admin()` at
+it, guards the column against changes from any signed-in session, and **drops the old
+`admins` table** after carrying its rows across.
+
 Until it is applied the dashboard's screens will error, and the storefront will fall back to
 its previous behaviour — deliberately: `listFeatured` and `listSiteImages` in
 `storefront/src/lib/sources/supabaseSource.ts` both catch and degrade to the shop's own art,
@@ -122,6 +144,9 @@ so a landing page never breaks because a migration has not landed yet.
 | **Featured products** | §8 — choose and order the landing page strip |
 | **Hero & banners** | §8 — upload the landing page's hero images and promotional banners |
 | **Account** | Who is signed in, password change, who else is an admin |
+
+Roles are shown throughout (a badge on the Customers list, the administrator list on Account)
+and are editable nowhere — see **Roles** above.
 
 ---
 

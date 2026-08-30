@@ -94,9 +94,18 @@ Supabase Auth user id present in the `admins` table. See [`admin/README.md`](adm
 
 ## Signing in
 
-**There is one sign-in form**, at `/account/sign-in`, and one kind of account. An
-administrator is a customer account whose user id appears in the `admins` table — so the same
-email and password that buy a hoodie open the dashboard, if that row exists.
+**There is one sign-in form**, at `/account/sign-in`, and one kind of account. Every sign-up
+creates a profile with `role = 'user'`; an administrator is the same account with
+`role = 'admin'` — so the same email and password that buy a hoodie open the dashboard, once
+the shop's owner changes that one column.
+
+```sql
+update public.profiles set role = 'admin' where email = 'them@example.com';
+```
+
+Run that in the Supabase SQL editor. Neither application can change a role: the column is
+outside the customer's update grant, and a trigger refuses any change made from a signed-in
+session — so an admin session cannot mint another admin.
 
 After a successful sign-in the app asks the database `is_admin()` and routes on the answer:
 an administrator lands on `/admin`, everyone else on their account (or on `?next=`, if they

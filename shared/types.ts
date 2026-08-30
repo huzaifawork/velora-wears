@@ -268,9 +268,33 @@ export interface Review {
  * Guest checkout (requirements section 7) creates none of this. A guest has no
  * account and no profile, and orders exactly as they always have.
  */
+/**
+ * What an account may do.
+ *
+ * Every sign-up is a `user`. `admin` is granted by the shop's owner from the
+ * Supabase SQL or table editor — deliberately NOT from either application: an
+ * admin session that could create more admins would mean taking over one
+ * administrator's browser is the same as taking over the shop permanently.
+ *
+ * Mirrors the `public.user_role` enum. Add to both together.
+ */
+export type UserRole = "user" | "admin";
+
 export interface Profile {
   /** The Supabase Auth user id. There is one profile per account, keyed on it. */
   id: string;
+  /**
+   * `user` unless somebody has been made an administrator.
+   *
+   * This is what the whole dashboard is gated on — but reading it here is only
+   * ever for DISPLAY. The authority is `is_admin()` inside row level security,
+   * which Postgres evaluates per statement against this same column; a browser
+   * that lied about it would reach screens where every read returns nothing.
+   *
+   * Optional so that a profile read which did not select the column is still a
+   * valid `Profile`. Treat a missing value as `user`, never as `admin`.
+   */
+  role?: UserRole;
   /**
    * Mirrored from `auth.users` and kept in step by a trigger. Read-only to the
    * customer: changing an email address is an auth operation, not a form field.

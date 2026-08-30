@@ -115,16 +115,21 @@ export function AccountPage() {
           <div className="mt-5 rounded-lg border border-line bg-surface-raised p-4">
             <p className="text-sm leading-relaxed text-ink-soft">
               Administrators cannot be added or removed from this dashboard, on
-              purpose. Access is a row in the <code>admins</code> table, written
-              directly against the database:
+              purpose — the database refuses a role change from any signed-in
+              session, this one included. Whoever owns the Supabase project
+              changes it from the SQL editor:
             </p>
             <pre className="mt-3 overflow-x-auto rounded-lg bg-brand-deep p-3 text-xs leading-relaxed text-white/85">
-              {`insert into public.admins (user_id, email)
-values ('<their-user-id>', '<their-email>');`}
+              {`-- make someone an administrator
+update public.profiles set role = 'admin' where email = 'them@example.com';
+
+-- and back to an ordinary customer
+update public.profiles set role = 'user'  where email = 'them@example.com';`}
             </pre>
             <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-              Keeping it there means that gaining an admin session is not the
-              same as gaining the ability to create more of them.
+              Keeping it out here means that gaining an admin session is not the
+              same as gaining the ability to create more of them. A promoted
+              account picks it up on its next sign-in.
             </p>
           </div>
         </Card>
