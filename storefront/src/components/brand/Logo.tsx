@@ -12,20 +12,25 @@
  */
 
 type LogoVariant = "full" | "mark" | "stacked";
+type LogoSize = "md" | "lg";
 
 interface LogoProps {
   /** `full` = mark + wordmark (default). `mark` = monogram only, for tight spaces. */
   variant?: LogoVariant;
+  /** `md` (default) everywhere except a spot that wants the mark to carry more
+   *  visual weight, such as the header giving the logo its own room. */
+  size?: LogoSize;
   className?: string;
   /** Accessible name, exposed to screen readers via a visually hidden label. */
   title?: string;
 }
 
-const markSizes: Record<LogoVariant, string> = {
-  full: "h-9 w-9",
-  mark: "h-9 w-9",
-  stacked: "h-12 w-12",
+const markSizes: Record<LogoSize, Record<LogoVariant, string>> = {
+  md: { full: "h-9 w-9", mark: "h-9 w-9", stacked: "h-12 w-12" },
+  lg: { full: "h-11 w-11", mark: "h-11 w-11", stacked: "h-14 w-14" },
 };
+
+const wordmarkTextSizes: Record<LogoSize, string> = { md: "text-lg", lg: "text-xl" };
 
 export function LogoMark({ className = "" }: { className?: string }) {
   return (
@@ -53,23 +58,29 @@ export function LogoMark({ className = "" }: { className?: string }) {
   );
 }
 
-export function Logo({ variant = "full", className = "", title = "Velora Wears" }: LogoProps) {
+export function Logo({
+  variant = "full",
+  size = "md",
+  className = "",
+  title = "Velora Wears",
+}: LogoProps) {
   if (variant === "mark") {
     return (
       <span className={`inline-flex ${className}`} title={title}>
-        <LogoMark className={markSizes.mark} />
+        <LogoMark className={markSizes[size].mark} />
         <span className="sr-only">{title}</span>
       </span>
     );
   }
 
   const stacked = variant === "stacked";
+  const wordmarkText = wordmarkTextSizes[size];
 
   return (
     <span
       className={`inline-flex ${stacked ? "flex-col items-center gap-3" : "flex-row items-center gap-3"} ${className}`}
     >
-      <LogoMark className={markSizes[variant]} />
+      <LogoMark className={markSizes[size][variant]} />
       <span className={`flex flex-col leading-none ${stacked ? "items-center" : "items-start"}`}>
         {/* Both words are the same size and weight — client feedback, 2026-08-29:
             "Wears" read as an afterthought caption under a big "Velora". They are
@@ -77,8 +88,12 @@ export function Logo({ variant = "full", className = "", title = "Velora Wears" 
             accent), the way a two-line fashion lockup usually earns its second
             line. The trailing letter-space each word inherits from its tracking
             is trimmed off, so the glyphs - not the invisible gap - stay aligned. */}
-        <span className="-mr-[0.24em] font-display text-lg tracking-wordmark">VELORA</span>
-        <span className="-mr-[0.24em] font-display text-lg tracking-wordmark text-accent">
+        <span className={`-mr-[0.24em] font-display ${wordmarkText} tracking-wordmark`}>
+          VELORA
+        </span>
+        <span
+          className={`-mr-[0.24em] font-display ${wordmarkText} tracking-wordmark text-accent`}
+        >
           WEARS
         </span>
       </span>

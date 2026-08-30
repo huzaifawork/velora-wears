@@ -46,7 +46,7 @@ export function AccountPage() {
             and it appears only for the accounts that can actually open it.
 
             There is no separate administrator login — an admin is a customer
-            account whose id is in the `admins` table — so this is not a second
+            account whose profiles.role is 'admin' — so this is not a second
             front door, it is a link. `isAdmin` is `undefined` until the check
             settles, which is why this is an explicit `=== true`: rendering it
             optimistically would show a link that leads to a refusal.

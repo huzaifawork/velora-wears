@@ -281,6 +281,12 @@ function SlotSection({
                     Button: “{image.ctaLabel}” → {image.ctaHref}
                   </p>
                 )}
+
+                {image.cta2Label && image.cta2Href && (
+                  <p className="truncate text-xs text-ink-muted">
+                    Second button: “{image.cta2Label}” → {image.cta2Href}
+                  </p>
+                )}
               </div>
 
               <div className="flex shrink-0 items-center gap-1">
@@ -350,6 +356,8 @@ function SiteImageDialog({
   const [body, setBody] = useState(image?.body ?? "");
   const [ctaLabel, setCtaLabel] = useState(image?.ctaLabel ?? "");
   const [ctaHref, setCtaHref] = useState(image?.ctaHref ?? "");
+  const [cta2Label, setCta2Label] = useState(image?.cta2Label ?? "");
+  const [cta2Href, setCta2Href] = useState(image?.cta2Href ?? "");
   const [active, setActive] = useState(image?.active ?? true);
 
   const [saving, setSaving] = useState(false);
@@ -374,12 +382,28 @@ function SiteImageDialog({
       setError("Choose an image to upload.");
       return;
     }
-    if (ctaLabel.trim() && !ctaHref.trim()) {
+    // Either half of a button on its own is a button that cannot be rendered,
+    // so it is caught here rather than being saved and silently dropped by the
+    // storefront.
+    if (
+      (ctaLabel.trim() && !ctaHref.trim()) ||
+      (cta2Label.trim() && !cta2Href.trim())
+    ) {
       setError("A button needs somewhere to go — fill in the link, or clear the button text.");
       return;
     }
 
-    const input: SiteImageInput = { alt, eyebrow, title, body, ctaLabel, ctaHref, active };
+    const input: SiteImageInput = {
+      alt,
+      eyebrow,
+      title,
+      body,
+      ctaLabel,
+      ctaHref,
+      cta2Label,
+      cta2Href,
+      active,
+    };
 
     setSaving(true);
     setError(undefined);
@@ -491,8 +515,14 @@ function SiteImageDialog({
           <p className="text-xs font-medium text-ink-soft">
             Copy — all optional
           </p>
+          {/* This used to promise that a blank field "keeps the wording the
+              shop already has". It does not: the shop's own copy is what it
+              shows when NOTHING has been uploaded at all. Once there is a real
+              photograph on the page, a field left blank on it is left out —
+              which is the right behaviour (a photograph should not ship with
+              marketing copy nobody wrote for it) but not what this said. */}
           <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-            Anything you leave empty keeps the wording the shop already has.
+            Anything you leave empty is simply left off this image.
           </p>
 
           <div className="mt-4 space-y-4">
@@ -527,16 +557,21 @@ function SiteImageDialog({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
-                label="Button text"
+                label="First button text"
                 value={ctaLabel}
                 onChange={setCtaLabel}
                 optional
                 maxLength={40}
                 placeholder="Shop winter"
+                hint={
+                  slot === "hero"
+                    ? "The gold button on the banner."
+                    : undefined
+                }
               />
 
               <Field
-                label="Button link"
+                label="First button link"
                 value={ctaHref}
                 onChange={setCtaHref}
                 optional
@@ -545,6 +580,32 @@ function SiteImageDialog({
                 hint="A path inside the shop, or a full web address."
               />
             </div>
+
+            {/* The hero renders two buttons; a promo banner renders one, so
+                there is nothing on the page for this pair to become there. */}
+            {slot === "hero" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Second button text"
+                  value={cta2Label}
+                  onChange={setCta2Label}
+                  optional
+                  maxLength={40}
+                  placeholder="Shop the collection"
+                  hint="The outlined button beside it."
+                />
+
+                <Field
+                  label="Second button link"
+                  value={cta2Href}
+                  onChange={setCta2Href}
+                  optional
+                  maxLength={200}
+                  placeholder="/products"
+                  hint="A path inside the shop, or a full web address."
+                />
+              </div>
+            )}
           </div>
         </div>
 

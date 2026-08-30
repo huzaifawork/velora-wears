@@ -139,6 +139,10 @@ export interface SiteImage {
   ctaLabel?: string;
   /** Where it links. An in-app path (`/products?category=shirts`) or a full URL. */
   ctaHref?: string;
+  /** Text of the SECOND button. Shown only when `cta2Href` is set too. */
+  cta2Label?: string;
+  /** Where the second button links. Same two forms as `ctaHref`. */
+  cta2Href?: string;
   position: number;
   active: boolean;
   createdAt: number;

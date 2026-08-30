@@ -18,7 +18,7 @@ import { SIGN_IN } from "@/lib/routes";
  * ---------------------------------------------------------------------------
  * There is ONE sign-in form in this project, and it is the shop's
  * (`/account/sign-in`). An administrator is not a different kind of login; they
- * are a customer account whose id happens to appear in the `admins` table.
+ * are a customer account whose `profiles.role` happens to be `'admin'`.
  * So this component never asks for credentials. It asks THREE questions of the
  * session that already exists, in order, and each has exactly one right answer:
  *

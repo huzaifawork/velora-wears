@@ -16,7 +16,7 @@
  * finds is the session the person just created.
  *
  * THE SERVICE ROLE KEY IS STILL NOWHERE NEAR THIS APPLICATION. Authority comes
- * from the signed-in user's id being present in `admins`, which is what
+ * from the signed-in user's `profiles.role` being `'admin'`, which is what
  * `is_admin()` checks inside every admin policy in the schema — not from which
  * client object made the request.
  */

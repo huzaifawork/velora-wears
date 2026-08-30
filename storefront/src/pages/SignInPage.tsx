@@ -16,9 +16,9 @@ import { ACCOUNT, ADMIN, SIGN_UP } from "@/lib/routes";
  * ONE FORM, TWO DESTINATIONS
  * ---------------------------------------------------------------------------
  * There is no separate administrator login, because there is no separate
- * administrator account: an admin is a customer account whose user id appears
- * in the `admins` table. The same email and password that buy a hoodie open the
- * dashboard, if that row exists.
+ * administrator account: an admin is a customer account whose `profiles.role`
+ * is `'admin'`. The same email and password that buy a hoodie open the
+ * dashboard, if that's set.
  *
  * So this form asks nobody to choose. It signs in, asks the database
  * `is_admin()`, and routes on the answer — the dashboard for an administrator,

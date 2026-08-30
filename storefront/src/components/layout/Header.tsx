@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Logo } from "@/components/brand/Logo";
@@ -53,7 +53,21 @@ interface NavItem {
 }
 
 const linkClasses =
-  "shrink-0 text-xs font-medium tracking-eyebrow whitespace-nowrap uppercase transition hover:text-accent";
+  "group relative shrink-0 py-2 text-xs font-medium tracking-eyebrow whitespace-nowrap uppercase transition hover:text-accent";
+
+/** The same accent-underline-grows-on-hover motif `ProductCard` uses on its
+ *  price, so the header's interaction language matches the rest of the site
+ *  instead of introducing a new one. Always full-width when active. */
+function NavUnderline({ active }: { active: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`absolute -bottom-0.5 left-0 h-px bg-accent transition-all duration-300 ease-brand ${
+        active ? "w-full" : "w-0 group-hover:w-full"
+      }`}
+    />
+  );
+}
 
 export function Header() {
   const [open, setOpen] = useState(false);
@@ -108,6 +122,18 @@ export function Header() {
 
   const currentSearch = isProducts ? (params.get("q")?.trim() ?? "") : "";
 
+  // The mobile drawer covers the page, so background scroll is locked while
+  // it's open — same reasoning, same pattern, as the admin dashboard's own
+  // drawer (`AdminLayout`).
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
   return (
     // Solid, not translucent (client feedback, 2026-08-29): a blurred
     // semi-opaque header let whatever was scrolled underneath — the hero's
@@ -120,7 +146,16 @@ export function Header() {
         </p>
       )}
 
-      <Container wide className="flex h-20 items-center justify-between gap-6">
+      {/*
+        Logo and primary nav are clustered together on the left with a
+        deliberate — not equal — gap between them, and the icon cluster sits
+        alone on the far right (`ml-auto` below). An evenly-split 3-zone bar
+        (logo | nav | icons) reads as symmetric/generic even though nothing
+        in it is literally centered; this left-heavy weighting is what most
+        premium boutique headers actually do, and it is what makes the bar
+        read as a considered layout rather than a template default.
+      */}
+      <Container wide className="flex h-24 items-center gap-10">
         <Link
           to="/"
           onClick={() => setOpen(false)}
@@ -132,10 +167,10 @@ export function Header() {
               carries the brand at that width instead of forcing a horizontal
               scroll or pushing the menu button off-screen. */}
           <span className="min-[375px]:hidden">
-            <Logo variant="mark" />
+            <Logo variant="mark" size="lg" />
           </span>
           <span className="hidden min-[375px]:inline-flex">
-            <Logo />
+            <Logo size="lg" />
           </span>
         </Link>
 
@@ -143,7 +178,7 @@ export function Header() {
             than 1024px gives even after the width and gap fixes above
             (client feedback, 2026-08-29). Below 1280px the hamburger menu
             covers it instead, same as it always has below `lg`. */}
-        <nav className="hidden items-center gap-7 xl:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-8 xl:flex" aria-label="Primary">
           {links.map((link) => {
             const active = isActive(link);
             return (
@@ -151,9 +186,10 @@ export function Header() {
                 key={link.label}
                 to={link.to}
                 aria-current={active ? "page" : undefined}
-                className={`${linkClasses} ${active ? "text-accent" : "text-ink-soft"}`}
+                className={`${linkClasses} ${active ? "text-ink" : "text-ink-soft"}`}
               >
                 {link.label}
+                <NavUnderline active={active} />
               </Link>
             );
           })}
@@ -163,7 +199,7 @@ export function Header() {
             Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-3 w-16" />)}
         </nav>
 
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => setSearchOpen((v) => !v)}
@@ -230,13 +266,56 @@ export function Header() {
         </div>
       )}
 
-      {open && (
+      {/*
+        A slide-over drawer, not a block that pushes the page down (what this
+        was before) — presented as an overlay so it reads as intentionally
+        designed for a phone rather than a shrunk desktop menu. Same links,
+        same data, same destinations; only how it's presented changed. Always
+        mounted so both the open and close transitions animate; `inert` when
+        closed keeps it out of the tab order and out of the way of clicks.
+      */}
+      <div
+        className={`fixed inset-0 z-50 xl:hidden ${open ? "" : "pointer-events-none"}`}
+        inert={!open}
+      >
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={() => setOpen(false)}
+          className={`absolute inset-0 bg-ink/45 transition-opacity duration-300 ease-brand ${
+            open ? "opacity-100" : "opacity-0"
+          }`}
+        />
         <nav
           id="mobile-nav"
           aria-label="Primary"
-          className="border-t border-line bg-canvas xl:hidden"
+          className={`absolute inset-y-0 right-0 flex w-full max-w-xs flex-col bg-canvas shadow-lift transition-transform duration-300 ease-brand ${
+            open ? "translate-x-0" : "translate-x-full"
+          }`}
         >
-          <Container className="flex flex-col py-2">
+          <div className="flex items-center justify-between border-b border-line px-5 py-5">
+            <Logo variant="mark" />
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              aria-label="Close menu"
+              className="-mr-2 inline-flex h-11 w-11 items-center justify-center rounded-full text-ink transition hover:bg-canvas-alt"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="flex flex-col overflow-y-auto px-5 py-2">
             {links.map((link) => {
               const active = isActive(link);
               return (
@@ -245,7 +324,7 @@ export function Header() {
                   to={link.to}
                   onClick={() => setOpen(false)}
                   aria-current={active ? "page" : undefined}
-                  className={`${linkClasses} border-b border-line py-4 last:border-0 ${
+                  className={`border-b border-line py-4 text-xs font-medium tracking-eyebrow uppercase transition last:border-0 hover:text-accent ${
                     active ? "text-accent" : "text-ink"
                   }`}
                 >
@@ -254,9 +333,9 @@ export function Header() {
               );
             })}
             <AccountMobileLink onNavigate={() => setOpen(false)} />
-          </Container>
+          </div>
         </nav>
-      )}
+      </div>
     </header>
   );
 }

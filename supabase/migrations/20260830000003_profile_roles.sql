@@ -66,6 +66,14 @@ alter table public.profiles
 comment on column public.profiles.role is
   'What this account may do. Every sign-up is ''user''. Change to ''admin'' from the Supabase SQL or table editor — an API session cannot change it (see guard_profile_role).';
 
+-- Restated here rather than left to 20260830000002 alone, so this file is
+-- still correct if it is ever replayed against a database that somehow has the
+-- column but not that earlier grant. `role` is deliberately absent from the
+-- allowlist: that omission is lock #1 described at the top of this file.
+revoke update on public.profiles from anon, authenticated;
+grant update (full_name, phone) on public.profiles to authenticated;
+
+
 -- The one query `is_admin()` makes, and the admin list on the account screen.
 -- Partial, because almost every row is a 'user' and indexing those would make
 -- the index bigger without answering anything.
@@ -221,4 +229,16 @@ left join lateral (
 -- `is_admin()` was repointed in step 3, BEFORE this runs — the order matters,
 -- and a `cascade` here would have quietly dropped the function instead.
 
-drop table if exists public.admins;
+-- Guarded on the table existing, and the policy dropped first. `drop policy if
+-- exists` forgives a missing POLICY but not a missing TABLE — it raises
+-- outright — and on the live project the table is already gone, dropped by hand
+-- before this migration was written down.
+
+do $$
+begin
+  if to_regclass('public.admins') is not null then
+    drop policy if exists "admins read admins" on public.admins;
+    drop table public.admins;
+  end if;
+end
+$$;
