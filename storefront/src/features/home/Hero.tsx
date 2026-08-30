@@ -126,34 +126,51 @@ export function Hero({
     <section className="relative isolate overflow-hidden bg-ink">
       {/* Every slide's photograph is stacked and crossfaded by opacity —
           simpler and smoother than mounting/unmounting, and it means the
-          NEXT slide's image is already decoded before it needs to be seen. */}
+          NEXT slide's image is already decoded before it needs to be seen.
+          ---------------------------------------------------------------
+          TWO COPIES OF THE SAME PHOTO, NOT ONE
+          ---------------------------------------------------------------
+          `object-cover` alone cropped the photo differently (and too far)
+          on a tall phone screen than on a wide desktop window — reading as
+          "zoomed in." `object-contain` alone fixed that but left flat empty
+          bars either side, which read as broken. This is the standard fix
+          for a banner whose shape doesn't match its photograph: a blurred,
+          scaled-up copy of the SAME image fills the section edge to edge
+          (so there is never empty space), and the real, complete,
+          UNCROPPED photo sits on top of it, contained. Same `src`, so the
+          second copy costs no extra network request — only a second
+          decode of an image the browser already has. */}
       {(hasUpload ? uploaded : [null]).map((option, i) => {
         const src = option?.full ?? DEFAULT_IMAGE.src;
         const alt = option?.alt ?? DEFAULT_IMAGE.alt;
         const w = option?.width ?? DEFAULT_IMAGE.width;
         const h = option?.height ?? DEFAULT_IMAGE.height;
+        const eager = i === 0;
 
         return (
-          <Image
+          <div
             key={option?.id ?? "default"}
-            src={src}
-            alt={alt}
-            width={w}
-            height={h}
-            eager={i === 0}
-            // `object-contain`, not `object-cover`: this banner's shape
-            // changes a lot between a tall phone screen and a wide desktop
-            // window, and no single crop of a fixed photograph can fill
-            // both without cutting a very different part of it away each
-            // time -- which is exactly what read as "zoomed in." Containing
-            // shows the WHOLE uploaded photograph on every screen, full
-            // stop; the dark ground (`bg-ink` on the section, the scrim
-            // below) is what's behind it on wider or narrower screens where
-            // the photo's own aspect ratio doesn't fill every edge.
-            className={`absolute inset-0 h-full w-full object-contain transition-opacity duration-1000 ease-brand ${
+            className={`absolute inset-0 transition-opacity duration-1000 ease-brand ${
               i === current ? "opacity-100" : "opacity-0"
             }`}
-          />
+          >
+            <Image
+              src={src}
+              alt=""
+              width={w}
+              height={h}
+              eager={eager}
+              className="absolute inset-0 h-full w-full scale-110 object-cover object-center opacity-60 blur-2xl saturate-75"
+            />
+            <Image
+              src={src}
+              alt={alt}
+              width={w}
+              height={h}
+              eager={eager}
+              className="relative h-full w-full object-contain"
+            />
+          </div>
         );
       })}
 
