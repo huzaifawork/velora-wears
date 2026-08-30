@@ -34,7 +34,6 @@ import { Testimonials } from "@/features/home/Testimonials";
  * default art, so an empty result changes nothing about how this page renders
  * (requirements section 8).
  */
-
 export function HomePage() {
   const featured = useAsync(
     () => Promise.all([listFeatured(8), getCategories()]),
