@@ -53,10 +53,20 @@ export function Testimonials({
           </div>
         )}
 
+        {/* A staggered grid rather than a flat one — every second card sits a
+            little lower, so the section reads as an arranged composition
+            rather than a centered block of identical tiles. Only the rating
+            summary above earns true centering; it's a single stat. */}
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {loading
-            ? Array.from({ length: 6 }, (_, i) => <Skeleton key={i} className="h-60 w-full" />)
-            : reviews?.map((review) => <ReviewCard key={review.id} review={review} />)}
+            ? Array.from({ length: 6 }, (_, i) => (
+                <Skeleton key={i} className={`h-60 w-full ${i % 2 === 1 ? "sm:mt-8" : ""}`} />
+              ))
+            : reviews?.map((review, i) => (
+                <div key={review.id} className={i % 2 === 1 ? "sm:mt-8" : ""}>
+                  <ReviewCard review={review} />
+                </div>
+              ))}
         </div>
       </Container>
     </section>

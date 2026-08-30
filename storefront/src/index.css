@@ -2,6 +2,22 @@
 
 /*
  * ---------------------------------------------------------------------------
+ * The admin dashboard lives in `admin/src`, a sibling of this file's project
+ * root (`storefront/`) — reached only through the `@admin` Vite alias, never
+ * imported from anywhere inside `storefront/src`. Tailwind's automatic source
+ * detection scans outward from THIS file's project root and has no reason to
+ * follow that alias, so without this line every utility class used only in
+ * `admin/src` (arbitrary values, and every admin-only token below —
+ * `bg-surface*`, `text-ink*`, `bg-brand-deep`, `animate-sheet`, `animate-fade`,
+ * `ease-brand`) is silently absent from the compiled CSS. Classes admin
+ * happens to share with the storefront still "work" by coincidence, which is
+ * what made this so easy to miss.
+ * ---------------------------------------------------------------------------
+ */
+@source "../../admin/src";
+
+/*
+ * ---------------------------------------------------------------------------
  * VELORA WEARS - BRAND DESIGN TOKENS (Requirements section 1)
  * ---------------------------------------------------------------------------
  * The single source of colour, type, and elevation for the whole storefront.
@@ -20,25 +36,30 @@
   --color-ink-muted: #9b949f;
 
   /* --- Canvas: page and card surfaces -----------------------------------
-     Chosen from the seven options laid out side by side in the published
-     "Velora Canvas Study" Artifact (2026-08-29) — option G, Plum Mist: the
-     only one of the seven not built from the gold family. A faint plum
-     undertone instead, tying the ground to the brand's own ink/plum rather
-     than always leaning on the gold accent — quieter and more
-     fashion-editorial than E or C, which is what Huzaifa picked it over
-     after both were already live. The `--glow-*` wash below and the `body`
-     rule that uses it are unchanged — they work over any of the seven
-     options, since they are built from the accent/brand colours, not the
-     canvas tiers. */
-  --color-canvas: #e8e3e2;
-  --color-canvas-alt: #d6cbcd;
-  --color-canvas-deep: #bcabb0;
+     Replaced 2026-08-30 — option G, "Plum Mist" (#e8e3e2/#d6cbcd/#bcabb0),
+     read as "light pink" to the client. An intermediate warm-white pass
+     (#fbfaf8/#f4f1eb) still read as cream/beige, and the client was explicit:
+     full white, nothing else. `--color-canvas` and `--color-canvas-alt` are
+     both pure `#ffffff` now — there is deliberately no visual difference
+     between "canvas" and "canvas-alt" sections any more, which is the point.
+     `--color-canvas-deep` stays a near-white neutral rather than pure white
+     too, because it is what an image placeholder is drawn in and a product
+     photo is cropped against (`bg-canvas-deep` behind every `Image` while it
+     loads, and behind `CtaBand`) — pure white there would make a loading
+     image invisible against its own placeholder. `--color-ink`,
+     `--color-brand` and `--color-accent` are untouched — the client liked
+     the plum/gold identity, the complaint was only ever the ground under it. */
+  --color-canvas: #ffffff;
+  --color-canvas-alt: #ffffff;
+  --color-canvas-deep: #f2f2f2;
 
   /* The hero's two blurred brand-colour blobs, reused as a fixed, sitewide
      ambient wash (see `body` below) rather than a decoration only the
-     landing page gets. */
-  --glow-accent: color-mix(in oklab, var(--color-accent-soft) 26%, transparent);
-  --glow-brand: color-mix(in oklab, var(--color-brand) 6%, transparent);
+     landing page gets. Toned down alongside the canvas change above: at
+     their old strength, over a true white ground rather than the old mauve
+     one, they read as a visible pink cast rather than an ambient vignette. */
+  --glow-accent: color-mix(in oklab, var(--color-accent-soft) 14%, transparent);
+  --glow-brand: color-mix(in oklab, var(--color-brand) 4%, transparent);
 
   /* --- Brand: the signature deep plum ---------------------------------- */
   --color-brand: #241d33;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Settings, SiteImage } from "@shared/types";
@@ -7,7 +7,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { PRODUCTS, categoryPath } from "@/lib/routes";
 import { Image } from "@/components/ui/Image";
 import { Marquee } from "@/components/ui/Marquee";
-import { formatPrice, formatRating } from "@/lib/format";
+import { formatPrice } from "@/lib/format";
 
 /**
  * The hero the shop ships with.
@@ -19,107 +19,100 @@ import { formatPrice, formatRating } from "@/lib/format";
 const DEFAULT_IMAGE = {
   src: "/banners/hero.webp",
   alt: "Velora Wears heavyweight hoodie in deep plum",
-  width: 1100,
-  height: 1375,
+  width: 1200,
+  height: 1500,
 } as const;
 
+const DEFAULT_EYEBROW = "Autumn collection 2026";
+const DEFAULT_TITLE = (
+  <>
+    Considered pieces for the way you <em className="text-accent-soft">actually</em> dress.
+  </>
+);
+const DEFAULT_BODY =
+  "A Pakistani label making oversized shirts, winter layers, trousers, essentials — honest fabrics, a fit cut properly rather than copied. Ordered today, delivered to your door, paid in cash when it arrives.";
+
+/** How long each slide holds before advancing. */
+const SLIDE_MS = 6000;
+
 /**
- * Landing hero (requirements section 2): the brand statement, a short
- * introduction to what Velora Wears sells, and the two calls to action that
- * matter — shop everything, or jump straight into the winter collection.
+ * Landing hero (requirements section 2): a full-bleed photograph with the
+ * brand statement and calls to action set directly over it — a banner, not a
+ * boxed picture beside a column of text.
  *
- * The composition is the editorial split used by most premium fashion labels:
- * type on the left, one large product image on the right with the social proof
- * floated over it, then a running ticker of the delivery and payment terms —
- * the pattern an Instagram-led brand's customers already recognise.
+ * ---------------------------------------------------------------------------
+ * A CAROUSEL WHEN THE ADMIN HAS UPLOADED MORE THAN ONE SLIDE
+ * ---------------------------------------------------------------------------
+ * Every uploaded hero image is a full slide — its own photograph, eyebrow,
+ * title, body and secondary call to action, not just an alternate picture
+ * behind the same words. With two or more, the hero auto-advances every
+ * `SLIDE_MS`, crossfading rather than cutting, and a row of dots underneath
+ * lets a visitor jump to one directly or just shows where they are with one
+ * slide. Auto-advance is suspended for `prefers-reduced-motion`, same as
+ * every other animation in this project (see `storefront/src/index.css`) —
+ * the dots still work by hand.
  *
- * The hero image is the page's largest paint, so it is the ONE image on the
- * landing page loaded eagerly at high priority (section 19). Its intrinsic
- * dimensions are declared, so the layout does not move while it arrives.
+ * The hero image is the page's largest paint, so the FIRST slide's image is
+ * the one loaded eagerly at high priority (section 19); the rest load only
+ * once the visitor actually reaches them (they're already cached by the same
+ * request that drew this page, so "loading" here means the browser decoding
+ * an image it already has — the `Image` component's default lazy behaviour
+ * is exactly right for that).
  *
  * ---------------------------------------------------------------------------
  * THE IMAGE AND THE COPY CAN NOW COME FROM THE ADMIN DASHBOARD (section 8)
  * ---------------------------------------------------------------------------
  * `images` is whatever the admin has uploaded into the `hero` slot, and every
- * part of it is OPTIONAL. Nothing uploaded, or nothing active, and this section
- * renders exactly as it always has — the committed photograph and the copy
- * written below. Upload a photograph with no words and only the photograph
- * changes.
- *
- * That fallback is the whole design of this feature, not a defensive extra: the
- * hero is the first thing anyone sees, and a mistake in the dashboard has to
- * degrade to the shop's own art rather than to an empty rectangle.
- *
- * More than one active hero image gets a small thumbnail strip, so a brand can
- * put up a seasonal set. The images all arrive in the ONE request the landing
- * page already makes, so switching between them costs nothing and needs no
- * carousel library.
+ * part of it is OPTIONAL. Nothing uploaded, or nothing active, and this
+ * section renders exactly as it always has — the committed photograph and
+ * the copy written below. Upload a photograph with no words and only the
+ * photograph changes.
  *
  * ---------------------------------------------------------------------------
- * THE STATS ARE MEASURED, NOT WRITTEN
+ * A BLANK FIELD ON A REAL UPLOAD MEANS "NOTHING", NOT "SHOW THE BOOTSTRAP COPY"
  * ---------------------------------------------------------------------------
- * This row used to read "12+ pieces in stock" and "4.7 average rating" as
- * literal strings. Both were invented, both were rendered to customers as
- * facts about the shop, and neither would have become true when the catalog
- * moved to the database — the numbers were in the markup, not in the data.
- *
- * They are now computed from the catalog the page has already loaded (`stats`),
- * which costs no extra request. **A figure with nothing real behind it is not
- * shown at all**: a shop with no reviews yet renders two stats rather than
- * claiming a rating it has not earned. That is the whole rule here — an empty
- * shop should look new, not dishonest.
+ * `DEFAULT_EYEBROW`/`DEFAULT_TITLE`/`DEFAULT_BODY` only apply when NOTHING
+ * has ever been uploaded (`uploaded.length === 0`) — the shop's own
+ * bootstrap content. Once an admin uploads a real photograph, a field left
+ * blank on THAT slide is omitted, never silently replaced with the
+ * bootstrap copy — otherwise a real photograph would ship with someone
+ * else's invented marketing line stitched over it.
  */
-
-export interface HeroStats {
-  /** Products in the catalog. Undefined while loading, 0 for an empty shop. */
-  pieces?: number;
-  /** Mean rating across rated products. Undefined when nothing is rated yet. */
-  rating?: number;
-}
 export function Hero({
   settings,
   images,
-  stats,
 }: {
   settings: Settings | null | undefined;
   /** Admin-uploaded hero images, in display order. Empty is normal. */
   images?: SiteImage[];
-  /** Measured from the catalog. Anything absent is simply not claimed. */
-  stats?: HeroStats;
 }) {
   const threshold = settings?.freeDeliveryThreshold;
 
   const uploaded = images ?? [];
-  const [shownIndex, setShownIndex] = useState(0);
-  // Clamped rather than reset in an effect: the list can shrink underneath this
-  // when Realtime delivers a deletion, and an out-of-range index would blank the
-  // image for a frame.
-  const shown = uploaded[Math.min(shownIndex, uploaded.length - 1)];
+  const hasUpload = uploaded.length > 0;
+  const [index, setIndex] = useState(0);
+  // Clamped rather than reset in an effect: the list can shrink underneath
+  // this when Realtime delivers a deletion, and an out-of-range index would
+  // blank the slide for a frame. With nothing uploaded there is exactly one
+  // synthetic slide (the bootstrap image below), always at index 0.
+  const current = hasUpload ? Math.min(index, uploaded.length - 1) : 0;
+  const slide = uploaded[current];
 
-  const image = {
-    src: shown?.full ?? DEFAULT_IMAGE.src,
-    alt: shown?.alt ?? DEFAULT_IMAGE.alt,
-    width: shown?.width ?? DEFAULT_IMAGE.width,
-    height: shown?.height ?? DEFAULT_IMAGE.height,
-  };
+  useEffect(() => {
+    if (uploaded.length < 2) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-  // Built from what is actually true. The delivery promise is a service
-  // commitment rather than a measurement, so it is the one entry that is still
-  // written here — and it is a promise the shop makes, not a number it reports.
-  const facts: Array<{ value: string; label: string }> = [];
+    const id = window.setInterval(() => {
+      setIndex((i) => (i + 1) % uploaded.length);
+    }, SLIDE_MS);
+    return () => window.clearInterval(id);
+  }, [uploaded.length]);
 
-  if (stats?.pieces) {
-    facts.push({
-      value: String(stats.pieces),
-      label: stats.pieces === 1 ? "Piece in the collection" : "Pieces in the collection",
-    });
-  }
-
-  if (stats?.rating) {
-    facts.push({ value: formatRating(stats.rating), label: "Average rating" });
-  }
-
-  facts.push({ value: "2-4 days", label: "Nationwide delivery" });
+  // See "A blank field..." above: the bootstrap copy is a fallback for NO
+  // upload, not a per-slide default for an upload that left a field blank.
+  const eyebrow = hasUpload ? slide?.eyebrow : DEFAULT_EYEBROW;
+  const title = hasUpload ? slide?.title : DEFAULT_TITLE;
+  const body = hasUpload ? slide?.body : DEFAULT_BODY;
 
   const promises = [
     "Cash on delivery",
@@ -130,142 +123,122 @@ export function Hero({
   ];
 
   return (
-    <section className="relative overflow-hidden bg-canvas-alt">
-      {/* Decorative brand wash - never interactive. */}
+    <section className="relative isolate overflow-hidden bg-ink">
+      {/* Every slide's photograph is stacked and crossfaded by opacity —
+          simpler and smoother than mounting/unmounting, and it means the
+          NEXT slide's image is already decoded before it needs to be seen. */}
+      {(hasUpload ? uploaded : [null]).map((option, i) => {
+        const src = option?.full ?? DEFAULT_IMAGE.src;
+        const alt = option?.alt ?? DEFAULT_IMAGE.alt;
+        const w = option?.width ?? DEFAULT_IMAGE.width;
+        const h = option?.height ?? DEFAULT_IMAGE.height;
+
+        return (
+          <Image
+            key={option?.id ?? "default"}
+            src={src}
+            alt={alt}
+            width={w}
+            height={h}
+            eager={i === 0}
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-1000 ease-brand ${
+              i === current ? "opacity-100" : "opacity-0"
+            }`}
+          />
+        );
+      })}
+
+      {/* Bottom-up scrim so the overlaid copy stays legible over ANY
+          uploaded photograph, not just the ones dark enough at the bottom
+          on their own. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -top-48 -left-40 h-[36rem] w-[36rem] rounded-full bg-accent-soft/30 blur-3xl"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute right-0 bottom-0 h-[28rem] w-[28rem] rounded-full bg-brand/5 blur-3xl"
+        className="absolute inset-0 bg-linear-to-t from-ink via-ink/35 to-ink/5"
       />
 
-      <Container className="relative grid items-center gap-14 pt-14 pb-20 lg:grid-cols-[1.08fr_1fr] lg:gap-16 lg:pt-20 lg:pb-28">
-        <div className="animate-rise">
-          <p className="flex items-center gap-3 text-[0.625rem] tracking-eyebrow text-accent uppercase">
-            <span aria-hidden="true" className="h-px w-10 bg-accent" />
-            {shown?.eyebrow ?? "Autumn collection 2026"}
-          </p>
+      <Container className="relative flex min-h-[86vh] flex-col justify-end pt-32 pb-16 sm:min-h-[90vh] sm:pb-20 lg:pb-24">
+        {/* `key` restarts the rise-in animation on every slide change, which
+            reads as the copy changing WITH the photograph rather than a
+            static caption sitting over a background that happens to move. */}
+        <div key={current} className="max-w-2xl animate-rise">
+          {eyebrow && (
+            <p className="flex items-center gap-3 text-[0.625rem] tracking-eyebrow text-accent-soft uppercase">
+              <span aria-hidden="true" className="h-px w-10 bg-accent-soft" />
+              {eyebrow}
+            </p>
+          )}
 
-          <h1 className="mt-7 text-[2.75rem] leading-[1.04] tracking-tight text-balance sm:text-6xl lg:text-[4.25rem]">
-            {shown?.title ?? (
-              <>
-                Considered pieces for the way you{" "}
-                <em className="text-accent">actually</em> dress.
-              </>
-            )}
-          </h1>
+          {/* The page's one real `h1` still exists even when the current
+              slide has no title — visually hidden rather than removed, so
+              the homepage keeps a heading landmark, without printing text
+              nobody asked for. */}
+          {title ? (
+            <h1
+              className={`text-5xl leading-[1.02] tracking-tight text-balance text-canvas sm:text-7xl lg:text-[5.5rem] ${eyebrow ? "mt-6" : ""}`}
+            >
+              {title}
+            </h1>
+          ) : (
+            <h1 className="sr-only">Velora Wears</h1>
+          )}
 
-          <p className="mt-7 max-w-xl text-base leading-relaxed text-pretty text-ink-soft sm:text-lg">
-            {shown?.body ??
-              "Velora Wears is a Pakistani label making oversized shirts, winter layers, trousers, essentials — honest fabrics, a fit cut properly rather than copied, and prices meant for clothes you wear every week. Ordered today, delivered to your door, paid in cash when it arrives."}
-          </p>
+          {body && (
+            <p className="mt-6 max-w-lg text-base leading-relaxed text-pretty text-canvas/75 sm:text-lg">
+              {body}
+            </p>
+          )}
 
           <div className="mt-10 flex flex-wrap items-center gap-3">
-            {/* The primary call to action is never taken away from the admin's
-                control: "Shop the collection" is the one link this page must
-                always offer, so an uploaded button becomes the SECOND one. */}
-            <Link to={PRODUCTS} className={buttonClasses()}>
+            {/* The primary call to action is never taken away from the
+                admin's control: "Shop the collection" is the one link this
+                page must always offer, so an uploaded button becomes the
+                SECOND one. Gold fill, not the plum default — against a
+                photograph, the accent is what reads instantly as "press
+                this". */}
+            <Link to={PRODUCTS} className={buttonClasses({ variant: "accent", size: "lg" })}>
               Shop the collection
             </Link>
 
-            {shown?.ctaLabel && shown.ctaHref ? (
-              <HeroCta label={shown.ctaLabel} href={shown.ctaHref} />
+            {slide?.ctaLabel && slide.ctaHref ? (
+              <HeroCta label={slide.ctaLabel} href={slide.ctaHref} />
             ) : (
               <Link
                 to={categoryPath("winter-collection")}
-                className={buttonClasses({ variant: "secondary" })}
+                className={buttonClasses({ variant: "secondary", size: "lg" })}
               >
                 Winter collection
               </Link>
             )}
           </div>
+        </div>
 
-          {/* The column count follows how many facts there are, so two stats sit
-              as two columns rather than leaving a gap where a third claim used
-              to be. */}
-          <dl
-            className={`mt-14 grid max-w-lg gap-6 border-t border-line-strong/60 pt-8 ${
-              facts.length === 3 ? "grid-cols-3" : facts.length === 2 ? "grid-cols-2" : "grid-cols-1"
-            }`}
-          >
-            {facts.map((stat) => (
-              <div key={stat.label}>
-                <dt className="font-display text-2xl text-ink sm:text-3xl">{stat.value}</dt>
-                <dd className="mt-2 text-[0.625rem] leading-relaxed tracking-eyebrow text-ink-muted uppercase">
-                  {stat.label}
-                </dd>
-              </div>
+        {/* Slide dots — only when there is more than one to choose between.
+            A click both jumps the slide and restarts the auto-advance timer
+            (the effect above re-runs from `SLIDE_MS` because `index` isn't
+            one of its dependencies — it always counts from the last change,
+            manual or automatic). */}
+        {uploaded.length > 1 && (
+          <div className="mt-10 flex items-center gap-2 sm:absolute sm:right-8 sm:bottom-8 sm:mt-0 lg:right-12 lg:bottom-12">
+            {uploaded.map((option, i) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setIndex(i)}
+                aria-label={option.alt ?? `Slide ${i + 1}`}
+                aria-current={i === current}
+                className={`h-1.5 rounded-full transition-all duration-300 ease-brand ${
+                  i === current ? "w-8 bg-accent" : "w-4 bg-canvas/40 hover:bg-canvas/70"
+                }`}
+              />
             ))}
-          </dl>
-        </div>
-
-        <div className="relative animate-rise">
-          {/* Gold rule offset behind the image - the couture-label detail from section 1. */}
-          <div
-            aria-hidden="true"
-            className="absolute -top-5 -right-5 bottom-10 left-10 rounded-sm border border-accent/45"
-          />
-
-          <Image
-            key={image.src}
-            src={image.src}
-            alt={image.alt}
-            width={image.width}
-            height={image.height}
-            eager
-            className="relative aspect-4/5 w-full rounded-sm object-cover shadow-lift"
-          />
-
-          {/* A second and further hero image, if the shop has uploaded any.
-              Every one of these URLs came back in the request that drew this
-              page, so switching is instant and costs no round trip. The small
-              `thumb` variant is what loads here — never the full-size file. */}
-          {uploaded.length > 1 && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {uploaded.map((option, index) => {
-                const current = index === Math.min(shownIndex, uploaded.length - 1);
-
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    onClick={() => setShownIndex(index)}
-                    aria-label={option.alt ?? `Hero image ${index + 1}`}
-                    aria-current={current}
-                    className={`h-16 w-14 overflow-hidden rounded-sm border transition duration-200 ease-brand ${
-                      current
-                        ? "border-accent opacity-100"
-                        : "border-line-strong opacity-60 hover:opacity-100"
-                    }`}
-                  >
-                    <Image
-                      src={option.thumb}
-                      alt=""
-                      width={640}
-                      height={800}
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* The floating review card that used to sit here was cut on client
-              feedback, 2026-08-29 — one testimonial pinned to the hero read as
-              a canned pop-up rather than real social proof, and the same
-              reviews already have a dedicated section further down the page
-              (`Testimonials`), pulled from the actual review data rather than
-              one hardcoded quote. */}
-          <span className="absolute top-5 right-5 rounded-full bg-brand/90 px-4 py-2 text-[0.625rem] tracking-eyebrow text-canvas uppercase backdrop-blur-sm">
-            Cash on delivery
-          </span>
-        </div>
+          </div>
+        )}
       </Container>
 
-      <Marquee items={promises} className="border-t border-line bg-brand py-4 text-canvas/85" />
+      <Marquee
+        items={promises}
+        className="relative border-t border-canvas/10 bg-brand py-4 text-canvas/85"
+      />
     </section>
   );
 }
@@ -282,7 +255,7 @@ function HeroCta({ label, href }: { label: string; href: string }) {
   const internal = href.startsWith("/");
 
   return internal ? (
-    <Link to={href} className={buttonClasses({ variant: "secondary" })}>
+    <Link to={href} className={buttonClasses({ variant: "secondary", size: "lg" })}>
       {label}
     </Link>
   ) : (
@@ -290,7 +263,7 @@ function HeroCta({ label, href }: { label: string; href: string }) {
       href={href}
       target="_blank"
       rel="noreferrer"
-      className={buttonClasses({ variant: "secondary" })}
+      className={buttonClasses({ variant: "secondary", size: "lg" })}
     >
       {label}
     </a>

@@ -112,22 +112,6 @@ export function AccountPage() {
               ))}
             </ul>
           )}
-
-          <div className="mt-5 rounded-lg border border-line bg-surface-raised p-4">
-            <p className="text-sm leading-relaxed text-ink-soft">
-              Administrators cannot be added or removed from this dashboard, on
-              purpose. Access is the <code>role</code> column on their{" "}
-              <code>profiles</code> row, written directly against the database:
-            </p>
-            <pre className="mt-3 overflow-x-auto rounded-lg bg-brand-deep p-3 text-xs leading-relaxed text-white/85">
-              {`update public.profiles set role = 'admin'
-where id = '<their-user-id>';`}
-            </pre>
-            <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-              Keeping it there means that gaining an admin session is not the
-              same as gaining the ability to create more of them.
-            </p>
-          </div>
         </Card>
       </div>
     </div>
