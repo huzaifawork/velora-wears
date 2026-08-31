@@ -61,6 +61,20 @@
   --glow-accent: color-mix(in oklab, var(--color-accent-soft) 14%, transparent);
   --glow-brand: color-mix(in oklab, var(--color-brand) 4%, transparent);
 
+  /* --- The light band --------------------------------------------------
+     Client feedback, 2026-08-31: the plum bands — the promises strip under
+     the banner and the brand-story section — read as "blue", and were asked
+     to go light. Pale champagne rather than another white: the page ground
+     is pure white (see the canvas note above), so a band needs a tint to be
+     a band at all, and this one carries a trace of the antique gold so it
+     belongs to the palette instead of being a grey plane.
+
+     `--color-brand` below is deliberately UNTOUCHED. Only the bands went
+     light; buttons and badges stay dark, which is what keeps them reading
+     as things you press rather than as more page. */
+  --color-band: #efe4d2;
+  --color-band-line: #dfcdb0;
+
   /* --- Brand: the signature deep plum ---------------------------------- */
   --color-brand: #241d33;
   --color-brand-soft: #3b3153;
@@ -136,6 +150,23 @@
     }
     to {
       transform: translateX(-50%);
+    }
+  }
+
+  /* The hero carousel's slide timer, drawn as a filling bar (Hero.tsx).
+     THE DURATION MUST MATCH `SLIDE_MS` THERE — this is the visible half of
+     the same countdown, so if one changes the other has to. Reduced motion
+     collapses it to nothing by the global rule at the bottom of this file,
+     which leaves the active bar simply full: correct, since auto-advance is
+     switched off in that case too. */
+  --animate-hero-progress: hero-progress 6s linear both;
+
+  @keyframes hero-progress {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
     }
   }
 

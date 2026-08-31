@@ -314,74 +314,59 @@ export function Hero({
           </div>
         </Container>
 
-        {slides.length > 1 && (
-          <>
-            {/* Dots, on the same gutter as the copy above them. */}
-            <Container wide className="absolute inset-x-0 bottom-7 lg:bottom-9">
-              <div className="flex items-center gap-2">
-                {slides.map((option, i) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => setIndex(i)}
-                    aria-label={option.alt || `Slide ${i + 1}`}
-                    aria-current={i === current}
-                    className={`h-1.5 rounded-full transition-all duration-300 ease-brand ${
-                      i === current ? "w-10 bg-accent" : "w-4 bg-canvas/40 hover:bg-canvas/70"
-                    }`}
-                  />
-                ))}
-              </div>
-            </Container>
+        {/*
+          THE SLIDE TIMER, DRAWN.
 
-            {/* Arrows only where there is a cursor to hover them with. On a
-                phone the swipe and the dots do this job. */}
-            <HeroArrow direction="previous" onClick={() => go(-1)} />
-            <HeroArrow direction="next" onClick={() => go(1)} />
-          </>
+          This replaces a pair of round arrow buttons. Arrows are a carousel
+          telling you it is a carousel; a row of thin bars with the current
+          one filling says the same thing more quietly and adds what the
+          arrows never did — how long this slide has left. It is also the
+          control that survives on a phone, where the arrows were hidden and
+          the swipe was undiscoverable.
+
+          The fill is a CSS animation, not a timer in React: nothing
+          re-renders sixty times a second to draw it. `key` on the fill
+          restarts that animation whenever the slide changes, including when
+          a visitor picks one by hand — which is exactly when the countdown
+          restarts too (see the effect above).
+        */}
+        {slides.length > 1 && (
+          <Container
+            wide
+            className="pointer-events-none absolute inset-x-0 bottom-7 lg:bottom-9"
+          >
+            <div className="pointer-events-auto flex w-fit items-center gap-2.5">
+              {slides.map((option, i) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => setIndex(i)}
+                  aria-label={option.alt || `Slide ${i + 1}`}
+                  aria-current={i === current}
+                  // The bar is 3px; the button around it is 24px, because a
+                  // three-pixel tap target is not a tap target.
+                  className="group flex h-6 w-12 items-center sm:w-16"
+                >
+                  <span className="relative h-[3px] w-full overflow-hidden rounded-full bg-canvas/25 transition-colors duration-200 ease-brand group-hover:bg-canvas/45">
+                    {i === current && (
+                      <span
+                        key={current}
+                        className="absolute inset-0 origin-left animate-hero-progress rounded-full bg-accent"
+                      />
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </Container>
         )}
       </div>
 
       <Marquee
         items={promises}
-        className="relative border-t border-canvas/10 bg-brand py-4 text-canvas/85"
+        className="relative border-t border-band-line bg-band py-4 text-ink/75"
       />
     </section>
-  );
-}
-
-/** One of the carousel's two side arrows. */
-function HeroArrow({
-  direction,
-  onClick,
-}: {
-  direction: "previous" | "next";
-  onClick: () => void;
-}) {
-  const next = direction === "next";
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={next ? "Next slide" : "Previous slide"}
-      className={`absolute top-1/2 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-canvas/30 bg-ink/25 text-canvas backdrop-blur-sm transition duration-200 ease-brand hover:border-canvas/60 hover:bg-ink/45 lg:flex ${
-        next ? "right-6" : "left-6"
-      }`}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        className="h-5 w-5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d={next ? "m9 5 7 7-7 7" : "m15 5-7 7 7 7"} />
-      </svg>
-    </button>
   );
 }
 
