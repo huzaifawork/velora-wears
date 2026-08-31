@@ -98,7 +98,7 @@ export function Sidebar({
         <Wordmark />
       </div>
 
-      <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
+      <nav className="no-scrollbar min-h-0 flex-1 space-y-6 overflow-y-auto px-3 pb-4">
         {navGroups(openOrders).map((group) => (
           <div key={group.caption}>
             <p className="px-3 pb-2 text-[0.625rem] font-medium tracking-[0.18em] text-white/35 uppercase">

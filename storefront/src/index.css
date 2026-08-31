@@ -352,6 +352,19 @@ body {
   background: var(--color-accent);
 }
 
+/* The dashboard's navigation rail scrolls when the window is short, but the
+   themed bar above is a page-level chrome and reads as a seam cutting down the
+   dark column (client feedback, 2026-08-31). This hides the bar in both
+   engines WITHOUT touching overflow, so the rail still scrolls by wheel,
+   trackpad, touch and keyboard exactly as before. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* Headings carry the display serif - set once, not repeated per page. */
 h1,
 h2,

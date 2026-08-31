@@ -10,7 +10,7 @@ import { DataTable, Pagination, type Column } from "@admin/components/ui/DataTab
 import { EmptyState, ErrorState } from "@admin/components/ui/Skeleton";
 import { ActiveFilters, FilterBar, SearchInput } from "@admin/components/ui/SearchInput";
 import { Select } from "@admin/components/ui/Select";
-import { OrdersIcon } from "@admin/components/ui/Icons";
+import { EyeIcon, OrdersIcon } from "@admin/components/ui/Icons";
 import { useQuery } from "@admin/hooks/useQuery";
 import { useUrlState } from "@admin/hooks/useUrlState";
 import { DEFAULT_PAGE_SIZE } from "@admin/services/products";
@@ -143,6 +143,27 @@ export function OrdersPage() {
       label: "Status",
       align: "right",
       cell: (order) => <OrderStatusBadge status={order.status} />,
+    },
+    {
+      // The row's name already links to the same place, but a name does not
+      // LOOK like a way in — this is the affordance, in the column every other
+      // list screen keeps its row actions in (client feedback, 2026-08-31).
+      key: "actions",
+      label: "",
+      align: "right",
+      width: "1%",
+      cell: (order) => (
+        <div className="flex items-center justify-end">
+          <Link
+            to={routes.orderPath(order.id)}
+            aria-label={`View order ${order.orderNumber}`}
+            title="View order"
+            className="rounded-md p-2 text-ink-muted transition hover:bg-surface-sunken hover:text-ink"
+          >
+            <EyeIcon className="h-4 w-4" />
+          </Link>
+        </div>
+      ),
     },
   ];
 
