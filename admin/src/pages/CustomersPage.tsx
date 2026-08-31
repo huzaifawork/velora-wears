@@ -1,8 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
-import type { CustomerSummary } from "@shared/types";
-import { buttonClasses } from "@admin/components/ui/Button";
+import type { CustomerSummary, UserRole } from "@shared/types";
+import { Button, buttonClasses } from "@admin/components/ui/Button";
+import { ConfirmDialog } from "@admin/components/ui/Modal";
+import { useToast } from "@admin/components/ui/Toast";
+import { useAuth } from "@/features/account/AuthContext";
+import { setUserRole } from "@admin/services/admins";
 import { Card, PageHeader } from "@admin/components/ui/Card";
 import { Badge } from "@admin/components/ui/Badge";
 import { DataTable, Pagination, type Column } from "@admin/components/ui/DataTable";
@@ -39,17 +43,32 @@ import * as routes from "@admin/lib/routes";
  * has done nothing wrong.
  *
  * ---------------------------------------------------------------------------
- * READ ONLY
+ * ONE THING IS EDITABLE: WHO MANAGES THE SHOP
  * ---------------------------------------------------------------------------
- * There is nothing to edit and no delete button. A profile is created by a
+ * There is still no edit form and no delete button. A profile is created by a
  * database trigger at sign-up and removed with the account; the name and phone
  * on it belong to the customer, and row level security grants those two columns
  * to the account that owns them and to nobody else — an admin cannot rewrite a
  * person's own details. See `admin/src/services/customers.ts`.
+ *
+ * What an admin CAN change from here is a person's role, because this is the
+ * screen where every account already is. It is not an update: it goes through
+ * `set_user_role()`, which does its own authorization in the database (see
+ * `services/admins.ts`). The button is hidden on the signed-in admin's own row
+ * because the function refuses that — an admin neither promotes nor demotes
+ * themselves — and hiding it is how somebody learns that without an error.
  */
 export function CustomersPage() {
   const [params] = useSearchParams();
   const url = useUrlState();
+  const { user } = useAuth();
+  const toast = useToast();
+
+  const [pendingRole, setPendingRole] = useState<{
+    customer: CustomerSummary;
+    next: UserRole;
+  }>();
+  const [savingRole, setSavingRole] = useState(false);
 
   const search = params.get("q") ?? "";
   const sort = (params.get("sort") as CustomerSort) || "newest";
@@ -64,6 +83,29 @@ export function CustomersPage() {
     listCustomers(options),
   );
 
+  const onChangeRole = async () => {
+    if (!pendingRole) return;
+    const { customer, next } = pendingRole;
+
+    setSavingRole(true);
+    try {
+      await setUserRole(customer.id, next);
+      const who = customer.fullName || customer.email || "That account";
+      toast.success(
+        next === "admin"
+          ? `${who} can now manage the shop. They pick it up on their next sign-in.`
+          : `${who} is an ordinary customer again.`,
+      );
+      setPendingRole(undefined);
+    } catch (error) {
+      // The dialog stays open on failure: the refusal explains itself, and
+      // closing it would take the sentence away with it.
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingRole(false);
+    }
+  };
+
   const columns: Column<CustomerSummary>[] = [
     {
       key: "who",
@@ -77,9 +119,10 @@ export function CustomersPage() {
                 <span className="text-ink-muted italic">No name given</span>
               )}
             </p>
-            {/* Shown, not editable. The database refuses a role change from any
-                signed-in session — see `services/admins.ts`. */}
             {customer.role === "admin" && <Badge tone="accent">Administrator</Badge>}
+            {customer.id === user?.id && (
+              <span className="text-xs text-ink-muted">(you)</span>
+            )}
           </div>
           <p className="mt-0.5 truncate text-xs text-ink-muted">{customer.email}</p>
         </div>
@@ -143,6 +186,31 @@ export function CustomersPage() {
           {customer.totalSpent > 0 ? formatPrice(customer.totalSpent) : "—"}
         </span>
       ),
+    },
+    {
+      key: "role",
+      label: "Access",
+      align: "right",
+      cell: (customer) => {
+        // Your own row has no button, because `set_user_role()` refuses it.
+        // See the note at the top of this file.
+        if (customer.id === user?.id) {
+          return <span className="text-sm text-ink-muted">—</span>;
+        }
+
+        const isAdmin = customer.role === "admin";
+        return (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() =>
+              setPendingRole({ customer, next: isAdmin ? "user" : "admin" })
+            }
+          >
+            {isAdmin ? "Remove admin" : "Make admin"}
+          </Button>
+        );
+      },
     },
   ];
 
@@ -233,6 +301,44 @@ export function CustomersPage() {
           </>
         )}
       </Card>
+
+      <ConfirmDialog
+        open={Boolean(pendingRole)}
+        onClose={() => setPendingRole(undefined)}
+        onConfirm={() => void onChangeRole()}
+        loading={savingRole}
+        variant={pendingRole?.next === "admin" ? "primary" : "danger"}
+        confirmLabel={
+          pendingRole?.next === "admin" ? "Make administrator" : "Remove administrator"
+        }
+        title={
+          pendingRole?.next === "admin"
+            ? `Make ${pendingRole.customer.fullName || pendingRole.customer.email || "this account"} an administrator?`
+            : `Remove ${pendingRole?.customer.fullName || pendingRole?.customer.email || "this account"}'s access?`
+        }
+        message={
+          pendingRole?.next === "admin" ? (
+            <>
+              They will be able to do everything you can: edit products and
+              prices, read every order and customer, and promote or demote other
+              accounts — including you.
+              <br />
+              <br />
+              Their shopping account is unchanged, and they pick the access up on
+              their next sign-in.
+            </>
+          ) : (
+            <>
+              They keep their account, their orders and their reviews. What they
+              lose is the dashboard: the next page they open there tells them
+              they are not an administrator.
+              <br />
+              <br />
+              You can make them one again at any time.
+            </>
+          )
+        }
+      />
     </div>
   );
 }
