@@ -51,21 +51,33 @@ every write is refused, because `is_admin()` is evaluated by Postgres (requireme
 
 ### Roles
 
-Every account is created with `profiles.role = 'user'`. Promotion is one column:
+Every account is created with `profiles.role = 'user'`. An administrator changes that from
+the dashboard:
+
+- **Customers** — every account, each with `Make admin` or `Remove admin`.
+- **Account** — the administrators only, each with `Remove admin`.
+
+Both call `public.set_user_role(target_user, new_role)`
+([`../supabase/migrations/20260901000001_role_management.sql`](../supabase/migrations/20260901000001_role_management.sql)),
+a SECURITY DEFINER function that does its own authorization and refuses:
+
+- a caller who is not signed in, or is not an administrator;
+- a caller acting on **their own row**, in either direction — self-promotion is the
+  escalation this was built to stop, and self-demotion locks an admin out of the screen they
+  are standing on. Another administrator does it for them;
+- demoting the **last administrator**, which would leave nobody able to manage the shop.
+
+The column itself stays unwritable through the API: `role` is outside the grant that lets a
+customer edit their own name and phone, and `guard_profile_role` refuses any role change
+from a signed-in session that did not arrive through that function. So an ordinary customer
+session still cannot promote anybody, including itself.
+
+**The first administrator** is made in the Supabase SQL editor, because the function needs
+an administrator to call it — as is recovery, if a shop somehow ends up with none:
 
 ```sql
--- make someone an administrator
 update public.profiles set role = 'admin' where email = 'them@example.com';
-
--- and back to an ordinary customer
-update public.profiles set role = 'user'  where email = 'them@example.com';
 ```
-
-**Run it in the Supabase SQL editor** — not from either application. `guard_profile_role`
-refuses any role change made from a session that has an `auth.uid()`, and `role` is outside
-the column grant that lets a customer edit their own name and phone. So an admin session
-cannot promote anybody, including itself: taking over an administrator's browser must not be
-the same as gaining the ability to create administrators.
 
 A promoted account picks it up on its **next sign-in** — the app asks `is_admin()` once per
 session, not per page. Faster: the "check again" button on the screen they land on at
@@ -120,6 +132,12 @@ And [`../supabase/migrations/20260830000003_profile_roles.sql`](../supabase/migr
 which moves authorization onto `profiles.role` (default `'user'`), repoints `is_admin()` at
 it, guards the column against changes from any signed-in session, and **drops the old
 `admins` table** after carrying its rows across.
+
+Then [`../supabase/migrations/20260901000001_role_management.sql`](../supabase/migrations/20260901000001_role_management.sql),
+which adds `set_user_role()` — the one sanctioned path for a role change — and teaches the
+guard to recognise it. Until it is applied, the promote and demote buttons fail with
+"Could not find the function public.set_user_role" and roles stay a SQL-editor job; nothing
+else on either application is affected.
 
 Until it is applied the dashboard's screens will error, and the storefront will fall back to
 its previous behaviour — deliberately: `listFeatured` and `listSiteImages` in

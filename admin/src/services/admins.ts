@@ -1,5 +1,7 @@
+import type { UserRole } from "@shared/types";
 import { getSupabase } from "@admin/lib/supabase";
 import { describeError } from "@admin/lib/errors";
+import { invalidate } from "@admin/lib/cache";
 import { epoch } from "@admin/services/rows";
 
 /**
@@ -11,18 +13,25 @@ import { epoch } from "@admin/services/rows";
  * this screen lists and what the database enforces are the same fact.
  *
  * ---------------------------------------------------------------------------
- * READ ONLY, AND NOT BY OMISSION
+ * PROMOTING AND DEMOTING GOES THROUGH ONE DATABASE FUNCTION
  * ---------------------------------------------------------------------------
- * There is no promote and no demote here, and there cannot be. A role change
- * from a signed-in session is refused by the database itself: `profiles.role`
- * is outside the column grant that lets a customer edit their own name and
- * phone, and `guard_profile_role` raises on any change made where `auth.uid()`
- * is set — which is every request either application can make.
+ * Not through an update. `profiles.role` is deliberately outside the column
+ * grant that lets a customer edit their own name and phone, so no client can
+ * write it through the table endpoints — that has not been loosened and must
+ * not be. The dashboard instead calls `set_user_role()` (migration
+ * 20260901000001), a SECURITY DEFINER function that does its own authorization
+ * and refuses:
  *
- * So roles are changed in the Supabase SQL or table editor, by whoever owns the
- * project. That is the point rather than a limitation: gaining control of an
- * administrator's browser must not be the same as gaining the ability to create
- * administrators.
+ *   * a caller who is not an administrator;
+ *   * a caller acting on their OWN row, in either direction — self-promotion is
+ *     the escalation the guard exists to stop, and self-demotion is an admin
+ *     locking themselves out of the screen they are standing on;
+ *   * demoting the last remaining administrator.
+ *
+ * Those rules are enforced in Postgres, not here. The buttons on the Customers
+ * and Account screens hide what the database would refuse so nobody is invited
+ * to press something that cannot work — but hiding a button is a courtesy, and
+ * the function is the rule.
  */
 
 export interface AdminRecord {
@@ -55,4 +64,28 @@ export async function listAdmins(): Promise<AdminRecord[]> {
       createdAt: epoch(admin.created_at),
     };
   });
+}
+
+/**
+ * Promote an account to administrator, or demote one back to a customer.
+ *
+ * Resolves with the role the account actually ends up with — the function's own
+ * return value, read back from the row it wrote — so a caller renders what the
+ * database did rather than what it asked for. Setting a role somebody already
+ * has is a no-op rather than an error, which is what two administrators
+ * pressing the same button a second apart should get.
+ *
+ * Both tags are invalidated: the Customers list shows the badge and the Account
+ * screen lists the administrators, and a promotion changes both.
+ */
+export async function setUserRole(userId: string, role: UserRole): Promise<UserRole> {
+  const { data, error } = await getSupabase().rpc("set_user_role", {
+    target_user: userId,
+    new_role: role,
+  });
+
+  if (error) throw new Error(describeError(error));
+
+  invalidate("customers", "admins");
+  return (data as UserRole | null) ?? role;
 }
