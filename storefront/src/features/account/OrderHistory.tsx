@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { Order } from "@shared/types";
+import { REVIEW_AFTER_DELIVERY_MESSAGE, canReviewOrder } from "@shared/reviews";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/features/account/AuthContext";
@@ -82,15 +83,22 @@ export function OrderHistory() {
                 {/* Signed-in customers can review from here too, not only
                     from the order confirmation page (requirements section
                     16) — the order id is already known, so there is nothing
-                    to verify. */}
-                {accessToken && (
-                  <ReviewComposer
-                    productId={item.productId}
-                    productName={item.name}
-                    orderId={order.id}
-                    identity={{ mode: "session", accessToken }}
-                  />
-                )}
+                    to verify. Only once it has been DELIVERED, though: until
+                    then the row says so instead of offering a form the server
+                    would refuse (`shared/reviews.ts`). */}
+                {accessToken &&
+                  (canReviewOrder(order.status) ? (
+                    <ReviewComposer
+                      productId={item.productId}
+                      productName={item.name}
+                      orderId={order.id}
+                      identity={{ mode: "session", accessToken }}
+                    />
+                  ) : (
+                    order.status !== "cancelled" && (
+                      <p className="text-xs text-ink-muted">{REVIEW_AFTER_DELIVERY_MESSAGE}</p>
+                    )
+                  ))}
               </li>
             ))}
           </ul>

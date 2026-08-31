@@ -57,14 +57,17 @@ export const ORDER_STATUSES: readonly OrderStatus[] = [
 export const ORDER_STATUS_COPY: Record<OrderStatus, { label: string; hint: string }> = {
   pending: {
     label: "Pending",
-    hint: "Written, but the order never finished being placed. `place_order()` sets this only for the instant before it confirms — an order stuck here means checkout failed partway.",
+    hint: "Where every new order lands. Checkout has succeeded and stock is already deducted — what has not happened yet is you confirming it.",
   },
   confirmed: {
     label: "Confirmed",
-    hint: "Placed successfully and paid for on delivery. Stock has already been deducted.",
+    hint: "Checked and accepted by you — the customer reached, the address good. Move an order here once you are happy to fulfil it.",
   },
   shipped: { label: "Shipped", hint: "Handed to the courier and on its way." },
-  delivered: { label: "Delivered", hint: "Received by the customer and paid for." },
+  delivered: {
+    label: "Delivered",
+    hint: "Received by the customer and paid for. This also UNLOCKS reviewing: a customer can only review the pieces on an order once it is marked delivered.",
+  },
   cancelled: {
     label: "Cancelled",
     hint: "Called off. NOTE: this does not put the stock back — adjust it on the product if the pieces are returning to the shelf.",

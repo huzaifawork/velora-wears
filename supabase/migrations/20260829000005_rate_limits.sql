@@ -104,6 +104,11 @@ grant execute on function public.check_rate_limit(text, integer, integer) to ser
 -- ---------------------------------------------------------------------------
 -- find_order_for_review, RATE LIMITED.
 --
+-- SUPERSEDED. The live definition is now
+-- 20260831000002_pending_orders_delivered_reviews.sql, which kept everything
+-- below — the rate limit included — and narrowed the status test to
+-- 'delivered'. Edit THAT one.
+--
 -- This is the one read in the whole schema an anonymous caller can invoke
 -- directly with no server-side code in front of it at all (section 16) — and
 -- unlike a plain table read, guessing wrong here is exactly what it would

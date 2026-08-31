@@ -29,6 +29,11 @@ const TIMEOUT_MS = 15_000;
 export type SubmitReviewErrorCode =
   | "VALIDATION"
   | "NOT_PURCHASED"
+  /** The order is real and theirs, but has not been delivered yet — reviewing
+   *  waits for delivery (`shared/reviews.ts`). The UI normally never lets this
+   *  happen; it comes back when an order's status changed while the page was
+   *  open. */
+  | "NOT_DELIVERED"
   | "EDIT_WINDOW_EXPIRED"
   | "NOT_FOUND"
   | "REVIEW_FAILED"
@@ -68,6 +73,7 @@ export interface SubmittedReview {
 const KNOWN_CODES: readonly string[] = [
   "VALIDATION",
   "NOT_PURCHASED",
+  "NOT_DELIVERED",
   "EDIT_WINDOW_EXPIRED",
   "NOT_FOUND",
   "REVIEW_FAILED",

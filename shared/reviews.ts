@@ -20,6 +20,35 @@
  */
 
 import { stripUnsafeChars } from "./sanitize";
+import type { OrderStatus } from "./types";
+
+/**
+ * WHEN a customer may review a piece: once the order carrying it has been
+ * DELIVERED, and not before.
+ *
+ * A review is about wearing the thing, so "I paid for it ninety seconds ago"
+ * is not enough to have an opinion worth publishing — and an order that was
+ * cancelled never earns one. The storefront uses this to decide whether to
+ * offer a review form at all; the decision itself belongs to the server, which
+ * re-applies the same rule in two places that cannot import this file:
+ *
+ *   `supabase/functions/submit-review/index.ts`   `REVIEWABLE_STATUS`
+ *   `find_order_for_review` (the guest lookup)    `o.status = 'delivered'`
+ *
+ * CHANGING THE RULE MEANS CHANGING ALL THREE.
+ */
+export const REVIEWABLE_ORDER_STATUS: OrderStatus = "delivered";
+
+/** Whether an order in this status may have its items reviewed. */
+export function canReviewOrder(status: OrderStatus | undefined): boolean {
+  return status === REVIEWABLE_ORDER_STATUS;
+}
+
+/** The single line the storefront shows wherever a review is not yet possible,
+ *  so the customer is told to expect it rather than left wondering where the
+ *  form went. */
+export const REVIEW_AFTER_DELIVERY_MESSAGE =
+  "You can review this piece once your order has been delivered.";
 
 export const REVIEW_RATINGS = [1, 2, 3, 4, 5] as const;
 export type ReviewRating = (typeof REVIEW_RATINGS)[number];

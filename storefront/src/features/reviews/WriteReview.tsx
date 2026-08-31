@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { REVIEW_AFTER_DELIVERY_MESSAGE, canReviewOrder } from "@shared/reviews";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -21,10 +22,16 @@ import { ReviewLookupRateLimitedError, findOrderForReview } from "@/lib/reviewLo
  *    placed under, exactly as section 16 describes, via
  *    `findOrderForReview`.
  *
- * A guest who arrives straight from checkout does not need this at all — the
- * confirmation page and order history both already have a `reviewToken` or a
- * session in hand and render `ReviewComposer` directly. This component is
- * for a visitor who lands on the product page cold, days or weeks later.
+ * "Qualifying" means DELIVERED in both cases — see `shared/reviews.ts`. The
+ * signed-in path checks the status it already has in hand; the guest path
+ * gets it for free, because `find_order_for_review` returns nothing for an
+ * order that has not arrived.
+ *
+ * A signed-in customer whose order has arrived can also review from order
+ * history, which has the order id in hand already. The confirmation page has
+ * a `reviewToken` but no delivered order to use it on, so it only links here.
+ * This component is for a visitor on the product page — which, now that a
+ * review waits for delivery, is where most reviews will be written.
  */
 export function WriteReview({ productId, productName }: { productId: string; productName: string }) {
   const { status, accessToken } = useAuth();
@@ -53,13 +60,17 @@ function SignedInReview({
 
   if (loading) return <Skeleton className="h-11 w-40" />;
 
-  // Orders come back newest first, so this is the most recent qualifying one.
-  const order = orders?.find((o) => o.items.some((item) => item.productId === productId));
+  // Orders come back newest first, so this is the most recent qualifying one:
+  // delivered, and containing this piece.
+  const matching = orders?.filter((o) => o.items.some((item) => item.productId === productId));
+  const order = matching?.find((o) => canReviewOrder(o.status));
 
   if (!order) {
     return (
       <p className="text-sm text-ink-soft">
-        You can write a review once you have bought and received this piece.
+        {matching && matching.length > 0
+          ? REVIEW_AFTER_DELIVERY_MESSAGE
+          : "You can write a review once you have bought and received this piece."}
       </p>
     );
   }
@@ -109,11 +120,15 @@ function GuestVerify({ productId, productName }: { productId: string; productNam
     setVerifying(true);
     setError(undefined);
     try {
+      // Only delivered orders come back at all (the lookup applies the rule
+      // in SQL), so "no match" covers a wrong guess and an order still on its
+      // way alike — hence the message names both.
       const lines = await findOrderForReview(orderNumber.trim(), email.trim());
       const match = lines.find((line) => line.productId === productId);
       if (!match) {
         setError(
-          "We could not find a matching order for this product with that order number and email.",
+          "We could not find a delivered order for this product with that order number and email. " +
+            REVIEW_AFTER_DELIVERY_MESSAGE,
         );
         return;
       }

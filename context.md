@@ -3,7 +3,11 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-29. Scaffold complete. **Requirements sections 1-17 are
+Last updated: 2026-08-31 (late — the pending-orders/delivered-reviews deploy). **Read the
+2026-08-31 block at the end of this section first — it is newer than the four paragraphs that
+follow, and it corrects two things they say.**
+
+Scaffold complete. **Requirements sections 1-17 are
 built, and sections 18-20 are audited** — brand, landing, products, product details, categories, the cart, checkout, payment,
 delivery charges, stock and availability, the order success animation, search, filters
 and sorting, mobile responsiveness, reviews and ratings (the customer-facing half —
@@ -82,6 +86,40 @@ demo mode, clearly marked `DEMO-` so it can never be mistaken for a real one.
 > it, same as `admins` required. **Next:** real products still need to exist before
 > `VITE_DATA_SOURCE` can flip off `demo` — Huzaifa is adding them himself through the now-usable
 > admin dashboard rather than the catalog being seeded with invented data.
+
+> **2026-08-31 — the state to read first, because everything above it is older.**
+>
+> - **Section 8, the admin dashboard, IS BUILT, and it was built HERE.** It lives in `admin/`
+>   (commit `87f1b10`), compiles into the storefront, and is served at `/admin` behind the
+>   shop's one sign-in. Every sentence in this file that says the dashboard is "Developer B's,
+>   not built here" was true when it was written and **is not true any more** — including the
+>   section 16 note about admin moderation, which that dashboard's Reviews screen answers.
+>   [`admin/README.md`](admin/README.md) is its real documentation and is current; the write-up
+>   below is the summary.
+> - **The live database is NOT empty any more.** Checked on 2026-08-31 with the anon key:
+>   **11 products across 5 categories** (Shirts, Winter Collection, Essentials, Trousers,
+>   Shoes), with per-size stock, images in the `media` Storage bucket, featured positions, and
+>   a `settings` row carrying a Rs 250 delivery charge, a Rs 5,000 free-delivery threshold and
+>   a store announcement. It went in through the dashboard, by hand, exactly as the note above
+>   said it would. **The standing rule is untouched — WE still never write mock data into that
+>   database. What changed is that the shop's owner has put real data in it.**
+> - **`VITE_DATA_SOURCE` is still `demo` in `storefront/.env.local`, and whether the Vercel
+>   variable has been flipped is not recorded anywhere in this repository.** Check it in the
+>   Vercel dashboard before telling anyone which catalog the live site is showing — there are
+>   now real products for it to show, which is the condition every earlier note made the flip
+>   wait for.
+> - **The storefront was redesigned and the redesign is on `main`** — white ground, a
+>   full-screen banner carousel driven by the dashboard, champagne bands. Write-up below.
+> - **The branch this file is being edited on, `feat/pending-orders-delivered-reviews`, is NOT
+>   on `main` — but its BACKEND HALF IS LIVE.** It carries one new commit on top of
+>   `feat/admin-dashboard`: orders now start `pending` and a review waits for delivery
+>   (`91eaaf4`), open as **[PR #2](https://github.com/huzaifawork/velora-wears/pull/2)**,
+>   based on `feat/admin-dashboard` rather than `main` so its diff is only that work.
+>   **Migration `20260831000002` is APPLIED and `submit-review` is DEPLOYED** (both on
+>   2026-08-31, verified — see the write-up). So the database and the Edge Function already
+>   enforce both rules, while the STOREFRONT half only reaches customers when this merges and
+>   Vercel rebuilds. Until then the live site will offer a review form in a place the server
+>   now refuses — the correct outcome by a clumsy route, not a break. Write-up below.
 
 ---
 
@@ -162,14 +200,15 @@ Storefront builds, typechecks and lints clean.
 | Routing | react-router-dom, `/`, `/products`, `/products/:slug`, `/categories`, `/cart`, `/checkout`, `/order/confirmed`, `/account`, `/account/sign-in` and `/account/sign-up`, lazy-loaded, scroll reset on navigate. **Every internal link is built by `lib/routes.ts`** |
 | Supabase client | `lib/supabase.ts`, anon key in `storefront/.env.local` and on Vercel. **Session IS persisted** (accounts) |
 | Query layer | Two interchangeable sources behind `lib/queries.ts`; demo one is live |
-| Data source | `VITE_DATA_SOURCE=demo`. Switches to `supabase` when the admin dashboard can create real products |
+| Data source | `VITE_DATA_SOURCE=demo` in `.env.local`. **The condition for flipping it to `supabase` is now met** — the dashboard exists and 11 real products are in the database. Whether the Vercel variable has actually been flipped is not recorded here; check it |
 | Database schema | **Deployed and verified** — 10 tables + the `product_summaries` VIEW, in `supabase/migrations/` |
 | Row level security | **Enabled on all 10 tables and verified with the anon key** — catalog readable, orders and admins invisible, every client write refused |
 | Realtime | **All 8 data tables published.** `useCatalogRealtime` drops the read cache on any change |
 | Edge Function | `place-order` **deployed and implemented** — validates, then calls `place_order()` |
 | Data contract | `shared/types.ts` (app shape) + `supabase/migrations/` (database shape) |
 | Brand identity | **Done (section 1).** Logo, palette, and type scale are agreed and in use |
-| Landing page | **Done (section 2).** Hero, categories, featured grid, promos, story, reviews, Instagram strip, CTA, footer |
+| Landing page | **Done (section 2), and redesigned 2026-08-31.** White ground, a full-screen admin-driven banner carousel, champagne bands, editorial (de-centered) story/testimonial/CTA sections. Hero slides, promo banners and the featured strip all come from the database now, each falling back to committed art |
+| Admin dashboard | **Done (section 8), built here, 2026-08-30.** `admin/`, compiled into this app and served at `/admin` behind the shop's single sign-in. 12 screens. See [`admin/README.md`](admin/README.md) |
 | Products page | **Done (sections 3, 13, 14).** `/products` — the catalog, a category, search results, filters and sorting, all as URL state |
 | Product details | **Done (section 4).** `/products/:slug` — gallery, size selection, reviews, related |
 | Categories | **Done (section 5).** `/categories` index, the category view on `/products?category=`, category chips, data-driven header and footer nav |
@@ -180,12 +219,13 @@ Storefront builds, typechecks and lints clean.
 | Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
 | Filters and sorting | **Done (section 14).** Category chips, in-stock filter, four sorts, Load more |
 | Mobile responsiveness | **Audited (section 15).** Every page checked at 375/768/1280/1600px with a headless browser for console errors and horizontal overflow. One real bug found and fixed — see the write-up below |
-| Reviews and ratings | **Done, customer-facing half (section 16).** Write, edit, remove — signed in or guest, verified two ways. `submit-review` Edge Function **deployed**, migration **applied**, both verified end to end. **Admin moderation is NOT built — that's section 8, Developer B's** |
+| Reviews and ratings | **Done, both halves (section 16).** Write, edit, remove — signed in or guest, verified two ways. `submit-review` Edge Function **deployed**, migration **applied**. **Admin moderation IS built now** — the dashboard's Reviews screen hides or deletes one. **A product can be reviewed only once its order is `delivered` — LIVE on the database and the Edge Function; the storefront half waits on PR #2** |
+| Order status | **Live on the database; the UI copy waits on PR #2.** A new order is written `pending` and stays there; the admin's status dropdown moves it on. `place_order()` no longer confirms an order on the customer's behalf |
 | Demo catalog | **19 products, 5 categories**, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
 | Demo images | 48 product WebPs + hero, 2 promos, 3 category tiles. **430 KB total**, committed |
 | Product features | Listing, detail, category browsing, the bag, checkout, search, filters and sorting, and reviews. No admin |
-| Seed data | **Database is empty — intentionally, and it stays that way.** Mock data is NEVER written to the live database. The catalog comes from `demoData.ts` in the frontend until the admin dashboard exists |
+| Seed data | **We NEVER write mock data into the live database — that rule stands.** What changed on 2026-08-30: the shop's owner entered a real catalog through the dashboard, so the database holds 11 real products. `demoData.ts` is still what the frontend reads while `VITE_DATA_SOURCE=demo` |
 | Lint | `npm run lint` **passes clean** — flat config in `storefront/eslint.config.js` |
 
 ### Layout
@@ -243,12 +283,31 @@ storefront/          React + Vite (Developer A)
                            review here" read - both public, neither goes through the Edge Function
   src/lib/cartStore.ts     the bag as an external store over localStorage
   src/hooks/useAsync.ts    the one data-loading hook
-admin/               Developer B's dashboard - placeholder + contract notes
+admin/               THE STORE MANAGER (section 8) - no package.json, no dev server, no
+                     deployment of its own. storefront/vite.config.ts aliases @admin at
+                     admin/src and App.tsx mounts AdminApp at /admin, lazily. Read
+                     admin/README.md - it is current, and it is the real documentation
+  src/pages/               one file per screen - Dashboard, Products, ProductEditor,
+                           Categories, Inventory, Orders, OrderDetail, Customers, Reviews,
+                           Delivery, Featured, SiteImages, Account, NotFound
+  src/services/            the data layer - ALL SQL knowledge lives here, one module per
+                           subject. Nothing above it knows a column name
+  src/components/ui/       DataTable, Modal, Toast, ImageDrop, Reorder, Thumb, Skeleton,
+                           Icons, and the admin's own Button/Badge/Card/Field/Select
+  src/features/auth/       NotAnAdminPage - the only auth screen here; sign-in is the shop's
 supabase/
   migrations/        THE DATABASE. Schema, RLS policies, place_order(), find_order_for_review(),
-                     check_rate_limit(). 0001-0005 all deployed and verified. 0003 holds the
-                     live place_order() - 0002 is superseded history. 0004 is section 16
-                     (reviews). 0005 is section 17 (rate limiting).
+                     check_rate_limit(), admin_dashboard_stats(). ELEVEN files now.
+                     0829-0001..0006 and 0830-0001..0003 are all applied and verified, and so
+                     is 0831-0001 (checked against the live schema on 2026-08-31).
+                     0831-0002 is NOT applied - it is this branch's, and it lands with the
+                     code. SUPERSEDED, do not edit: 0829-0002 and 0829-0003 (place_order)
+                     and 0829-0005's find_order_for_review - 0831-0002 restates both
+                     functions in full and IS their live definition once applied.
+                     0830-0001 is the dashboard's schema (featured, categories.active,
+                     site_images, the media bucket, orders.search_text, the stats function);
+                     0830-0002 is public.profiles; 0830-0003 moves authorization onto
+                     profiles.role and drops the admins table.
   functions/
     place-order/     Edge Function (Deno) - validation + the call into place_order()
     submit-review/   Edge Function (Deno) - section 16: write/edit/remove a review, proves
@@ -297,7 +356,7 @@ by the Supabase CLI. Do not try to make it a workspace.
 | `SUPABASE_ACCESS_TOKEN` (`sbp_…`) | <https://supabase.com/dashboard/account/tokens> | the CLI and Management API |
 | anon key | Dashboard → Project Settings → API | the browser; already in `storefront/.env.local` and on Vercel |
 | service role key | Dashboard → Project Settings → API | **never needed locally** — Edge Functions get it injected |
-| DB password | set when the project was created | `supabase db push` |
+| DB password | set when the project was created | **not needed** — `db push --linked` authenticates with the access token alone (proven 2026-08-31) |
 
 **Ask Huzaifa for the access token at the start of a session that needs it**, and export it
 rather than pasting it into a command that gets logged:
@@ -310,11 +369,34 @@ The anon key in `storefront/.env.local` is **public by design** — it is compil
 browser bundle. Security comes from row level security, not from hiding it. The service role
 key is the opposite: it bypasses RLS entirely and must never appear in `storefront/`.
 
+### The migration history was EMPTY until 2026-08-31 — it is now repaired
+
+Every migration through `20260831000001` was live in the database but **not one row existed in
+`supabase_migrations.schema_migrations`**: the SQL had been applied through the Management API
+and the dashboard editor, which do not record anything. `supabase db push` therefore wanted to
+replay all eleven migrations from `init.sql` and would have failed on objects that already
+existed.
+
+**Fixed on 2026-08-31** with `migration repair --status applied` for the ten already-live
+versions, after checking the live schema really did contain each one's artifacts (the
+`order_status` enum, `profiles.role`, down to `cta2_label` from the most recent). `db push`
+then applied `20260831000002` normally. **`migration list --linked` now shows local and remote
+matching on all eleven, so ordinary `db push` works from here on — do not repeat the repair.**
+
+Verify the schema without SQL by generating types (`gen types typescript --linked`): tables,
+columns, functions and enums all appear, which is enough to tell whether a migration's
+artifacts are present.
+
 ### Running SQL without the CLI or Docker
 
 Docker is deliberately **not** used on this project — there is no local stack, we work
-against the live project. The Management API runs arbitrary SQL, which is how the schema was
-applied and verified:
+against the live project. **`supabase db push --linked` needs NO database password** — the CLI
+prints `Initialising login role...` and authenticates with `SUPABASE_ACCESS_TOKEN` alone, so
+migrations no longer have to go through the Management API. (`supabase db dump` is the one
+command that still demands Docker; use `gen types` to inspect the schema instead.)
+
+The Management API runs arbitrary SQL, which is how the schema was applied and verified before
+the CLI path was proven:
 
 ```bash
 curl -s -X POST \
@@ -347,16 +429,33 @@ there is another project on this account.
 ```bash
 export SUPABASE_ACCESS_TOKEN=sbp_...        # ask Huzaifa
 
-# Deploy the Edge Function. --use-api avoids Docker; --no-verify-jwt is REQUIRED
-# because guest checkout must work without a session (Requirements section 7).
+# Deploy an Edge Function. --use-api avoids Docker; --no-verify-jwt is REQUIRED
+# on a FIRST deploy because guest checkout and guest reviews must both work
+# without a session (sections 7 and 16) — the storefront sends `apikey` and NO
+# Authorization header on both guest paths.
 npx supabase functions deploy place-order \
   --project-ref owbnbzutqslihhnzdnyo --use-api --no-verify-jwt
+
+npx supabase functions deploy submit-review --project-ref owbnbzutqslihhnzdnyo --use-api
+
+# ^ A REDEPLOY may omit --no-verify-jwt: the platform KEEPS the flag it already has.
+#   Confirmed 2026-08-31 — submit-review was redeployed without it and stayed
+#   verify_jwt=false. Check both functions with a plain GET:
+#     https://api.supabase.com/v1/projects/owbnbzutqslihhnzdnyo/functions
+
+# Verify WHAT IS ACTUALLY DEPLOYED — downloads the live source (no Docker), which
+# can then be diffed against the repo. Stronger evidence than a green deploy line.
+npx supabase functions download submit-review --project-ref owbnbzutqslihhnzdnyo
 
 # Generate database types from the live schema
 npx supabase gen types typescript --project-id owbnbzutqslihhnzdnyo > shared/database.types.ts
 
-# Migrations: apply via the Management API (see section 4). `supabase db push`
-# needs the database password and a linked project.
+# Migrations. `db push` needs NO database password — see section 4. Link once,
+# then push. `migration list` shows local against remote, and since the history
+# was repaired on 2026-08-31 the two now agree — no repair should be needed again.
+npx supabase link --project-ref owbnbzutqslihhnzdnyo
+npx supabase migration list --linked
+npx supabase db push --linked
 ```
 
 ### Vercel CLI
@@ -489,7 +588,7 @@ one starts.
 | 5 | Categories | **Done** |
 | 6 | Shopping cart | **Done** |
 | 7 | Checkout — guest + signed in | **Done** |
-| 8 | *Admin dashboard — **Developer B**, not us* | not ours |
+| 8 | Admin dashboard | **Done, 2026-08-30 — and built HERE, not by Developer B.** `admin/`, compiled into this application and served at `/admin` behind the shop's one sign-in. 12 screens, three migrations, and the storefront wiring that makes the landing page read from it. See the write-up below and [`admin/README.md`](admin/README.md) |
 | 9 | Payment — COD only | **Done.** Stated on the form and the confirmation, and now RECORDED on the order — `payment_method` in Postgres, `shared/payment.ts` in the applications |
 | 10 | Delivery charges | **Done in section 7** — admin-configured, shown in the bag, at checkout and on the confirmation; the SERVER applies it |
 | 11 | Stock and availability | **Done.** One shared rule for "low" (`shared/stock.ts`), the badge now shows the count when it matters, and the product page states which sizes are actually available instead of a hardcoded three |
@@ -497,7 +596,7 @@ one starts.
 | 13 | Search | **Done** |
 | 14 | Filters and sorting | **Done** |
 | 15 | Mobile responsiveness | **Done.** Audited at 375/768/1280/1600px on every page; one real bug found and fixed. Still worth attention as new sections land |
-| 16 | Reviews and ratings | **Done, customer-facing half.** Write, edit, remove — signed in or guest. **Admin moderation (hide/remove a review) is section 8's "Admin" subsection — Developer B's, not built here** |
+| 16 | Reviews and ratings | **Done, both halves.** Write, edit, remove — signed in or guest; **and the moderation half is built too**, on the dashboard's Reviews screen (hide or delete). A product becomes reviewable only once its order is `delivered` — enforced live in `find_order_for_review` and `submit-review`; the storefront's half of it is in PR #2 |
 | 17 | Validation and security | **Done.** Checkout and review validation (shared rules, server re-validation), rate limiting on `place-order` and `submit-review`, text sanitisation, and public review reads tightened to exclude `user_id`/`order_id`. **Rate limiting on search is NOT built — architecturally out of reach with this design, not an oversight. See the write-up** |
 | 18 | Stack and component reuse | **Audited, 2026-08-29.** Cross-cutting, not a discrete build — held throughout sections 1-17. This pass checked the whole tree for drift; see the write-up below |
 | 19 | Performance | **Audited, 2026-08-29.** One real gap found and fixed — a missing index. See the write-up below |
@@ -2097,6 +2196,216 @@ browser added a real product to the bag, filled the checkout form, submitted it,
 it landed on `/order/confirmed` with an order number in the `DEMO-VW-` shape, the correct line
 item, price and total, and zero console errors throughout. Build, typecheck and lint are clean.
 
+### What section 8 delivered — the admin dashboard, 2026-08-30
+
+**It was built here.** Every note above this one written before 2026-08-30 says section 8 is
+Developer B's and that no admin code would be written in this repository. That held right up
+until the dashboard was needed to make the shop usable at all — the catalog could not be filled
+by anyone but an administrator, and there was no administrator screen. It is commit `87f1b10`,
+it lives in `admin/`, and **[`admin/README.md`](admin/README.md) is its documentation and is
+kept current** — what follows is the short version, not a replacement for it.
+
+**One application, one sign-in.** `admin/` has no `package.json`, no `index.html`, no dev
+server and no deployment: `storefront/vite.config.ts` aliases `@admin` at `admin/src` and the
+shop's router mounts `AdminApp` at `/admin`, lazily. That is not tidiness. A Supabase session
+belongs to ONE ORIGIN, so a separately deployed dashboard means a second session and a second
+login form — an administrator who signed in on the shop would arrive at the dashboard a
+stranger. There is therefore no admin sign-in page: there is `/account/sign-in`, the shop's,
+which asks `is_admin()` after a successful sign-in and routes on the answer (an explicit
+`?next=` always wins).
+
+**An administrator IS a customer account** whose `profiles.role` is `'admin'` — same email,
+same password, same form; only the landing place and what Postgres will answer differ. The
+client-side guard decides what to RENDER; **row level security is what makes it safe**, since
+`is_admin()` is evaluated per statement by Postgres. Signed in but not an admin gets
+`NotAnAdminPage`, which prints the promotion SQL pre-filled with their own email.
+
+**Nothing in either application can promote anybody**, deliberately, and it is locked twice: a
+column-level grant that lets a customer write only `full_name` and `phone`, and
+`guard_profile_role`, which raises on any role change made from a session that has an
+`auth.uid()`. Roles change from the Supabase SQL editor and nowhere else. Taking over an
+administrator's browser must not be the same as gaining the ability to create administrators.
+
+**Twelve screens:** Dashboard (orders waiting, sold out, running low, revenue, last orders, a
+14-day sparkline), Products, the product editor (details, per-size stock, visibility, featured,
+gallery), Categories, Inventory, Orders (the list, plus a detail screen with the customer, the
+lines and the status), Customers (read-only), **Reviews — this is section 16's "Admin"
+subsection, hide or delete**, Delivery & store settings, Featured products, Hero & banners, and
+Account (who is signed in, a password change, and who else is an admin).
+
+**The rules it holds itself to**, all of which the README states and the code keeps:
+
+- **Every list is filtered, sorted and paginated by Postgres**, with the row count in the same
+  request. Nothing fetches a table and narrows it in the browser.
+- **No N+1 reads.** The product list reads the `product_summaries` view; the inventory screen
+  reads a page of per-size stock in one `in (...)`; order lines are embedded in the order query.
+- **One Realtime subscription, on `orders` only.** Every other change is one the admin just
+  made, and their own write already drops the cache.
+- **Optimistic only where it cannot lie** — activating a product, hiding a review, reordering.
+  Never stock, never an order's status, never money.
+- **Money on an order is read-only.** `place_order()` computed it server-side from stored
+  prices inside the transaction that decremented stock; this dashboard changes `status` and
+  nothing else about an order.
+- **Both image variants, always.** Every upload is resized and re-encoded to WebP in the
+  browser and stored as `thumb_url` + `full_url`, with the dimensions in `shared/media.ts` so
+  the two applications cannot disagree about how big a thumbnail is.
+- **The service role key cannot appear here** — the root ESLint config fails the build on the
+  name, in both halves.
+- **Customer data does not outlive the session:** signing out drops the read cache holding
+  names, phones and addresses, including when the sign-out happened on the shop's side.
+
+**Three migrations, all applied:** `20260830000001_admin_dashboard.sql` (featured products,
+`categories.active`, the `site_images` table, the `media` Storage bucket and its policies, a
+generated `orders.search_text` with a trigram index, `admin_dashboard_stats()`, and an index
+per new filter and sort), `20260830000002_customer_profiles.sql` (`public.profiles`, one row
+per account, written by a trigger on `auth.users` at sign-up so it cannot be skipped or forged,
+plus the `customer_summaries` view), and `20260830000003_profile_roles.sql` (authorization onto
+`profiles.role`, `is_admin()` repointed at it, the `admins` table dropped after its rows were
+carried across).
+
+**What it changed in the shop.** The landing page's hero images, promo banners and featured
+strip now come from the database, each **falling back to the committed art when nothing is
+uploaded** — `listFeatured` and `listSiteImages` in `supabaseSource.ts` catch and degrade, so a
+landing page never breaks because a migration has not landed. The hero's "12+ pieces" and "4.7
+rating" were hardcoded strings presented as facts; they are measured from the catalog now, and
+a figure with nothing behind it is omitted rather than invented. Customers can edit their name
+and phone on `/account`.
+
+**The shop does not pay for any of it.** Every `/admin` screen is lazily imported; the entry
+bundle was unchanged at 30.46 kB with no admin code in it.
+
+### The redesign, 2026-08-31 — white ground, a full-screen banner, champagne bands
+
+Three rounds of client feedback, all on `main` (`8ab6d66`, five hero fixes, `632866b`,
+`99aa7e0`).
+
+**"Light pink" was the canvas token family.** A dusty mauve palette applied sitewide as page
+and card backgrounds. The ground is pure white now, per the client's explicit ask; the
+plum-ink and antique-gold identity was left alone because that part was already working.
+
+**The header** clusters logo and nav left with deliberate spacing and puts the icons alone on
+the right, replacing an evenly balanced three-zone bar that read as generic. Mobile navigation
+is a slide-over drawer instead of a block that pushed the page down.
+
+**The hero took five attempts, and they are worth knowing about** so nobody re-walks them: the
+first full-bleed version cropped the photograph, `object-contain` fixed the crop and left
+letterbox bars, filling the bars with a blurred copy of the same photo looked like a workaround,
+and rendering at natural size stopped filling the screen. **The answer was to stop treating the
+two shapes of screen as one problem.** On a phone the banner is simply the screen — `100svh`
+minus the header, `object-cover`. From `lg` it is `clamp(32rem, 100vw / ratio, 100svh - 6rem)`:
+a wide banner, which is the shape this slot is designed for, lands inside that range and is
+shown complete, edge to edge, uncropped, ending exactly at the fold — while a portrait upload
+clamps to the fold and is cropped from the centre rather than being allowed to push the whole
+page down.
+
+**Both hero buttons come from the dashboard.** `site_images` gained `cta2_label` and
+`cta2_href` (`20260831000001_hero_second_cta.sql`, **applied — verified against the live schema
+on 2026-08-31**), and the slide's first button takes the gold slot; a hard-coded link
+out-ranking it had made that dashboard field decorative. "Shop the collection" fills whichever
+slot the admin has not claimed, so the banner is never a dead end. A blank field on an uploaded
+slide is now treated as *nothing* rather than falling back to the bootstrap marketing copy,
+which used to ship over a real photograph; promo banners hide entirely when nothing is uploaded
+instead of showing illustrated placeholders as if they were real.
+
+**The arrows became a timer.** Two round arrow buttons are gone; in their place a row of thin
+bars, the current one filling with gold over the six seconds until the slide turns. Arrows are
+a carousel announcing that it is a carousel — this says the same thing more quietly and adds
+what they never did, which is how long this slide has left, and it works on a phone, where the
+arrows were hidden and the swipe was undiscoverable. The fill is a CSS animation, not a React
+timer, so nothing re-renders to draw it; its duration is coupled to `SLIDE_MS` and noted on
+both sides.
+
+**The bands went light.** The plum bands read as "blue" to the client. Two new tokens —
+`--color-band` (`#efe4d2`, pale champagne) and `--color-band-line` — carry the two surfaces
+that were `bg-brand` on the landing page: the promises strip under the banner, and the brand
+story, inverted throughout from canvas-on-plum to ink-on-champagne. Champagne rather than
+another white because the page ground is already pure white, so a band needs a tint to be a
+band at all, and this one has a trace of the antique gold in it rather than being a grey plane.
+**`--color-brand` itself is untouched** — only the bands went light, so primary buttons, badges
+and the admin's navigation rail stay dark, which is what keeps a button reading as something
+you press rather than as more page.
+
+`BrandIntro`, `Testimonials` and `CtaBand` were de-centered into editorial layouts per the
+brief's "don't default to centered"; the sections that were already asymmetric were left
+structurally alone. **The dashboard was untouched by design** — it shares only the ink, brand
+and accent tokens with the shop, never the canvas family.
+
+### Orders start pending, reviews wait for delivery — 2026-08-31, BACKEND LIVE, UI ON A BRANCH
+
+**The code is on `feat/pending-orders-delivered-reviews` (`91eaaf4`), open as
+[PR #2](https://github.com/huzaifawork/velora-wears/pull/2) against `feat/admin-dashboard` —
+not `main`, so the PR's diff is this work alone and nothing from the dashboard branch it sits
+on. The BACKEND HALF IS ALREADY DEPLOYED**, later the same day:
+
+| | |
+| --- | --- |
+| `20260831000002` | **applied** — `db push`, verified in the migration history |
+| `submit-review` | **deployed**, version 4 — the deployed source was downloaded and diffed against the repo, byte-for-byte identical |
+| storefront + admin UI | **not shipped** — waits on the PR merging and Vercel rebuilding |
+
+That split is deliberate and safe in this direction only: **the server is now stricter than the
+UI that is live**, so the worst a customer meets is a review form that opens and is then
+refused with "You can review this piece once your order has been delivered." The reverse order
+— shipping the UI first — would have shown forms that silently wrote nothing. Merge the PR to
+close the gap.
+
+**An order is now written `pending` and stays there.** `place_order()` used to finish by moving
+the row it had just inserted to `confirmed`, so every successful checkout reached the shop
+already confirmed and `pending` existed only for the instant between the insert and the totals
+update. That inverted what the two words mean to whoever runs the shop: **confirming an order
+is a decision someone makes** — the phone call, the address check, the stock on the shelf — not
+something checkout does on their behalf. The totals update no longer touches `status` at all,
+and the dashboard's status dropdown is what moves an order on.
+
+**A product can only be reviewed once its order is `delivered`.** Eligibility followed from
+"not cancelled", which included an order placed ninety seconds ago; a review is about wearing
+the piece. The rule lives in `shared/reviews.ts` and is enforced in **three places, because two
+of them cannot import it**: `find_order_for_review` (the guest's own lookup), `submit-review`
+(the Edge Function, which re-derives ownership on every write and is the actual boundary — its
+guest `orderId` + `reviewToken` path did not read status at all), and the storefront, which
+only decides what to show. A guest whose order is still on its way gets back an empty list —
+the same answer a wrong order number gives, which is what keeps that function useless for
+probing someone else's order.
+
+**The order success page no longer embeds a review form.** A new order is pending, so the form
+could only ever be refused. It links to each product instead, which still answers section 16's
+"direct link or option", and the receipt keeps its `reviewToken` for the guest path later. Its
+eyebrow reads "Order received" rather than "Order confirmed", which the shop's own order list
+would have contradicted.
+
+**Both Postgres functions are restated in full** in the new migration, because `create or
+replace` takes the whole body. **That file is now the live definition of `place_order()` and
+`find_order_for_review()`; `20260829000003` and `20260829000005` are marked superseded.**
+Existing rows are deliberately left alone: an order already marked confirmed was confirmed
+under the old meaning, and rewriting live rows to say otherwise is not a migration's business.
+
+**Underneath it on `feat/admin-dashboard`** (`a1a8962`, NOT part of PR #2): the dashboard's
+navigation rail hides its scrollbar via a new `no-scrollbar` utility (`overflow-y-auto`
+untouched, so it still scrolls by wheel, trackpad, touch and keyboard), and order rows gained
+an eye action in the trailing column — the customer name was already a link, but a name does
+not look like one.
+
+**What is left: merge PR #2, then let Vercel rebuild.** Nothing else — the migration and the
+Edge Function are done.
+
+**Verify it end to end** by placing an order: it should read **Pending** in the dashboard
+rather than Confirmed, which on its own proves `place_order()` no longer confirms on the
+customer's behalf. Then try to review that piece (refused), mark the order **Delivered**, and
+try again (the form appears and submits).
+
+### Housekeeping, 2026-08-31 — the deprecated `baseUrl`
+
+TypeScript flagged `"baseUrl"` as deprecated and due to stop functioning in TS 7. **The editor
+attributed it to `admin/tsconfig.json`, which does not exist** — `admin/` has no build of its
+own, and `admin/src` is compiled by `storefront/tsconfig.json`, where `baseUrl` was line 19.
+
+**Removed rather than silenced with `ignoreDeprecations`.** `paths` has resolved relative to
+the tsconfig's own directory since TS 4.4 and needs no `baseUrl`, and all three entries were
+already written relative (`./src/*`, `../shared/*`, `../admin/src/*`), so they resolve exactly
+as before. Checked first that nothing depended on baseUrl-style root resolution — no import in
+`storefront/src`, `admin/src` or `shared/` is written as `from "src/…"` — and Vite's aliases
+are independent of tsconfig either way. `npx tsc --noEmit` is clean.
+
 ## 9. Open questions — ask before inventing
 
 - ~~Brand identity and logo~~ — **resolved in section 1.** Logo, palette and typography are
@@ -2213,6 +2522,15 @@ item, price and total, and zero console errors throughout. Build, typecheck and 
   `place-order` and `submit-review` were both redeployed with the check wired in. See the
   section 17 write-up above for the two real bugs this caught (a check that never ran because it
   sat after an early return, and a function `PUBLIC` could call directly) before either shipped.
+- **Orders-start-pending and reviews-wait-for-delivery are DEPLOYED to the live project,
+  2026-08-31 — but only their backend half.** `20260831000002` is applied (`db push`, after the
+  migration history was repaired — see section 4) and `submit-review` is redeployed at version
+  4, its live source downloaded and diffed against the repo to confirm it, `verify_jwt` still
+  false. **The storefront and admin UI are NOT shipped** — they sit in
+  [PR #2](https://github.com/huzaifawork/velora-wears/pull/2) and reach customers only when it
+  merges and Vercel rebuilds. The server being stricter than the shipped UI is the safe
+  direction of that gap: a review form may open and then be refused, rather than appearing to
+  work and writing nothing.
 - **No email is sent when an order is placed.** There is no mail service on this project, so
   the confirmation page deliberately does not promise one; it tells the customer to keep
   their order number. If the client wants an order email, that is a new decision — it needs
@@ -2245,7 +2563,14 @@ item, price and total, and zero console errors throughout. Build, typecheck and 
   flat charge plus an optional free-delivery threshold, which is what §10 asks for. **Per-city
   rates are still undecided** and would be a schema change (`settings` holds one number), so
   agree it with the client and Developer B before building it.
-- **Admin dashboard spec** (section 8) — still pending from the client.
+- **Admin dashboard spec** (section 8) — never arrived from the client, and the dashboard was
+  built anyway, from the requirements text plus what the schema already implied. It is in use.
+  If the client eventually produces a spec, read it against
+  [`admin/README.md`](admin/README.md)'s screen table rather than against this line.
+- **Is the live site on the real catalog?** The database has 11 real products, so the
+  condition every earlier note attached to `VITE_DATA_SOURCE=supabase` is met. The repo cannot
+  tell you whether the Vercel variable was flipped — check it there, and remember Vite inlines
+  it at build time, so flipping it needs a redeploy.
 
 ---
 
