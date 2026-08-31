@@ -40,7 +40,7 @@ export function Testimonials({
           align="center"
           eyebrow="Customer reviews"
           title="What people across Pakistan are saying"
-          description="Every review below comes from a confirmed order — Lahore to Karachi, Islamabad to Multan."
+          description="Every review below comes from a delivered order — Lahore to Karachi, Islamabad to Multan."
         />
 
         {!loading && reviews && (

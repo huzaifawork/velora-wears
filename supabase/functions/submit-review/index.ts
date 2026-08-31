@@ -38,6 +38,14 @@ import { rateLimited } from "../_shared/rateLimit.ts";
  *                               an orderId is never taken on the client's
  *                               word alone.
  *
+ * Every one of those three paths additionally requires the order to be
+ * DELIVERED. Buying a piece is not the thing a review is about — wearing it
+ * is — so an order that is pending, confirmed or still with the courier
+ * cannot be reviewed yet, and one that was cancelled never can. The
+ * storefront hides the form in those cases; THIS is what enforces it, because
+ * the storefront's copy of a rule is a courtesy and the server's is the rule
+ * (see `REVIEWABLE_STATUS` below).
+ *
  * `reviews` has NO insert/update/delete policy for anon or authenticated —
  * on purpose, the same reasoning as `orders` having no insert policy at all.
  * Everything here runs with the service role key, which bypasses RLS.
@@ -64,6 +72,21 @@ const fail = (code: string, message: string, status = 400) =>
  * by the Supabase CLI) so the same bounds are inlined. CHANGING A RULE MEANS
  * CHANGING BOTH FILES.
  * ------------------------------------------------------------------------ */
+
+/**
+ * The one status an order may be in for its items to be reviewable.
+ *
+ * Mirrored in the storefront (`shared/reviews.ts` — `REVIEWABLE_ORDER_STATUS`)
+ * and in `find_order_for_review`'s SQL. Deno cannot import from `shared/`, so
+ * this is inlined for the same reason every other shared rule in this file is:
+ * CHANGING THE RULE MEANS CHANGING ALL THREE.
+ */
+const REVIEWABLE_STATUS = "delivered";
+
+/** Said the same way on every path, so a refusal never reveals WHICH order
+ *  exists — only that nothing reviewable was found. */
+const NOT_DELIVERED_MESSAGE =
+  "You can review this piece once your order has been delivered.";
 
 const COMMENT_MIN = 4;
 const COMMENT_MAX = 1000;
@@ -113,9 +136,11 @@ function withinEditWindow(createdAtIso: string): boolean {
 }
 
 /**
- * Resolves WHO is asking and WHICH order proves they bought `productId`.
- * Every path ends in an order id this function itself looked up — never one
- * merely echoed back from the request (requirements section 17).
+ * Resolves WHO is asking and WHICH DELIVERED order proves they bought
+ * `productId`. Every path ends in an order id this function itself looked up —
+ * never one merely echoed back from the request (requirements section 17) —
+ * and every path applies the delivered rule itself rather than trusting an
+ * earlier lookup to have applied it.
  */
 async function resolveOrder(
   supabase: any,
@@ -138,14 +163,17 @@ async function resolveOrder(
       .select("id, order_items!inner(product_id)")
       .eq("user_id", userId)
       .eq("order_items.product_id", productId)
-      .neq("status", "cancelled")
+      .eq("status", REVIEWABLE_STATUS)
       .order("created_at", { ascending: false })
       .limit(1);
 
     if (error || !data || data.length === 0) {
+      // Deliberately one message for "you never bought this" and "it has not
+      // arrived yet": the customer's own order history already tells them
+      // which of the two it is, and this endpoint should not be a way to ask.
       return {
         error: "NOT_PURCHASED",
-        message: "We could not find an order of this product on your account.",
+        message: `We could not find a delivered order of this product on your account. ${NOT_DELIVERED_MESSAGE}`,
       };
     }
     return { orderId: data[0].id, userId };
@@ -156,7 +184,7 @@ async function resolveOrder(
   if (orderId && reviewToken) {
     const { data, error } = await supabase
       .from("orders")
-      .select("id, review_token, order_items(product_id)")
+      .select("id, status, review_token, order_items(product_id)")
       .eq("id", orderId)
       .maybeSingle();
 
@@ -167,6 +195,12 @@ async function resolveOrder(
       !data.order_items?.some((item: { product_id: string }) => item.product_id === productId)
     ) {
       return { error: "NOT_PURCHASED", message: "We could not verify this order for this product." };
+    }
+    // The token proves the order is theirs; it says nothing about where the
+    // order has got to. A receipt held since checkout is exactly the case this
+    // catches — the order it names is pending, not delivered.
+    if (data.status !== REVIEWABLE_STATUS) {
+      return { error: "NOT_DELIVERED", message: NOT_DELIVERED_MESSAGE };
     }
     return { orderId: data.id, userId: null };
   }
@@ -179,14 +213,16 @@ async function resolveOrder(
       .select("id, order_items!inner(product_id)")
       .eq("order_number", orderNumber)
       .ilike("email", email)
-      .neq("status", "cancelled")
+      .eq("status", REVIEWABLE_STATUS)
       .eq("order_items.product_id", productId)
       .maybeSingle();
 
     if (error || !data) {
+      // Same single answer `find_order_for_review` gives, and for the same
+      // reason: a wrong guess and an undelivered order must look alike.
       return {
         error: "NOT_PURCHASED",
-        message: "We could not find a matching order for that order number and email.",
+        message: `We could not find a delivered order for that order number and email. ${NOT_DELIVERED_MESSAGE}`,
       };
     }
     return { orderId: data.id, userId: null };

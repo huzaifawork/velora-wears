@@ -4,12 +4,12 @@ import { Container } from "@/components/layout/Container";
 import { Image } from "@/components/ui/Image";
 import { buttonClasses } from "@/components/ui/Button";
 import { OrderSuccessAnimation } from "@/features/checkout/OrderSuccessAnimation";
-import { ReviewComposer } from "@/features/reviews/ReviewComposer";
 import { formatPrice } from "@/lib/format";
 import { readReceipt, receiptSubtotal } from "@/lib/orderReceipt";
 import { CART, HOME, PRODUCTS, productPath } from "@/lib/routes";
 import { SIZE_LABELS } from "@/lib/sizes";
 import { paymentMethodCopy } from "@shared/payment";
+import { REVIEW_AFTER_DELIVERY_MESSAGE } from "@shared/reviews";
 
 /**
  * The order success page (requirements section 7 — "an order confirmation
@@ -60,8 +60,13 @@ export function OrderConfirmedPage() {
         <div className="text-center">
           <OrderSuccessAnimation />
 
+          {/* "Received", not "confirmed": an order is written as PENDING and
+              stays there until someone at the shop confirms it (see the
+              paragraph below, which has always described exactly that call).
+              The customer should not read a word here that the shop's own
+              order list disagrees with. */}
           <p className="mt-8 text-[0.625rem] tracking-eyebrow text-accent uppercase">
-            Order confirmed
+            Order received
           </p>
           <h1 className="mt-5 text-3xl leading-tight text-balance sm:text-4xl">
             Thank you — your order is placed.
@@ -133,16 +138,22 @@ export function OrderConfirmedPage() {
 
                 {/* Requirements section 16: "the Order Success page should
                     offer a direct link or option to review the purchased
-                    product(s)." `reviewToken` is what lets a guest do this
-                    without an account. */}
-                {line.productId && (
-                  <ReviewComposer
-                    productId={line.productId}
-                    productName={line.name}
-                    orderId={receipt.orderId}
-                    identity={{ mode: "token", reviewToken: receipt.reviewToken }}
-                  />
-                )}
+                    product(s)." A brand new order is PENDING, and a piece can
+                    only be reviewed once it has been delivered
+                    (`shared/reviews.ts`) — so what belongs here is the direct
+                    link, not the form. Opening a composer the server would
+                    refuse would be a worse page than one that says when to
+                    come back. The order's `reviewToken` stays in the receipt
+                    for the guest path on the product page itself. */}
+                <p className="text-xs leading-relaxed text-ink-muted">
+                  {REVIEW_AFTER_DELIVERY_MESSAGE}{" "}
+                  <Link
+                    to={productPath(line.slug)}
+                    className="text-accent underline underline-offset-4 transition hover:text-ink"
+                  >
+                    Review {line.name}
+                  </Link>
+                </p>
               </li>
             ))}
           </ul>

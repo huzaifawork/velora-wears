@@ -1,51 +1,38 @@
 -- ---------------------------------------------------------------------------
--- payment_method — recording HOW an order is paid (requirements section 9).
+-- Two rules that belong together: an order STARTS as pending, and a product
+-- can only be reviewed once that order has been DELIVERED.
 --
--- Section 9 allows exactly one method in version one, cash on delivery, and
--- says online payment "may be added in the future if required". The orders
--- table did not record the method at all, which is fine while there is only
--- one answer and ambiguous the moment there are two: every row written before
--- a second method existed would become a guess, and section 8 requires the
--- admin dashboard to show every confirmed order for management.
+--   1. `place_order` used to finish by moving the row it had just written from
+--      'pending' to 'confirmed' — so every successful checkout landed in the
+--      admin's list already confirmed, and 'pending' only ever existed for the
+--      instant between the insert and the totals update. That inverted what
+--      the two words mean to whoever runs the shop: confirming an order is a
+--      DECISION someone makes (the phone call, the address check, the stock on
+--      the shelf), not something checkout does on their behalf. A new order is
+--      now simply pending, and the admin dashboard's status dropdown (§8) is
+--      what moves it on.
 --
--- So: an enum with one value, and a column that defaults to it. Adding a
--- method later is `alter type public.payment_method add value 'card'` plus
--- whatever collects it — not a backfill over live orders.
+--   2. Review eligibility followed from "not cancelled", which included an
+--      order placed ninety seconds ago. A review is meant to be about wearing
+--      the piece, so the bar is now the last status in the chain: the order
+--      must be 'delivered'. That is checked in THREE places, all of which have
+--      to agree —
 --
--- THE BROWSER CANNOT SET THIS. `place_order` writes the value itself and the
--- Edge Function has no parameter for it. A client that could name its own
--- payment method could mark an order paid (requirements section 17).
--- ---------------------------------------------------------------------------
-
-create type public.payment_method as enum ('cod');
-
-alter table public.orders
-  add column payment_method public.payment_method not null default 'cod';
-
--- The admin dashboard lists orders by status and date (section 8), and "which
--- COD orders are still awaiting a courier" is the obvious next question it
--- asks. A new filter column gets its index in the same migration.
-create index orders_payment_method on public.orders (payment_method, created_at desc);
-
--- ---------------------------------------------------------------------------
--- place_order, restated.
+--        `find_order_for_review`      here, the guest's own lookup;
+--        `submit-review`              the Edge Function, which re-derives
+--                                     ownership itself on every write and is
+--                                     the actual boundary;
+--        the storefront               which only decides what to show.
 --
--- A Postgres function cannot be patched in place — `create or replace` takes
--- the whole body — so this file held the LIVE definition and
--- 20260829000002_place_order.sql became history.
+-- Neither function is new. Both are restated in full because Postgres cannot
+-- patch a function body in place — `create or replace` takes the whole thing.
+-- THIS FILE IS NOW THE LIVE DEFINITION OF BOTH; the earlier migrations that
+-- carry them (20260829000003 for `place_order`, 20260829000005 for
+-- `find_order_for_review`) are history. Edit this one.
 --
--- SUPERSEDED. The live definition is now
--- 20260831000002_pending_orders_delivered_reviews.sql, which stopped this
--- function from confirming the order it had just written. Edit THAT one.
---
--- Two changes from that file, both marked below:
---   * the insert names payment_method explicitly rather than leaning on the
---     column default, so the value an order is written with is visible in the
---     function that writes it rather than in a table definition three files
---     away;
---   * the result carries paymentMethod back, so the confirmation page states
---     what the STORE recorded instead of the browser assuming it — the same
---     reason it shows the server's total and not its own arithmetic.
+-- Existing rows are deliberately left alone. An order already marked confirmed
+-- was confirmed under the old meaning, and rewriting live orders to say
+-- something else about work already done is not a migration's business.
 -- ---------------------------------------------------------------------------
 
 create or replace function public.place_order(
@@ -106,6 +93,8 @@ begin
     payment_method,
     is_guest, user_id, review_token
   ) values (
+    -- Where an order BEGINS, and now also where it stays until someone at the
+    -- shop moves it on.
     v_order_id, v_order_number, 'pending',
     btrim(p_customer ->> 'fullName'),
     lower(btrim(p_customer ->> 'email')),
@@ -188,11 +177,13 @@ begin
     v_delivery := 0;
   end if;
 
+  -- The totals, and ONLY the totals. This update used to also set
+  -- status = 'confirmed'; it no longer touches status at all, so the row keeps
+  -- the 'pending' it was inserted with and the admin decides the rest.
   update public.orders
   set subtotal = v_subtotal,
       delivery_charge = v_delivery,
-      total = v_subtotal + v_delivery,
-      status = 'confirmed'
+      total = v_subtotal + v_delivery
   where id = v_order_id;
 
   return jsonb_build_object(
@@ -205,8 +196,61 @@ begin
 end;
 $$;
 
--- Only trusted server code may call this. The Edge Function uses the service
--- role key; the browser's anon key is deliberately not granted execute, so the
--- storefront cannot reach past its own validation (requirements section 17).
+-- Unchanged from 20260829000003, restated because `create or replace` on a
+-- function resets nothing else but a fresh definition deserves its grants
+-- stated beside it: only trusted server code may place an order.
 revoke all on function public.place_order(jsonb, jsonb, uuid) from public, anon, authenticated;
 grant execute on function public.place_order(jsonb, jsonb, uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- find_order_for_review — the guest "order number + email" lookup (§16),
+-- restated with the delivered rule.
+--
+-- Same name, same signature, same columns, same rate limit as the version in
+-- 20260829000005 — the ONE line that differs is the status test, which was
+-- `o.status <> 'cancelled'` and is now `o.status = 'delivered'`. A guest whose
+-- order is still on its way gets back an empty list, which is the same answer
+-- a wrong order number gives: this function has never distinguished between
+-- kinds of "no", and it should not start now (that is what makes it useless
+-- for probing someone else's order).
+-- ---------------------------------------------------------------------------
+
+create or replace function public.find_order_for_review(p_order_number text, p_email text)
+returns table (
+  order_id uuid,
+  review_token uuid,
+  product_id uuid,
+  product_name text,
+  product_slug text,
+  size public.product_size,
+  qty integer
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_ip text;
+  v_allowed boolean;
+begin
+  v_ip := coalesce(
+    nullif(split_part(coalesce(current_setting('request.headers', true), '{}')::json->>'x-forwarded-for', ',', 1), ''),
+    'unknown'
+  );
+
+  v_allowed := public.check_rate_limit('find-order-for-review:' || v_ip, 20, 900);
+  if not v_allowed then
+    raise exception 'Too many attempts. Please wait a few minutes and try again.' using errcode = '55000';
+  end if;
+
+  return query
+  select o.id, o.review_token, oi.product_id, oi.name, oi.slug, oi.size, oi.qty
+  from public.orders o
+  join public.order_items oi on oi.order_id = o.id
+  where o.status = 'delivered'
+    and o.order_number = btrim(p_order_number)
+    and lower(o.email) = lower(btrim(p_email));
+end;
+$$;
+
+grant execute on function public.find_order_for_review(text, text) to anon, authenticated;

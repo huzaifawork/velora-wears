@@ -24,10 +24,15 @@ import { formatDate } from "@/lib/format";
  * review per product per order. The read half is `ProductReviews`.
  *
  * ONE component reused everywhere a customer can write a review (requirements
- * section 18): after checkout, from order history, and — once a guest has
- * verified an order number and email — on the product page itself. What
- * differs between those three call sites is only how ownership is proven,
- * which is `identity`; everything else about writing a review is identical.
+ * section 18): from order history, and — once a guest has verified an order
+ * number and email — on the product page itself. What differs between those
+ * call sites is only how ownership is proven, which is `identity`; everything
+ * else about writing a review is identical.
+ *
+ * Every call site only mounts this for a DELIVERED order (`shared/reviews.ts`),
+ * which is why it takes no status of its own: by the time it renders, the
+ * question of whether a review is allowed yet has already been answered — and
+ * `submit-review` answers it again server-side regardless.
  *
  * It always knows `orderId` up front (the caller looked it up — from the
  * receipt, from `listMyOrders()`, or from `findOrderForReview`), so it can

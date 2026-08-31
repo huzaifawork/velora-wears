@@ -43,7 +43,7 @@ export function ProductReviews({
         <SectionHeading
           eyebrow="Customer reviews"
           title="What buyers said about this piece"
-          description="Reviews can only be left by customers with a confirmed order, so everything here comes from someone who actually received it."
+          description="Reviews can only be left once an order has been delivered, so everything here comes from someone who actually received it."
         />
 
         {ratingCount > 0 && (
