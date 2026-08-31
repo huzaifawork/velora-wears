@@ -275,10 +275,11 @@ export interface Review {
 /**
  * What an account may do.
  *
- * Every sign-up is a `user`. `admin` is granted by the shop's owner from the
- * Supabase SQL or table editor — deliberately NOT from either application: an
- * admin session that could create more admins would mean taking over one
- * administrator's browser is the same as taking over the shop permanently.
+ * Every sign-up is a `user`. `admin` is granted by an existing administrator,
+ * from the dashboard's Customers screen, through the `set_user_role()` database
+ * function — never by writing the column, which no client may do. That function
+ * refuses a caller acting on their own row in either direction, and refuses to
+ * demote the last administrator.
  *
  * Mirrors the `public.user_role` enum. Add to both together.
  */

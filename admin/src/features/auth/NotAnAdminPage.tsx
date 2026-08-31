@@ -73,11 +73,24 @@ export function NotAnAdminPage() {
 
           <p className="mt-4 text-sm leading-relaxed text-ink-soft">
             {/*
-              The SQL editor, not this dashboard, and not by an admin through
-              the API — `guard_profile_role` refuses a role change from any
-              signed-in session. Whoever owns the Supabase project runs:
+              The normal path. An existing admin promotes people from the
+              dashboard's Customers screen, through `set_user_role()` — which is
+              the only way a role can be written, and needs a caller who is
+              already an administrator.
             */}
-            Whoever owns the Supabase project can grant it from the SQL editor:
+            An existing administrator can grant it: they find your account on the
+            dashboard&rsquo;s <strong>Customers</strong> screen and press{" "}
+            <strong>Make admin</strong>. Sign out and back in afterwards.
+          </p>
+
+          <p className="mt-4 text-sm leading-relaxed text-ink-soft">
+            {/*
+              The bootstrap, and the recovery. `set_user_role()` needs an
+              administrator to call it, so the FIRST one — and the shop after
+              losing them all — has to be made in the SQL editor.
+            */}
+            If this shop has no administrator yet, whoever owns the Supabase
+            project makes the first one from the SQL editor:
           </p>
 
           <pre className="mt-3 overflow-x-auto rounded-lg bg-brand-deep p-4 text-xs leading-relaxed text-white/85">

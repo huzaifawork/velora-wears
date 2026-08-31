@@ -9,9 +9,9 @@ import { DEFAULT_PAGE_SIZE } from "@admin/services/products";
  * Customers — the accounts people have created on the shop.
  *
  * ---------------------------------------------------------------------------
- * READ ONLY, AND THAT IS THE WHOLE SHAPE OF IT
+ * READ ONLY, EXCEPT FOR ONE THING THAT IS NOT READ FROM HERE EITHER
  * ---------------------------------------------------------------------------
- * There is no create, no update and no delete here, and none of them is
+ * There is no create, no update and no delete in this file, and none of them is
  * missing by accident:
  *
  *  - A profile is created by a DATABASE TRIGGER when somebody signs up, and
@@ -21,14 +21,16 @@ import { DEFAULT_PAGE_SIZE } from "@admin/services/products";
  *    grants update on those two columns to the account that owns the row and to
  *    nobody else — an admin cannot rewrite a person's own details, which is
  *    correct and is also the reason there is no edit form on this screen.
- *  - A customer's ROLE is shown here and cannot be changed from here. The
- *    database refuses any role change made from a session that has an
- *    `auth.uid()`, which is every request this dashboard can make — so an admin
- *    session cannot promote anybody, including itself. Roles are changed in the
- *    Supabase SQL or table editor by whoever owns the project.
+ *  - A customer's ROLE is read here and written nowhere — not even by the
+ *    Customers screen's own "Make admin" button, which calls `set_user_role()`
+ *    in `services/admins.ts`. `profiles.role` is outside the column grant, so a
+ *    table update of it fails for every client; the promotion path is one
+ *    SECURITY DEFINER function that authorizes itself. Keeping that call out of
+ *    this file keeps this file honest: a read of `customer_summaries` and
+ *    nothing else.
  *
- * So this is a directory: who has an account, how to reach them, and what they
- * have bought.
+ * So this is a directory: who has an account, how to reach them, what they have
+ * bought, and whether they manage the shop.
  *
  * ---------------------------------------------------------------------------
  * ORDER COUNTS COME FROM THE DATABASE, NOT FROM A LOOP

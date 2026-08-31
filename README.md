@@ -89,23 +89,33 @@ The catalog is still served from demo data in the frontend (`VITE_DATA_SOURCE=de
 to `supabase` once real products exist in the database — the admin dashboard is what creates
 them. **The live database is deliberately empty; mock data is never written to it.**
 
-The dashboard needs `supabase/migrations/20260830000001_admin_dashboard.sql` applied, and your
-Supabase Auth user id present in the `admins` table. See [`admin/README.md`](admin/README.md).
+The dashboard needs every migration in `supabase/migrations/` applied, and your Supabase Auth
+account's `profiles.role` set to `'admin'`. See [`admin/README.md`](admin/README.md).
 
 ## Signing in
 
 **There is one sign-in form**, at `/account/sign-in`, and one kind of account. Every sign-up
 creates a profile with `role = 'user'`; an administrator is the same account with
 `role = 'admin'` — so the same email and password that buy a hoodie open the dashboard, once
-the shop's owner changes that one column.
+that one column changes.
+
+**An existing administrator promotes and demotes from the dashboard.** On **Customers**,
+each account has a `Make admin` / `Remove admin` button; the **Account** screen lists every
+administrator with the same demote button. Both go through `set_user_role()`, a SECURITY
+DEFINER function that authorizes itself in the database and refuses three things: a caller
+who is not an administrator, a caller acting on their own row in either direction, and
+demoting the last remaining administrator.
+
+`profiles.role` itself is still writable by nobody through the API — it is outside the
+customer's update grant, and a trigger refuses any change that did not come through that
+function — so an ordinary session cannot mint an admin.
+
+**The FIRST administrator** has to be made in the Supabase SQL editor, since the function
+needs an administrator to call it. Same for a shop that has somehow lost all of them:
 
 ```sql
 update public.profiles set role = 'admin' where email = 'them@example.com';
 ```
-
-Run that in the Supabase SQL editor. Neither application can change a role: the column is
-outside the customer's update grant, and a trigger refuses any change made from a signed-in
-session — so an admin session cannot mint another admin.
 
 After a successful sign-in the app asks the database `is_admin()` and routes on the answer:
 an administrator lands on `/admin`, everyone else on their account (or on `?next=`, if they
