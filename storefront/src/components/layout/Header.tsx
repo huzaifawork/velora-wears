@@ -139,7 +139,7 @@ export function Header() {
     // semi-opaque header let whatever was scrolled underneath — the hero's
     // colour washes especially — tint it unevenly, which read as the header
     // not properly covering the page. A flat `bg-canvas` cannot do that.
-    <header className="sticky top-0 z-40 border-b border-line bg-canvas shadow-card">
+    <header className="sticky top-0 z-40 border-b border-line bg-canvas shadow-card print:hidden">
       {settings?.storeAnnouncement && (
         <p className="bg-brand px-4 py-2 text-center text-[0.625rem] tracking-eyebrow text-canvas/85 uppercase">
           {settings.storeAnnouncement}

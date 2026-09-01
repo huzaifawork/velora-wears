@@ -70,7 +70,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="border-t border-line bg-canvas-alt">
+    <footer className="border-t border-line bg-canvas-alt print:hidden">
       <Container className="grid gap-12 py-16 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
         <div className="sm:col-span-2 lg:col-span-1">
           <Logo variant="stacked" className="items-start! text-ink" />
