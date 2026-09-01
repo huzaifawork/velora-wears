@@ -55,10 +55,19 @@ export function OrderConfirmedPage() {
   const payment = paymentMethodCopy(receipt.paymentMethod);
 
   return (
-    <Container className="py-16 sm:py-24">
+    <Container className="py-16 sm:py-24 print:py-0">
       <div className="mx-auto max-w-2xl">
+        {/* Print-only letterhead — the header carrying the logo is hidden while
+            printing (see Header.tsx), so the receipt needs its own. */}
+        <div className="hidden print:mb-8 print:block">
+          <p className="font-display text-xl text-ink">Velora Wears</p>
+          <p className="text-xs text-ink-soft">Order receipt</p>
+        </div>
+
         <div className="text-center">
-          <OrderSuccessAnimation />
+          <div className="print:hidden">
+            <OrderSuccessAnimation />
+          </div>
 
           {/* "Received", not "confirmed": an order is written as PENDING and
               stays there until someone at the shop confirms it (see the
@@ -145,7 +154,7 @@ export function OrderConfirmedPage() {
                     refuse would be a worse page than one that says when to
                     come back. The order's `reviewToken` stays in the receipt
                     for the guest path on the product page itself. */}
-                <p className="text-xs leading-relaxed text-ink-muted">
+                <p className="text-xs leading-relaxed text-ink-muted print:hidden">
                   {REVIEW_AFTER_DELIVERY_MESSAGE}{" "}
                   <Link
                     to={productPath(line.slug)}
@@ -191,13 +200,20 @@ export function OrderConfirmedPage() {
           <p className="mt-4 text-xs leading-relaxed text-ink-soft">{payment.confirmation}</p>
         </section>
 
-        <div className="mt-12 flex flex-wrap justify-center gap-3">
+        <div className="mt-12 flex flex-wrap justify-center gap-3 print:hidden">
           <Link to={PRODUCTS} className={buttonClasses({ size: "lg" })}>
             Continue shopping
           </Link>
           <Link to={HOME} className={buttonClasses({ variant: "secondary", size: "lg" })}>
             Back to home
           </Link>
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className={buttonClasses({ variant: "secondary", size: "lg" })}
+          >
+            Print receipt
+          </button>
         </div>
       </div>
     </Container>

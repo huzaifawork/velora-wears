@@ -99,6 +99,13 @@ export function OrderDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* Print-only letterhead — the sidebar and top bar carrying the shop's
+          name are hidden while printing (see AdminLayout.tsx). */}
+      <div className="hidden print:mb-6 print:block">
+        <p className="font-display text-xl text-ink">Velora Wears</p>
+        <p className="text-xs text-ink-soft">Order receipt</p>
+      </div>
+
       <PageHeader
         title={data.customer.fullName}
         description={
@@ -111,9 +118,14 @@ export function OrderDetailPage() {
           </span>
         }
         action={
-          <Link to={routes.ORDERS} className={buttonClasses({ variant: "secondary" })}>
-            Back to orders
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <Button variant="secondary" onClick={() => window.print()}>
+              Print receipt
+            </Button>
+            <Link to={routes.ORDERS} className={buttonClasses({ variant: "secondary" })}>
+              Back to orders
+            </Link>
+          </div>
         }
       />
 
@@ -195,7 +207,7 @@ export function OrderDetailPage() {
 
         <div className="space-y-6">
           {/* --- Status ------------------------------------------------ */}
-          <Card>
+          <Card className="print:hidden">
             <CardHeader title="Status" />
 
             <div className="mt-4 flex items-center gap-3">
@@ -320,7 +332,7 @@ function CopyableValue({
           setCopied(true);
           window.setTimeout(() => setCopied(false), 1600);
         }}
-        className="-mt-1 shrink-0 px-2"
+        className="-mt-1 shrink-0 px-2 print:hidden"
       >
         <CopyIcon className="h-3.5 w-3.5" />
         <span className="sr-only">{copied ? "Copied" : "Copy"}</span>

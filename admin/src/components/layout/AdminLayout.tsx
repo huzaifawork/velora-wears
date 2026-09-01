@@ -68,7 +68,7 @@ export function AdminLayout() {
   return (
     <div className="min-h-screen bg-surface-sunken">
       {/* --- Permanent rail, lg and up ----------------------------------- */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 lg:block">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 print:hidden lg:block">
         <Sidebar openOrders={openOrders} footer={footer} />
       </aside>
 
@@ -97,10 +97,10 @@ export function AdminLayout() {
         </div>
       )}
 
-      <div className="lg:pl-64">
+      <div className="lg:pl-64 print:pl-0">
         {/* --- Mobile top bar. Sticky, because it is the only way back to
                 navigation on a phone and a long table would strand it. --- */}
-        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-brand px-4 py-3 lg:hidden">
+        <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-line bg-brand px-4 py-3 print:hidden lg:hidden">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
@@ -113,7 +113,7 @@ export function AdminLayout() {
           <Wordmark />
         </header>
 
-        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+        <main className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 print:px-0 print:py-0 lg:px-8">
           <Outlet />
         </main>
       </div>
