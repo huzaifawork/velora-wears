@@ -154,6 +154,27 @@ export interface Category {
   slug: string;
   name: string;
   sortOrder: number;
+  /**
+   * The category this one sits UNDER, or absent for a top-level category
+   * (requirements section 5 — subcategories).
+   *
+   * ADDITIVE and optional, like `active` and `description` above: every row
+   * that existed before subcategories has none, which is what "top level"
+   * means. A source that predates the column returns categories that are by
+   * definition top-level, so read a missing value as "no parent", never as an
+   * unknown one.
+   *
+   * EXACTLY ONE LEVEL. A category with a parent can never itself be a parent —
+   * the database enforces it (`categories_enforce_one_level()`), so no reader
+   * has to walk a tree of unknown depth. Use the helpers in
+   * `shared/categories.ts` rather than reading this field directly; they are
+   * what both applications group, count and filter with.
+   *
+   * A product belongs to ONE category, parent or child alike —
+   * `products.category_slug` is unchanged. Browsing a parent shows everything
+   * in its children too; that roll-up is `categoryBranchSlugs()`.
+   */
+  parentSlug?: string;
   thumb?: string;
   /**
    * One line of copy introducing the category, shown on the category tiles and

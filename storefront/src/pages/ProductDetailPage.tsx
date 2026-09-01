@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { Size } from "@shared/types";
 import { FALLBACK_LOW_STOCK_THRESHOLD, availableSizes, joinNames, stockInSize } from "@shared/stock";
+import { parentOfCategory } from "@shared/categories";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { Container } from "@/components/layout/Container";
 import { ValueProps } from "@/components/layout/ValueProps";
@@ -102,12 +103,31 @@ export function ProductDetailPage() {
     `reviews:${product?.id ?? "none"}:${REVIEW_LIMIT}`,
   );
 
+  /**
+   * The category "more from this category" reads — the product's own, or its
+   * PARENT when the product sits in a subcategory (requirements section 5).
+   *
+   * Widening is the point. A subcategory is by definition a slice of a
+   * category, so a strip drawn from it alone would often be one or two pieces
+   * and would disappear entirely for the only piece in a new sub-collection.
+   * Reading the parent gives the strip everything under the same heading —
+   * which is what a shopper looking at an oxford shirt means by "more like
+   * this" — and browsing a parent already includes its children, so this is
+   * one read, not several.
+   *
+   * `categories` and `product` land in the SAME `Promise.all` above, so this
+   * never resolves to the child first and then flips to the parent.
+   */
+  const relatedCategorySlug = product
+    ? (parentOfCategory(categories ?? [], product.categorySlug)?.slug ?? product.categorySlug)
+    : undefined;
+
   const related = useAsync(
     () =>
-      product
-        ? listProducts({ categorySlug: product.categorySlug, limit: RELATED_LIMIT })
+      relatedCategorySlug
+        ? listProducts({ categorySlug: relatedCategorySlug, limit: RELATED_LIMIT })
         : Promise.resolve([]),
-    `related:${product?.categorySlug ?? "none"}:${RELATED_LIMIT}`,
+    `related:${relatedCategorySlug ?? "none"}:${RELATED_LIMIT}`,
   );
 
   if (main.loading) return <ProductDetailSkeleton />;
@@ -119,6 +139,9 @@ export function ProductDetailPage() {
   const categoryName =
     categories?.find((c) => c.slug === product.categorySlug)?.name ??
     prettifySlug(product.categorySlug);
+
+  /** Set only when this product's category sits inside another one. */
+  const parentCategory = parentOfCategory(categories ?? [], product.categorySlug);
 
   const soldOut = availableSizes(product.sizes).length === 0;
 
@@ -160,6 +183,12 @@ export function ProductDetailPage() {
         items={[
           { label: "Home", to: HOME },
           { label: "Categories", to: CATEGORIES },
+          // Home / Categories / Shirts / Oxford & Poplin / Meridian… — the
+          // parent rung appears only for a product in a subcategory, so a flat
+          // catalog keeps the trail it has always had.
+          ...(parentCategory
+            ? [{ label: parentCategory.name, to: categoryPath(parentCategory.slug) }]
+            : []),
           { label: categoryName, to: categoryPath(product.categorySlug) },
           { label: product.name },
         ]}
@@ -295,8 +324,11 @@ export function ProductDetailPage() {
       <RelatedProducts
         products={related.data}
         categories={categories}
-        categorySlug={product.categorySlug}
-        categoryName={categoryName}
+        /* Named after whatever the strip actually read — the parent for a
+           product in a subcategory — so "More from X" and the link under it
+           agree with the pieces shown. */
+        categorySlug={relatedCategorySlug ?? product.categorySlug}
+        categoryName={parentCategory?.name ?? categoryName}
         currentProductId={product.id}
         loading={related.loading}
       />

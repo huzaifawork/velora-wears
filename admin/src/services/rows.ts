@@ -201,10 +201,12 @@ export interface CategoryRow {
   thumb: string | null;
   description: string | null;
   active: boolean;
+  parent_slug: string | null;
   products?: { count: number }[];
 }
 
-export const CATEGORY_COLUMNS = "slug, name, sort_order, thumb, description, active";
+export const CATEGORY_COLUMNS =
+  "slug, name, sort_order, thumb, description, active, parent_slug";
 
 export function toCategory(row: CategoryRow): Category {
   return {
@@ -214,6 +216,9 @@ export function toCategory(row: CategoryRow): Category {
     thumb: opt(row.thumb),
     description: opt(row.description),
     active: row.active,
+    // Null is "top level" — the state of every category before
+    // `20260902000001_subcategories.sql`. See shared/types.ts.
+    parentSlug: opt(row.parent_slug),
     // Counted live by the same query (`products(count)`), never stored — see
     // the note on `Category.productCount` in shared/types.ts.
     productCount: row.products?.[0]?.count ?? 0,

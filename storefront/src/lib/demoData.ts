@@ -53,7 +53,7 @@ const seeds: Seed[] = [
     slug: "meridian-oxford-shirt",
     name: "Meridian Oversized Drop Shoulder Shirt",
     price: 4290,
-    categorySlug: "shirts",
+    categorySlug: "oxford-shirts",
     alt: "Meridian Oversized Drop Shoulder Shirt in ecru, laid flat",
     description:
       "An oversized drop-shoulder cut in a mid-weight oxford cotton that holds its shape after a wash. The shoulder seam sits low on the arm for a relaxed line through the body. Mother-of-pearl buttons, a single chest pocket, and a collar with enough structure to wear open or closed.",
@@ -64,7 +64,7 @@ const seeds: Seed[] = [
     slug: "noor-linen-shirt",
     name: "Noor Oversized Drop Shoulder Shirt",
     price: 4890,
-    categorySlug: "shirts",
+    categorySlug: "linen-shirts",
     alt: "Noor Oversized Drop Shoulder Shirt in warm sand, laid flat",
     description:
       "An oversized drop-shoulder cut in pure linen, washed soft before it reaches you, so it drapes from the first wear rather than the tenth. Built for Karachi humidity and long afternoons — breathable, light, and unbothered by creasing.",
@@ -75,7 +75,7 @@ const seeds: Seed[] = [
     slug: "kohl-poplin-shirt",
     name: "Kohl Oversized Drop Shoulder Shirt",
     price: 3990,
-    categorySlug: "shirts",
+    categorySlug: "oxford-shirts",
     alt: "Kohl Oversized Drop Shoulder Shirt in deep charcoal, laid flat",
     description:
       "A crisp poplin in a near-black charcoal — the shirt that works for a dinner, an interview, and the office on the same week. Slim through the sleeve, straight at the hem, finished with a hidden button stand.",
@@ -86,7 +86,7 @@ const seeds: Seed[] = [
     slug: "sahil-camp-collar-shirt",
     name: "Sahil Oversized Drop Shoulder Shirt",
     price: 4590,
-    categorySlug: "shirts",
+    categorySlug: "linen-shirts",
     alt: "Sahil Oversized Drop Shoulder Shirt in sage green, laid flat",
     description:
       "An open camp collar in a soft sage viscose blend, cut oversized with a dropped shoulder through the chest. Short sleeves, a boxy hem you can wear untucked, and a colour that sits well against every skin tone.",
@@ -108,7 +108,7 @@ const seeds: Seed[] = [
     slug: "anwar-heavyweight-hoodie",
     name: "Anwar Heavyweight Hoodie",
     price: 6490,
-    categorySlug: "winter-collection",
+    categorySlug: "hoodies",
     alt: "Anwar Heavyweight Hoodie in deep plum, laid flat",
     description:
       "400 GSM brushed fleece with a double-layer hood that actually stands up. Ribbed cuffs and hem, a deep kangaroo pocket, and flat drawcords that do not fray. The one you will reach for all winter.",
@@ -119,7 +119,7 @@ const seeds: Seed[] = [
     slug: "dune-zip-hoodie",
     name: "Dune Zip Hoodie",
     price: 6990,
-    categorySlug: "winter-collection",
+    categorySlug: "hoodies",
     alt: "Dune Zip Hoodie in warm sand, laid flat",
     description:
       "A full-zip in a warm sand fleece, with a YKK zip and split kangaroo pockets. Cut slightly cropped so it sits at the waist, not below it.",
@@ -130,7 +130,7 @@ const seeds: Seed[] = [
     slug: "ravi-cropped-hoodie",
     name: "Ravi Cropped Hoodie",
     price: 5890,
-    categorySlug: "winter-collection",
+    categorySlug: "hoodies",
     alt: "Ravi Cropped Hoodie in clay, laid flat",
     description:
       "Boxy, cropped, and dyed a warm clay that softens with every wash. Loop-back cotton inside, so it breathes far better than a brushed fleece in mid-season weather.",
@@ -722,6 +722,20 @@ export const demoSummaries: ProductSummary[] = demoProducts.map((product) => {
   };
 });
 
+/**
+ * The demo catalog's categories, INCLUDING subcategories (requirements section 5).
+ *
+ * `parentSlug` is what makes one a subcategory, and the demo exercises the two
+ * cases the storefront has to get right: a parent that still holds products of
+ * its own (Shirts keeps the overshirt) and one that holds none directly
+ * (Winter Collection — everything in it is a hoodie). Browsing either parent
+ * shows the whole branch, because `queries.listProducts` expands the filter
+ * through `shared/categories.ts`; browsing a child shows only the child.
+ *
+ * A subcategory carries no tile image on purpose: the shop renders children as
+ * links under their parent's tile, never as tiles of their own, so art for one
+ * would be a file nothing loads.
+ */
 export const demoCategories: Category[] = [
   {
     slug: "shirts",
@@ -733,6 +747,24 @@ export const demoCategories: Category[] = [
     productCount: demoSummaries.filter((p) => p.categorySlug === "shirts").length,
   },
   {
+    slug: "oxford-shirts",
+    name: "Oxford & Poplin",
+    parentSlug: "shirts",
+    sortOrder: 1,
+    description:
+      "Crisp cotton weaves that hold a collar — the shirts that work for an office and a dinner in the same week.",
+    productCount: demoSummaries.filter((p) => p.categorySlug === "oxford-shirts").length,
+  },
+  {
+    slug: "linen-shirts",
+    name: "Linen & Viscose",
+    parentSlug: "shirts",
+    sortOrder: 2,
+    description:
+      "Soft, breathable and washed before they reach you. Built for humidity rather than for structure.",
+    productCount: demoSummaries.filter((p) => p.categorySlug === "linen-shirts").length,
+  },
+  {
     slug: "winter-collection",
     name: "Winter Collection",
     sortOrder: 2,
@@ -740,6 +772,15 @@ export const demoCategories: Category[] = [
     description:
       "Heavyweight brushed fleece for Lahore and Islamabad winters, in the muted colours that go with everything already in the wardrobe.",
     productCount: demoSummaries.filter((p) => p.categorySlug === "winter-collection").length,
+  },
+  {
+    slug: "hoodies",
+    name: "Hoodies",
+    parentSlug: "winter-collection",
+    sortOrder: 1,
+    description:
+      "Brushed fleece, heavyweight loopback and the zip-throughs that go over everything else.",
+    productCount: demoSummaries.filter((p) => p.categorySlug === "hoodies").length,
   },
   {
     slug: "shoes",

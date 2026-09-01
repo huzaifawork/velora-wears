@@ -6,6 +6,7 @@ import type {
   Settings,
   SiteImage,
 } from "@shared/types";
+import { categoryBranchSlugs } from "@shared/categories";
 import { DEFAULT_SORT, normaliseSearch } from "@/lib/sources/CatalogSource";
 import type {
   CatalogSource,
@@ -106,6 +107,13 @@ export function listProducts({
   return cached(key, async () =>
     (await source()).listProducts({
       categorySlug,
+      // Browsing a category browses its subcategories too (section 5). The
+      // expansion happens HERE rather than in either source, because the
+      // categories it needs are already cached one line below — so a parent
+      // category costs no extra request, and both sources get the same answer.
+      categorySlugs: categorySlug
+        ? categoryBranchSlugs(await getCategories().catch(() => undefined), categorySlug)
+        : undefined,
       search: term || undefined,
       inStockOnly,
       sort,
@@ -129,6 +137,15 @@ export function getProductSummaryBySlug(slug: string): Promise<ProductSummary | 
   return cached(`summary:${slug}`, async () => (await source()).getProductSummaryBySlug(slug));
 }
 
+/**
+ * Every category — top level and subcategory alike — in display order.
+ *
+ * ONE flat list, deliberately, not a tree. It is what the header, the footer,
+ * the category index and the products page all read, and each of them wants a
+ * different shape of it; `shared/categories.ts` turns this into whichever one
+ * is needed. Sending a tree instead would have meant a second read for the
+ * surfaces that want the flat version, over a table of a few dozen rows.
+ */
 export function getCategories(): Promise<Category[]> {
   return cached("categories", async () => (await source()).getCategories());
 }

@@ -23,6 +23,7 @@ import {
 } from "@admin/services/products";
 import type { AdminProductImage } from "@admin/services/rows";
 import { SLUG_HINT, isValidSlug, slugify } from "@admin/lib/slug";
+import { categorySelectOptions } from "@admin/lib/categoryOptions";
 import { formatDateTime, formatPrice } from "@admin/lib/format";
 import * as routes from "@admin/lib/routes";
 
@@ -363,12 +364,12 @@ function ProductForm({
                   label="Category"
                   value={draft.categorySlug}
                   onChange={(value) => setField("categorySlug", value)}
+                  /* Subcategories appear grouped under the category they are
+                     inside — a product belongs to ONE of them, parent or child
+                     alike (`products.category_slug` is unchanged). */
                   options={[
                     ...(draft.categorySlug ? [] : [{ value: "", label: "Choose a category" }]),
-                    ...categories.map((category) => ({
-                      value: category.slug,
-                      label: category.active === false ? `${category.name} (hidden)` : category.name,
-                    })),
+                    ...categorySelectOptions(categories),
                   ]}
                   hint={
                     categories.length === 0

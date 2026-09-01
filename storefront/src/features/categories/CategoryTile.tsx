@@ -43,6 +43,16 @@ export function CategoryTile({
   variant = "compact",
   /** Position in the strip, shown as an editorial 01 / 02 / 03 marker. */
   index,
+  /**
+   * What the tile SAYS it holds, when that is not simply `productCount`.
+   *
+   * A category with subcategories holds its own products plus theirs, and
+   * tapping the tile opens all of them (`categoryBranchSlugs`) — so the tile
+   * has to promise the branch total or the number and the grid disagree. The
+   * record's own `productCount` stays the direct count, because that is what
+   * the database returned and what the dashboard means by it.
+   */
+  count,
   /** Show the category's line of copy inside the tile. Off in the tight bento. */
   showDescription = false,
   /** Above the fold? Only the first tile of the first grid on a page. */
@@ -52,11 +62,13 @@ export function CategoryTile({
   category: Category;
   variant?: CategoryTileVariant;
   index?: number;
+  count?: number;
   showDescription?: boolean;
   eager?: boolean;
   className?: string;
 }) {
-  const empty = category.productCount === 0;
+  const total = count ?? category.productCount;
+  const empty = total === 0;
   const shell = `group relative isolate block overflow-hidden rounded-sm bg-canvas-deep ${className}`;
 
   const body = (
@@ -95,7 +107,7 @@ export function CategoryTile({
             </p>
           )}
           <p className="mt-2 text-[0.625rem] tracking-eyebrow text-canvas/70 uppercase">
-            {empty ? "Coming soon" : formatPieceCount(category.productCount)}
+            {empty ? "Coming soon" : formatPieceCount(total)}
           </p>
         </div>
         {!empty && (
@@ -119,7 +131,7 @@ export function CategoryTile({
     <Link
       to={categoryPath(category.slug)}
       className={shell}
-      aria-label={`${category.name} — ${formatPieceCount(category.productCount)}`}
+      aria-label={`${category.name} — ${formatPieceCount(total)}`}
     >
       {body}
     </Link>
