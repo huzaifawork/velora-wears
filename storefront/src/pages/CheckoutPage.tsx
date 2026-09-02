@@ -19,6 +19,7 @@ import { useAsync } from "@/hooks/useAsync";
 import { clearCatalogCache, isLiveSource } from "@/lib/queries";
 import { PlaceOrderError, isBagProblem, placeOrder } from "@/lib/placeOrder";
 import { listMyOrders } from "@/lib/myOrders";
+import { sizeLabel } from "@/lib/sizes";
 import { saveReceipt, type ReceiptLine } from "@/lib/orderReceipt";
 import { CART, CHECKOUT, HOME, ORDER_CONFIRMED, PRODUCTS, SIGN_IN } from "@/lib/routes";
 
@@ -127,6 +128,9 @@ export function CheckoutPage() {
       slug: line.item.slug,
       thumb: line.product?.images[0]?.thumb ?? "",
       size: line.item.size,
+      // Resolved here, while the product (and so its scale) is still in hand.
+      // The confirmation page reads only this receipt.
+      sizeLabel: sizeLabel(line.product?.sizeScale, line.item.size),
       qty: line.orderableQty,
       unitPrice: line.unitPrice,
     }));

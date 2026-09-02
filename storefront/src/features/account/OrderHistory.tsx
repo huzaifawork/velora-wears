@@ -10,7 +10,7 @@ import { useAsync } from "@/hooks/useAsync";
 import { formatDate, formatPrice } from "@/lib/format";
 import { listMyOrders } from "@/lib/myOrders";
 import { PRODUCTS, productPath } from "@/lib/routes";
-import { SIZE_LABELS } from "@/lib/sizes";
+import { orderLineSize } from "@/lib/sizes";
 
 /**
  * Past orders — what an account unlocks, per the note added to requirements
@@ -76,7 +76,7 @@ export function OrderHistory() {
                     {item.name}
                   </Link>
                   <span className="shrink-0 text-xs text-ink-muted">
-                    {SIZE_LABELS[item.size]} &middot; Qty {item.qty}
+                    {orderLineSize(item)} &middot; Qty {item.qty}
                   </span>
                 </div>
 

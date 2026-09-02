@@ -55,7 +55,23 @@ const fail = (code: string, message: string, status = 400) =>
  * BOTH FILES. See the section 7 notes in `context.md` for the drift check.
  * ------------------------------------------------------------------------ */
 
-const SIZES = ["S", "M", "L"];
+/**
+ * A size is checked for SHAPE here, not for membership.
+ *
+ * This used to be `["S", "M", "L"]` — a global list of every size the shop
+ * sold. There is no such list any more: which sizes exist is a question about a
+ * PRODUCT (see `shared/sizes.ts`), and this function has not read one. Keeping
+ * a copy here would mean a size the admin added this morning is rejected at
+ * checkout tonight, with a message about a bag that "could not be read".
+ *
+ * The real check is in `place_order()`, one call further in, and it is a better
+ * one than a list ever was: it looks for a stock row for THIS product and THIS
+ * size, under the row lock it already takes, and answers OUT_OF_STOCK when
+ * there is none. A size the piece is not sold in and a size that has run out
+ * are the same answer to a customer, and it is the truthful one.
+ */
+const SIZE_SHAPE = /^[A-Za-z0-9][A-Za-z0-9. \/-]*$/;
+const MAX_SIZE_LENGTH = 16;
 const MAX_LINES = 20;
 const MAX_QTY = 10;
 
@@ -129,7 +145,7 @@ function validateItems(raw: any): { items: any[]; error?: string } {
     const size = clean(entry?.size);
     const qty = Number(entry?.qty);
 
-    if (!productId || !SIZES.includes(size)) {
+    if (!productId || !size || size.length > MAX_SIZE_LENGTH || !SIZE_SHAPE.test(size)) {
       return { items: [], error: "Your bag contains an item we could not read." };
     }
     if (!Number.isInteger(qty) || qty < 1 || qty > MAX_QTY) {

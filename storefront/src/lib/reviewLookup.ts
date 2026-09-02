@@ -37,6 +37,15 @@ export interface GuestOrderLine {
   productName: string;
   productSlug: string;
   size: Size;
+  /**
+   * The size as it was WORDED on the order — "Extra large", "EU 42".
+   *
+   * Comes from the order line's own snapshot, not from the product's current
+   * scale: this is a list of things somebody already bought, and it has to read
+   * the way it read on the day. Falls back to the raw code for an order placed
+   * before the column existed.
+   */
+  sizeLabel: string;
   qty: number;
 }
 
@@ -47,6 +56,7 @@ interface FindOrderRow {
   product_name: string;
   product_slug: string;
   size: Size;
+  size_label: string | null;
   qty: number;
 }
 
@@ -92,6 +102,7 @@ export async function findOrderForReview(orderNumber: string, email: string): Pr
     productName: row.product_name,
     productSlug: row.product_slug,
     size: row.size,
+    sizeLabel: row.size_label ?? row.size,
     qty: row.qty,
   }));
 }

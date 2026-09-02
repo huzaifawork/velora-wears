@@ -1,5 +1,4 @@
-import type { ProductSummary, Size } from "@shared/types";
-import { SIZES } from "@shared/stock";
+import type { ProductSummary, Size, SizeScaleId } from "@shared/types";
 import { PRODUCT_IMAGE } from "@shared/media";
 import { getSupabase } from "@admin/lib/supabase";
 import { describeError } from "@admin/lib/errors";
@@ -205,7 +204,18 @@ export interface ProductInput {
   categorySlug: string;
   active: boolean;
   featured: boolean;
-  /** Full S/M/L map. Every size is written, including the zeroes (§11). */
+  /** Which set of sizes this piece is sold in — see `shared/sizes.ts`. */
+  sizeScale: SizeScaleId;
+  /**
+   * The sizes this piece is SOLD IN, and how many of each (§11).
+   *
+   * The KEYS are the meaningful part and they are chosen by the admin: a shirt
+   * that only comes in S, M and L has three, a sneaker has however many of EU
+   * 38–46 the shop actually stocks. A zero is a size that is sold out and still
+   * offered; a size that is simply absent is one the piece was never made in.
+   * `writeSizes` below deletes rows for keys that are gone, which is how a size
+   * stops being offered at all.
+   */
   stock: Record<Size, number>;
 }
 
@@ -218,28 +228,60 @@ function toRow(input: ProductInput) {
     category_slug: input.categorySlug,
     active: input.active,
     featured: input.featured,
+    size_scale: input.sizeScale,
   };
 }
 
 /**
- * Write the three size rows for a product in ONE statement.
+ * Make the product's stock rows match the sizes it is sold in.
  *
- * `upsert` on the composite primary key, not delete-then-insert: a product's
- * stock is live data that `place_order()` decrements under a row lock, and
- * deleting the rows — even for a millisecond — is a window in which a customer's
- * order finds no stock row and fails with "out of stock" for a size that is
- * fully stocked.
+ * ---------------------------------------------------------------------------
+ * UPSERT THE ONES THAT STAY, DELETE ONLY THE ONES THAT LEAVE
+ * ---------------------------------------------------------------------------
+ * The upsert is on the composite primary key rather than delete-then-insert,
+ * and that has always been deliberate: a product's stock is live data that
+ * `place_order()` decrements under a row lock, and deleting a row — even for a
+ * millisecond — is a window in which a customer's order finds no stock row and
+ * fails with "out of stock" for a size that is fully stocked.
+ *
+ * What is new is the DELETE, which size scales made necessary: the set of sizes
+ * is now editable, so a size the admin has removed has to actually go. It is
+ * scoped to exactly the codes that are no longer offered (`not.in`), never a
+ * blanket clear — so the rows that survive the edit are never absent for even
+ * an instant, and the race above stays closed for them.
+ *
+ * The delete runs AFTER the upsert for the same reason: at no point between the
+ * two statements is a size that should exist missing.
  */
-async function writeSizes(productId: string, stock: Record<Size, number>): Promise<void> {
-  const rows = SIZES.map((size) => ({
+async function writeSizes(
+  productId: string,
+  stock: Record<Size, number>,
+): Promise<void> {
+  const codes = Object.keys(stock);
+
+  const rows = codes.map((size) => ({
     product_id: productId,
     size,
     stock: Math.max(0, Math.round(stock[size] ?? 0)),
   }));
 
-  const { error } = await getSupabase()
-    .from("product_sizes")
-    .upsert(rows, { onConflict: "product_id,size" });
+  if (rows.length > 0) {
+    const { error } = await getSupabase()
+      .from("product_sizes")
+      .upsert(rows, { onConflict: "product_id,size" });
+
+    if (error) throw new Error(describeError(error));
+  }
+
+  // Retire the sizes this product is no longer sold in. PostgREST needs the
+  // list as a parenthesised set; the codes are constrained to
+  // `[A-Za-z0-9. /-]` by the database, so none of them can contain the comma
+  // that would break out of it.
+  const remove = getSupabase().from("product_sizes").delete().eq("product_id", productId);
+
+  const { error } = codes.length > 0
+    ? await remove.not("size", "in", `(${codes.join(",")})`)
+    : await remove;
 
   if (error) throw new Error(describeError(error));
 }
@@ -412,8 +454,11 @@ export async function listStockFor(productIds: readonly string[]): Promise<
 
   if (error) throw new Error(describeError(error));
 
+  // An empty map per product, not a pre-seeded S/M/L one. Which sizes a product
+  // has is now answered by its rows — seeding three fixed keys would put three
+  // phantom columns on the inventory screen for every sneaker in the shop.
   for (const id of productIds) {
-    byProduct.set(id, { S: 0, M: 0, L: 0 });
+    byProduct.set(id, {});
   }
 
   for (const row of data ?? []) {

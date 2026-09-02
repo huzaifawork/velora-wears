@@ -1,6 +1,6 @@
 import type { Product, Settings, Size } from "@shared/types";
 import { MAX_ORDER_LINES, MAX_QTY_PER_LINE } from "@shared/checkout";
-import { SIZES } from "@/lib/sizes";
+import { isPlausibleSizeCode } from "@/lib/sizes";
 import { stockInSize } from "@shared/stock";
 
 /**
@@ -70,7 +70,13 @@ function parseItem(raw: unknown): CartItem | null {
     return null;
   }
   if (typeof slug !== "string" || slug.length === 0 || slug.length > 128) return null;
-  if (typeof size !== "string" || !SIZES.includes(size as Size)) return null;
+  // A SHAPE check, not a membership one. There is no global list of sizes to
+  // check against any more — which sizes exist is a question about a PRODUCT,
+  // and this function has not looked one up yet. `buildCart` below resolves
+  // every line against real stock and marks an impossible one "sold-out", so a
+  // hand-edited size reaches the bag and is then refused there, with a message,
+  // rather than vanishing out of it without explanation.
+  if (!isPlausibleSizeCode(size)) return null;
   if (typeof qty !== "number") return null;
 
   return { productId, slug, size: size as Size, qty: clampQty(qty) };

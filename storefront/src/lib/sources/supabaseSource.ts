@@ -7,8 +7,10 @@ import type {
   Settings,
   SiteImage,
   Size,
+  SizeScaleId,
   SizeStock,
 } from "@shared/types";
+import { isSizeScaleId } from "@shared/sizes";
 import { getSupabase } from "@/lib/supabase";
 import {
   normaliseSearch,
@@ -16,7 +18,6 @@ import {
   type CatalogSource,
   type ResolvedListOptions,
 } from "@/lib/sources/CatalogSource";
-import { SIZES } from "@/lib/sizes";
 
 /**
  * The REAL read layer — Supabase (Postgres) via the JS client.
@@ -64,6 +65,7 @@ interface SummaryRow {
   active: boolean;
   created_at: string;
   search_text: string;
+  size_scale: string | null;
 }
 
 interface ImageRow {
@@ -90,6 +92,7 @@ interface ProductRow {
   active: boolean;
   created_at: string;
   updated_at: string;
+  size_scale: string | null;
   product_images: ImageRow[] | null;
   product_sizes: SizeRow[] | null;
 }
@@ -130,6 +133,15 @@ interface SettingsRow {
 
 const epoch = (iso: string): number => new Date(iso).getTime();
 
+/**
+ * A size scale id from the database, or `undefined` for a value this build does
+ * not know. Not an error: the column is constrained, so an unknown value means
+ * the database is one deploy ahead — and `sizeScale()` resolves `undefined` to
+ * the default rather than throwing at render time.
+ */
+const scaleIdOf = (value: string | null): SizeScaleId | undefined =>
+  isSizeScaleId(value) ? value : undefined;
+
 function toSummary(row: SummaryRow): ProductSummary {
   return {
     id: row.id,
@@ -140,6 +152,7 @@ function toSummary(row: SummaryRow): ProductSummary {
     thumb: row.thumb,
     inStock: row.in_stock,
     lowStock: row.low_stock,
+    sizeScale: scaleIdOf(row.size_scale),
     // The view has always computed this; it was simply never selected, so no
     // list surface could answer section 11's "available product quantity".
     totalStock: Number(row.total_stock),
@@ -163,13 +176,15 @@ function toProduct(row: ProductRow): Product {
       height: image.height ?? undefined,
     }));
 
-  // The contract is a full S/M/L record. A size with no row is genuinely zero
-  // stock, not a missing key — the size selector must be able to strike it out.
+  // THE ROWS ARE THE CONTRACT. This used to materialise a fixed S/M/L record
+  // and fill the gaps with zeroes, which was the only thing it could do while
+  // sizes were a global enum. With size scales, a stock row existing IS the
+  // statement that this piece comes in that size — so the map carries exactly
+  // the sizes it is sold in, and the selector renders those and no others. A
+  // row with `stock: 0` is a size that has sold out; no row at all is a size
+  // this piece was never made in, and the two must not be confused.
   const sizes = Object.fromEntries(
-    SIZES.map((size) => [
-      size,
-      { stock: row.product_sizes?.find((s) => s.size === size)?.stock ?? 0 },
-    ]),
+    (row.product_sizes ?? []).map((s) => [s.size, { stock: Math.max(0, s.stock) } as SizeStock]),
   ) as Record<Size, SizeStock>;
 
   return {
@@ -180,6 +195,7 @@ function toProduct(row: ProductRow): Product {
     price: row.price,
     categorySlug: row.category_slug,
     images,
+    sizeScale: scaleIdOf(row.size_scale),
     sizes,
     active: row.active,
     createdAt: epoch(row.created_at),
@@ -217,7 +233,7 @@ function toReview(row: ReviewRow): Review {
 }
 
 const SUMMARY_COLUMNS =
-  "id, slug, name, price, category_slug, thumb, in_stock, low_stock, total_stock, rating_avg, rating_count, active, created_at, search_text";
+  "id, slug, name, price, category_slug, thumb, in_stock, low_stock, total_stock, rating_avg, rating_count, active, created_at, search_text, size_scale";
 
 /**
  * What a PUBLIC review listing needs, and nothing more (requirements section
@@ -314,7 +330,7 @@ async function getProductBySlug(slug: string): Promise<Product | null> {
   const { data, error } = await getSupabase()
     .from("products")
     .select(
-      "id, slug, name, description, price, category_slug, active, created_at, updated_at, " +
+      "id, slug, name, description, price, category_slug, active, created_at, updated_at, size_scale, " +
         "product_images(thumb_url, full_url, alt, width, height, position), " +
         "product_sizes(size, stock)",
     )

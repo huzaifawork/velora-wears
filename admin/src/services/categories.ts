@@ -1,4 +1,4 @@
-import type { Category } from "@shared/types";
+import type { Category, SizeScaleId } from "@shared/types";
 import { PRODUCT_IMAGE } from "@shared/media";
 import { getSupabase } from "@admin/lib/supabase";
 import { describeError } from "@admin/lib/errors";
@@ -55,6 +55,14 @@ export interface CategoryInput {
    * level however it is driven.
    */
   parentSlug?: string | null;
+  /**
+   * Which size scale NEW products in this category should start on.
+   *
+   * A SUGGESTION the product editor reads once, when creating — never applied
+   * to products already in the category, which each carry their own scale.
+   * Null means "no suggestion", and the editor falls back to clothing sizes.
+   */
+  defaultSizeScale?: SizeScaleId | null;
 }
 
 function toRow(input: CategoryInput) {
@@ -66,6 +74,7 @@ function toRow(input: CategoryInput) {
     active: input.active,
     thumb: input.thumb ?? null,
     parent_slug: input.parentSlug?.trim() || null,
+    default_size_scale: input.defaultSizeScale ?? null,
   };
 }
 

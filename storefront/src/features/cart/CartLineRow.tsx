@@ -5,7 +5,7 @@ import { QuantityStepper } from "@/features/cart/QuantityStepper";
 import { useCart } from "@/features/cart/CartContext";
 import { formatPrice } from "@/lib/format";
 import { productPath } from "@/lib/routes";
-import { SIZE_LABELS } from "@/lib/sizes";
+import { sizeLabel } from "@/lib/sizes";
 import type { CartLine } from "@/lib/cart";
 
 /**
@@ -28,15 +28,27 @@ import type { CartLine } from "@/lib/cart";
 
 const LINE_IMAGE = { width: 600, height: 800 } as const;
 
+/**
+ * How this line's size is worded.
+ *
+ * Read off the RESOLVED product, because the wording depends on that product's
+ * size scale — the bag stores only the code, and "42" is "EU 42" on a sneaker
+ * and a 42 inch waist on a trouser. A line whose product has been deleted has
+ * no scale to ask, and falls back to the bare code rather than guessing.
+ */
+function labelFor(line: CartLine): string {
+  return sizeLabel(line.product?.sizeScale, line.item.size);
+}
+
 /** What is wrong with this line, in the words a customer would use. */
 function problemMessage(line: CartLine): string | null {
   switch (line.problem) {
     case "gone":
       return "This piece is no longer available and has to be removed before checkout.";
     case "sold-out":
-      return `${SIZE_LABELS[line.item.size]} has sold out since you added it. Remove it, or choose another size on the product page.`;
+      return `${labelFor(line)} has sold out since you added it. Remove it, or choose another size on the product page.`;
     case "reduced":
-      return `Only ${line.available} left in ${SIZE_LABELS[line.item.size]}. Reduce the quantity to continue.`;
+      return `Only ${line.available} left in ${labelFor(line)}. Reduce the quantity to continue.`;
     default:
       return null;
   }
@@ -57,7 +69,8 @@ export function CartLineRow({
   const { item, product, unitPrice, available, problem } = line;
 
   const name = product?.name ?? "This piece";
-  const label = `${name}, ${SIZE_LABELS[item.size]}`;
+  const sizeText = labelFor(line);
+  const label = `${name}, ${sizeText}`;
   const thumb = product?.images[0]?.thumb;
   const message = problemMessage(line);
   const unavailable = problem === "gone" || problem === "sold-out";
@@ -96,7 +109,7 @@ export function CartLineRow({
               </p>
             )}
             <p className="mt-1 text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
-              Size {SIZE_LABELS[item.size]}
+              Size {sizeText}
             </p>
           </div>
 
