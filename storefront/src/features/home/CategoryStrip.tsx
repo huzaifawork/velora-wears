@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { Category } from "@shared/types";
+import { buildCategoryTree } from "@shared/categories";
 import { Container } from "@/components/layout/Container";
 import { buttonClasses } from "@/components/ui/Button";
 import { SectionHeading } from "@/components/ui/SectionHeading";
@@ -19,6 +20,11 @@ import { CATEGORIES } from "@/lib/routes";
  * The bento only has room for the first three categories, which is why it links
  * on to the full index rather than growing a fourth row when the admin adds a
  * category.
+ *
+ * TOP-LEVEL CATEGORIES ONLY, and each tile counts its whole branch. Three tiles
+ * is the landing page saying what kind of shop this is; a subcategory in that
+ * position would be a detail standing where a heading belongs. The index this
+ * links on to is where the sub-collections are listed.
  */
 
 const SHOWN = 3;
@@ -30,7 +36,7 @@ export function CategoryStrip({
   categories: Category[] | undefined;
   loading: boolean;
 }) {
-  const shown = categories?.slice(0, SHOWN);
+  const shown = categories && buildCategoryTree(categories).slice(0, SHOWN);
 
   // Nothing to show — omit the section rather than leaving an empty heading.
   if (!loading && (!shown || shown.length === 0)) return null;
@@ -65,6 +71,7 @@ export function CategoryStrip({
                 <CategoryTile
                   key={category.slug}
                   category={category}
+                  count={category.totalProductCount}
                   variant={i === 0 ? "feature" : "compact"}
                   index={i}
                   className={i === 0 ? "sm:row-span-2" : ""}

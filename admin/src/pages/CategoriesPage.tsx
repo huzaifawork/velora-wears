@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Link } from "react-router-dom";
 
 import type { Category } from "@shared/types";
+import { buildCategoryTree, type CategoryNode } from "@shared/categories";
 import { PRODUCT_IMAGE } from "@shared/media";
 import { Button } from "@admin/components/ui/Button";
 import { Card, PageHeader } from "@admin/components/ui/Card";
 import { Badge } from "@admin/components/ui/Badge";
 import { Field, Switch } from "@admin/components/ui/Field";
+import { Select } from "@admin/components/ui/Select";
 import { ConfirmDialog, Modal } from "@admin/components/ui/Modal";
 import { ReorderControls, move } from "@admin/components/ui/Reorder";
 import { EmptyState, ErrorState, Skeleton } from "@admin/components/ui/Skeleton";
@@ -31,13 +33,34 @@ import { formatPieceCount } from "@admin/lib/format";
 import * as routes from "@admin/lib/routes";
 
 /**
- * Categories (requirements section 8, §5).
+ * Categories and subcategories (requirements section 8, §5).
  *
  * A small table with a big consequence: `sort_order` here IS the order of the
  * category strip on the shop's landing page and of the chips above the product
  * grid, and `active` decides whether a category appears there at all. So the
  * list is presented in its display order and reordered in place, rather than
  * being sorted by name with a number field to fill in.
+ *
+ * ---------------------------------------------------------------------------
+ * TWO LEVELS, SHOWN AS TWO LEVELS
+ * ---------------------------------------------------------------------------
+ * A category can sit inside another one — "Oxford & Poplin" under "Shirts" —
+ * and this screen draws that nesting literally: children are indented under
+ * their parent and move within it. The database refuses a third level
+ * (`categories_enforce_one_level()`), so there is no depth for this list to
+ * grow into.
+ *
+ * ORDER IS PER GROUP. The top-level categories order among themselves and each
+ * set of children orders inside its parent, so moving "Linen & Viscose" up
+ * cannot displace "Winter Collection". That is why every move sends only the
+ * slugs of the row it happened in (see `reorderCategories`).
+ *
+ * COUNTS AND FILTERS HERE ARE EXACT, not rolled up. "3 pieces" on Shirts means
+ * three products whose category IS Shirts, and the link beside it opens exactly
+ * those. The shop does the opposite — browsing Shirts there includes everything
+ * in its subcategories — because a shopper means "show me shirts" and an admin
+ * means "show me the rows I would be editing". Both are right for their reader;
+ * they must not be confused for each other.
  *
  * ---------------------------------------------------------------------------
  * A CATEGORY CANNOT BE RENAMED AT ITS SLUG, AND CANNOT BE DELETED WHILE FULL
@@ -47,42 +70,79 @@ import * as routes from "@admin/lib/routes";
  * whenever; the slug is fixed at creation, and the form says so instead of
  * offering an edit that would break every existing link.
  *
+ * Where a category SITS is not like that: moving a sub-collection under a
+ * different heading rewrites no URL, so that one is editable.
+ *
  * Deletion is refused by the database while any product still points at the
- * category — including retired ones. That is correct, and the dialog explains
- * it rather than surfacing a foreign key error.
+ * category — including retired ones — and, now, while it still has
+ * subcategories. That is correct, and the dialog explains which of the two is
+ * in the way rather than surfacing a foreign key error.
  */
 export function CategoriesPage() {
   const toast = useToast();
   const categories = useQuery(CATEGORY_LIST_KEY, ["categories"], listCategories);
 
   const [editing, setEditing] = useState<Category | "new">();
-  const [pendingDelete, setPendingDelete] = useState<Category>();
+  const [pendingDelete, setPendingDelete] = useState<CategoryNode | Category>();
   const [deleting, setDeleting] = useState(false);
   const [order, setOrder] = useState<Category[]>();
 
   const list = order ?? categories.data ?? [];
+  const tree = buildCategoryTree(list);
 
-  const onMove = async (from: number, to: number) => {
-    const next = move(list, from, to);
-    setOrder(next);
+  /**
+   * Applies a move optimistically and persists the group it happened in.
+   *
+   * The optimistic list is FLATTENED BACK with fresh `sortOrder` values,
+   * because that is what the next `buildCategoryTree` reads to order the
+   * children — keeping the moved array alone would have shown the new order for
+   * one render and then snapped back.
+   */
+  const persist = async (roots: CategoryNode[], groupSlugs: string[]) => {
+    setOrder(flatten(roots));
 
     try {
-      await reorderCategories(next.map((category) => category.slug));
+      await reorderCategories(groupSlugs);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
       setOrder(undefined);
     }
   };
 
+  const onMoveRoot = (from: number, to: number) => {
+    const next = move(tree, from, to);
+    return persist(next, next.map((node) => node.slug));
+  };
+
+  const onMoveChild = (parent: CategoryNode, from: number, to: number) => {
+    const children = move(parent.children, from, to);
+    const next = tree.map((node) => (node.slug === parent.slug ? { ...node, children } : node));
+    return persist(next, children.map((child) => child.slug));
+  };
+
+  /**
+   * Hiding a PARENT takes its subcategories out of the shop with it — they are
+   * headings underneath a heading that is no longer there, so the storefront
+   * stops drawing the whole branch (`buildCategoryTree`). The rows here stay
+   * marked "shown", because they are: nothing was written to them, and showing
+   * the parent again brings them straight back. The toast says so, because it
+   * is the one consequence of this click that the list does not draw.
+   */
   const onToggle = async (category: Category) => {
     const next = !(category.active ?? true);
+    const children = tree.find((node) => node.slug === category.slug)?.children.length ?? 0;
+
     try {
       await setCategoryActive(category.slug, next);
       setOrder(undefined);
       toast.success(
         next
           ? `${category.name} is shown in the shop`
-          : `${category.name} is hidden. Its products stay live unless you hide them too.`,
+          : children > 0
+            ? `${category.name} is hidden, along with the ${children} ${
+                children === 1 ? "subcategory" : "subcategories"
+              } inside it. Every product stays live unless you hide it too.`
+            : `${category.name} is hidden. Its products stay live unless you hide them too.`,
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -106,11 +166,15 @@ export function CategoriesPage() {
     }
   };
 
+  /** Subcategories blocking a delete — checked before the database refuses it. */
+  const blockingChildren =
+    pendingDelete && "children" in pendingDelete ? pendingDelete.children.length : 0;
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Categories"
-        description="How the shop is divided up. This order is the order customers see, on the landing page and above the product grid."
+        description="How the shop is divided up. This order is the order customers see, on the landing page and above the product grid. A category can sit inside another one — those are indented, and move within their parent."
         action={
           <Button onClick={() => setEditing("new")}>
             <PlusIcon className="h-4 w-4" />
@@ -128,7 +192,7 @@ export function CategoriesPage() {
               <Skeleton key={index} className="h-16 w-full" />
             ))}
           </div>
-        ) : list.length === 0 ? (
+        ) : tree.length === 0 ? (
           <EmptyState
             icon={<CategoriesIcon />}
             title="No categories yet"
@@ -142,78 +206,34 @@ export function CategoriesPage() {
           />
         ) : (
           <ul className="divide-y divide-line">
-            {list.map((category, index) => {
-              const active = category.active ?? true;
+            {tree.map((node, index) => (
+              <Fragment key={node.slug}>
+                <CategoryRow
+                  category={node}
+                  subcategoryCount={node.children.length}
+                  index={index}
+                  count={tree.length}
+                  onMove={(from, to) => void onMoveRoot(from, to)}
+                  onEdit={() => setEditing(node)}
+                  onToggle={() => void onToggle(node)}
+                  onDelete={() => setPendingDelete(node)}
+                />
 
-              return (
-                <li
-                  key={category.slug}
-                  className="flex flex-wrap items-center gap-4 px-4 py-4 sm:px-5"
-                >
-                  <Thumb
-                    src={category.thumb}
-                    alt={category.name}
-                    width={64}
-                    height={64}
-                    className="h-14 w-14 shrink-0"
+                {node.children.map((child, childIndex) => (
+                  <CategoryRow
+                    key={child.slug}
+                    category={child}
+                    nestedUnder={node.name}
+                    index={childIndex}
+                    count={node.children.length}
+                    onMove={(from, to) => void onMoveChild(node, from, to)}
+                    onEdit={() => setEditing(child)}
+                    onToggle={() => void onToggle(child)}
+                    onDelete={() => setPendingDelete(child)}
                   />
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-medium text-ink">{category.name}</span>
-                      {!active && <Badge tone="neutral">Hidden</Badge>}
-                    </div>
-                    <p className="mt-0.5 truncate text-xs text-ink-muted">
-                      /{category.slug}
-                      {category.description ? ` · ${category.description}` : ""}
-                    </p>
-                  </div>
-
-                  <Link
-                    to={routes.productsInCategoryPath(category.slug)}
-                    className="shrink-0 text-xs text-ink-soft underline-offset-2 hover:text-accent hover:underline"
-                  >
-                    {formatPieceCount(category.productCount)}
-                  </Link>
-
-                  <ReorderControls
-                    index={index}
-                    count={list.length}
-                    onMove={(from, to) => void onMove(from, to)}
-                    label={category.name}
-                  />
-
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => void onToggle(category)}
-                      aria-label={active ? `Hide ${category.name}` : `Show ${category.name}`}
-                      className="rounded-md px-2 py-1.5 text-xs text-ink-soft transition hover:bg-surface-sunken hover:text-ink"
-                    >
-                      {active ? "Hide" : "Show"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setEditing(category)}
-                      aria-label={`Edit ${category.name}`}
-                      className="rounded-md p-2 text-ink-muted transition hover:bg-surface-sunken hover:text-ink"
-                    >
-                      <EditIcon className="h-4 w-4" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPendingDelete(category)}
-                      aria-label={`Delete ${category.name}`}
-                      className="rounded-md p-2 text-ink-muted transition hover:bg-danger/10 hover:text-danger"
-                    >
-                      <TrashIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
+                ))}
+              </Fragment>
+            ))}
           </ul>
         )}
       </Card>
@@ -221,8 +241,7 @@ export function CategoriesPage() {
       {editing && (
         <CategoryDialog
           category={editing === "new" ? undefined : editing}
-          existingSlugs={list.map((category) => category.slug)}
-          nextSortOrder={list.length}
+          categories={list}
           onClose={() => setEditing(undefined)}
           onSaved={() => {
             setEditing(undefined);
@@ -238,7 +257,14 @@ export function CategoriesPage() {
         loading={deleting}
         title={`Delete ${pendingDelete?.name ?? "this category"}?`}
         message={
-          pendingDelete && pendingDelete.productCount > 0 ? (
+          pendingDelete && blockingChildren > 0 ? (
+            <>
+              This category has {blockingChildren}{" "}
+              {blockingChildren === 1 ? "subcategory" : "subcategories"} inside it, and the
+              database will refuse to delete it while it does. Move those out to the top
+              level, or delete them first.
+            </>
+          ) : pendingDelete && pendingDelete.productCount > 0 ? (
             <>
               This category still holds {formatPieceCount(pendingDelete.productCount)},
               and the database will refuse to delete it while it does — a product
@@ -254,20 +280,148 @@ export function CategoriesPage() {
   );
 }
 
+/**
+ * The optimistic list, back in the flat shape `listCategories` returns.
+ *
+ * `sortOrder` is rewritten to the position within the group, matching exactly
+ * what `reorderCategories` is about to write — so the rebuilt tree shows the
+ * order the server is being given, not the one it had.
+ */
+function flatten(roots: readonly CategoryNode[]): Category[] {
+  return roots.flatMap((node, index) => [
+    { ...stripNode(node), sortOrder: index },
+    ...node.children.map((child, childIndex) => ({ ...child, sortOrder: childIndex })),
+  ]);
+}
+
+/** A tree node back down to the plain `Category` the list is made of. */
+function stripNode({ children, totalProductCount, ...category }: CategoryNode): Category {
+  void children;
+  void totalProductCount;
+  return category;
+}
+
+/* ---------------------------------------------------------------------------
+ * One row
+ * ------------------------------------------------------------------------ */
+
+function CategoryRow({
+  category,
+  /** Set on a subcategory — indents the row and names its parent for a reader. */
+  nestedUnder,
+  /** Set on a parent — how many categories sit inside it. */
+  subcategoryCount = 0,
+  index,
+  count,
+  onMove,
+  onEdit,
+  onToggle,
+  onDelete,
+}: {
+  category: Category;
+  nestedUnder?: string;
+  subcategoryCount?: number;
+  index: number;
+  count: number;
+  onMove: (from: number, to: number) => void;
+  onEdit: () => void;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const active = category.active ?? true;
+
+  return (
+    <li
+      className={`flex flex-wrap items-center gap-4 py-4 pr-4 sm:pr-5 ${
+        nestedUnder ? "bg-surface-sunken/40 pl-10 sm:pl-14" : "pl-4 sm:pl-5"
+      }`}
+    >
+      <Thumb
+        src={category.thumb}
+        alt={category.name}
+        width={64}
+        height={64}
+        className={nestedUnder ? "h-10 w-10 shrink-0" : "h-14 w-14 shrink-0"}
+      />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium text-ink">{category.name}</span>
+          {!active && <Badge tone="neutral">Hidden</Badge>}
+          {subcategoryCount > 0 && (
+            <Badge tone="neutral">
+              {subcategoryCount} {subcategoryCount === 1 ? "subcategory" : "subcategories"}
+            </Badge>
+          )}
+        </div>
+        <p className="mt-0.5 truncate text-xs text-ink-muted">
+          {nestedUnder ? `in ${nestedUnder} · ` : ""}/{category.slug}
+          {category.description ? ` · ${category.description}` : ""}
+        </p>
+      </div>
+
+      <Link
+        to={routes.productsInCategoryPath(category.slug)}
+        className="shrink-0 text-xs text-ink-soft underline-offset-2 hover:text-accent hover:underline"
+      >
+        {formatPieceCount(category.productCount)}
+      </Link>
+
+      <ReorderControls
+        index={index}
+        count={count}
+        onMove={onMove}
+        label={category.name}
+      />
+
+      <div className="flex shrink-0 items-center gap-1">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-label={active ? `Hide ${category.name}` : `Show ${category.name}`}
+          className="rounded-md px-2 py-1.5 text-xs text-ink-soft transition hover:bg-surface-sunken hover:text-ink"
+        >
+          {active ? "Hide" : "Show"}
+        </button>
+
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={`Edit ${category.name}`}
+          className="rounded-md p-2 text-ink-muted transition hover:bg-surface-sunken hover:text-ink"
+        >
+          <EditIcon className="h-4 w-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete ${category.name}`}
+          className="rounded-md p-2 text-ink-muted transition hover:bg-danger/10 hover:text-danger"
+        >
+          <TrashIcon className="h-4 w-4" />
+        </button>
+      </div>
+    </li>
+  );
+}
+
 /* ---------------------------------------------------------------------------
  * The create/edit dialog
  * ------------------------------------------------------------------------ */
 
+/** The value the "sits inside" dropdown uses for "nothing — top level". */
+const TOP_LEVEL = "";
+
 function CategoryDialog({
   category,
-  existingSlugs,
-  nextSortOrder,
+  /** Every category, flat — for the slug check and the parent picker. */
+  categories,
   onClose,
   onSaved,
 }: {
   category?: Category;
-  existingSlugs: string[];
-  nextSortOrder: number;
+  categories: Category[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -278,6 +432,7 @@ function CategoryDialog({
   const [slug, setSlug] = useState(category?.slug ?? "");
   const [slugPinned, setSlugPinned] = useState(!isNew);
   const [description, setDescription] = useState(category?.description ?? "");
+  const [parentSlug, setParentSlug] = useState(category?.parentSlug ?? TOP_LEVEL);
   const [active, setActive] = useState(category?.active ?? true);
   const [thumb, setThumb] = useState<string | undefined>(category?.thumb);
 
@@ -285,6 +440,37 @@ function CategoryDialog({
   const [stage, setStage] = useState<UploadStage>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>();
+
+  const tree = buildCategoryTree(categories);
+  const existingSlugs = categories.map((c) => c.slug);
+
+  /**
+   * Whether this category may be moved inside another at all.
+   *
+   * A category that already HAS subcategories cannot: that would be a third
+   * level, which the database refuses. The picker says so rather than offering
+   * a choice that fails on save.
+   */
+  const ownChildren = category
+    ? (tree.find((node) => node.slug === category.slug)?.children.length ?? 0)
+    : 0;
+  const canNest = ownChildren === 0;
+
+  /**
+   * The categories this one may sit inside: the top-level ones, minus itself.
+   * A subcategory is never offered, because nothing may sit inside one.
+   */
+  const parentOptions = tree.filter((node) => node.slug !== category?.slug);
+
+  /**
+   * Where a NEW category goes in its group's order — last, so creating one
+   * never reshuffles what is already arranged. Recomputed against whichever
+   * group the picker currently names.
+   */
+  const nextSortOrder =
+    parentSlug === TOP_LEVEL
+      ? tree.length
+      : (tree.find((node) => node.slug === parentSlug)?.children.length ?? 0);
 
   const slugError = !slug.trim()
     ? "A category needs a web address."
@@ -323,9 +509,16 @@ function CategoryDialog({
       slug: slug.trim(),
       name: name.trim(),
       description,
-      sortOrder: category?.sortOrder ?? nextSortOrder,
+      // An existing category keeps its place in its group unless it is being
+      // moved to a different one, where it goes last rather than colliding with
+      // whatever already holds that position.
+      sortOrder:
+        category && (category.parentSlug ?? TOP_LEVEL) === parentSlug
+          ? category.sortOrder
+          : nextSortOrder,
       active,
       thumb: thumb ?? null,
+      parentSlug: parentSlug || null,
     };
 
     setSaving(true);
@@ -351,7 +544,7 @@ function CategoryDialog({
       title={isNew ? "New category" : `Edit ${category.name}`}
       description={
         isNew
-          ? "Shirts, Hoodies, Winter collection — however the shop is divided up."
+          ? "Shirts, Hoodies, Winter collection — however the shop is divided up. It can sit on its own, or inside another category."
           : undefined
       }
       footer={
@@ -405,6 +598,35 @@ function CategoryDialog({
           </div>
         )}
 
+        {/*
+          Where it sits. Unlike the slug this IS editable after creation: a
+          subcategory's URL is its own slug, so moving it under a different
+          heading changes where it appears in the navigation and breaks no link.
+        */}
+        <Select
+          label="Sits inside"
+          value={parentSlug}
+          onChange={setParentSlug}
+          disabled={!canNest || parentOptions.length === 0}
+          options={[
+            { value: TOP_LEVEL, label: "Nothing — a category of its own" },
+            ...parentOptions.map((node) => ({
+              value: node.slug,
+              label: node.name,
+              group: "Inside another category",
+            })),
+          ]}
+          hint={
+            !canNest
+              ? `${category?.name ?? "This category"} has ${ownChildren} ${
+                  ownChildren === 1 ? "subcategory" : "subcategories"
+                } of its own, so it has to stay at the top level — categories only nest one level deep.`
+              : parentOptions.length === 0
+                ? "There is no other category to sit inside yet."
+                : "A subcategory appears under its parent on the shop's category page, and as a chip when someone browses the parent. Browsing the parent shows its products too."
+          }
+        />
+
         <Field
           label="One line of copy"
           value={description}
@@ -434,7 +656,11 @@ function CategoryDialog({
               onFiles={(files) => void onUpload(files)}
               onReject={toast.error}
               label={thumb ? "Replace tile image" : "Add a tile image"}
-              hint="Optional. Shown on the landing page's category strip."
+              hint={
+                parentSlug
+                  ? "Optional. Subcategories are listed as links under their parent's tile, so this is rarely shown."
+                  : "Optional. Shown on the landing page's category strip."
+              }
             />
           </div>
         </div>

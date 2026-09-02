@@ -54,6 +54,20 @@ export interface ListProductsOptions {
 /** Options after `queries.ts` has applied its defaults — implementations get concrete values. */
 export interface ResolvedListOptions {
   categorySlug?: string;
+  /**
+   * `categorySlug` EXPANDED to the whole branch: the category itself plus its
+   * subcategories (requirements section 5).
+   *
+   * Resolved in `queries.ts`, from the categories it has already cached, rather
+   * than by each source — a product belongs to exactly one category, so
+   * browsing "Shirts" has to match its children's products too or the parent
+   * heading opens an empty grid. See `shared/categories.ts`.
+   *
+   * Always contains `categorySlug` when it is set, so an implementation can
+   * simply use this and ignore the singular field. Absent when no category
+   * filter is applied.
+   */
+  categorySlugs?: readonly string[];
   search?: string;
   inStockOnly: boolean;
   sort: SortOption;
@@ -151,13 +165,21 @@ export function sortSummaries(rows: ProductSummary[], sort: SortOption): Product
  */
 export function applyFilters(
   rows: ProductSummary[],
-  { categorySlug, search, inStockOnly }: ResolvedListOptions,
+  { categorySlug, categorySlugs, search, inStockOnly }: ResolvedListOptions,
 ): ProductSummary[] {
   const term = normaliseSearch(search);
 
+  // The branch, or just the one category when nothing expanded it. Undefined
+  // means no category filter at all, which is not the same as an empty one.
+  const branch = categorySlugs?.length
+    ? new Set(categorySlugs)
+    : categorySlug
+      ? new Set([categorySlug])
+      : undefined;
+
   return rows.filter((row) => {
     if (!row.active) return false;
-    if (categorySlug && row.categorySlug !== categorySlug) return false;
+    if (branch && !branch.has(row.categorySlug)) return false;
     if (inStockOnly && !row.inStock) return false;
     if (term && !row.searchText.startsWith(term)) return false;
     return true;

@@ -40,6 +40,21 @@ export interface CategoryInput {
   sortOrder: number;
   active: boolean;
   thumb?: string | null;
+  /**
+   * The category this one sits inside, or null for a top-level one
+   * (requirements section 5 — subcategories).
+   *
+   * Unlike the slug, this CAN be changed after creation: moving a
+   * sub-collection under a different heading rewrites no public URL, because
+   * `/products?category=oxford-shirts` is addressed by the slug alone. Only
+   * where it appears in the navigation changes.
+   *
+   * The database refuses a parent that is itself a subcategory, and refuses to
+   * give a parent to a category that already has children
+   * (`categories_enforce_one_level()`), so the form below cannot create a third
+   * level however it is driven.
+   */
+  parentSlug?: string | null;
 }
 
 function toRow(input: CategoryInput) {
@@ -50,6 +65,7 @@ function toRow(input: CategoryInput) {
     sort_order: Math.round(input.sortOrder),
     active: input.active,
     thumb: input.thumb ?? null,
+    parent_slug: input.parentSlug?.trim() || null,
   };
 }
 
@@ -91,6 +107,10 @@ export async function setCategoryActive(slug: string, active: boolean): Promise<
  * product still points at it — including retired ones, which is correct: a
  * deactivated product still has to be able to say what it was. `describeError`
  * turns that constraint into "move or delete them first".
+ *
+ * `categories.parent_slug` is `on delete restrict` for the same reason, so a
+ * category with subcategories cannot be deleted out from under them either.
+ * The dialog says which of the two is in the way before the click.
  */
 export async function deleteCategory(slug: string, thumb?: string): Promise<void> {
   const { error } = await getSupabase().from("categories").delete().eq("slug", slug);
@@ -100,7 +120,15 @@ export async function deleteCategory(slug: string, thumb?: string): Promise<void
   if (thumb) void deleteImageFiles([thumb]).catch(() => undefined);
 }
 
-/** Persist the display order after a drag. Same shape as the featured strip's. */
+/**
+ * Persist the display order after a move. Same shape as the featured strip's.
+ *
+ * ONE GROUP AT A TIME. `sort_order` is scoped to a category's siblings — the
+ * top-level categories order among themselves, and each set of subcategories
+ * orders within its parent — so the page passes the slugs of the row being
+ * reordered and nothing else. Passing every category would renumber the
+ * children against their parents and shuffle both.
+ */
 export async function reorderCategories(orderedSlugs: readonly string[]): Promise<void> {
   const supabase = getSupabase();
 

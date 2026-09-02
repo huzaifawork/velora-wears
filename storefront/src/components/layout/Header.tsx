@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 
+import { parentOfCategory, topLevelCategories } from "@shared/categories";
 import { Logo } from "@/components/brand/Logo";
 import { Container } from "@/components/layout/Container";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -40,6 +41,12 @@ import { CATEGORIES, PRODUCTS, categoryPath, searchPath } from "@/lib/routes";
  * How many categories fit across the desktop bar before it looks crowded.
  * Anything beyond this is reachable through the "Categories" link, which is
  * always present — that is what the /categories index is for.
+ *
+ * TOP-LEVEL ONLY. Subcategories never appear in the bar: four headings and
+ * their sub-collections would be a dozen links across a laptop, and the bar
+ * would grow every time an admin subdivides a category. They live one level in,
+ * on the chips above the product grid and on the /categories index, which is
+ * where the shop's structure is meant to be read (see `CategoryNav`).
  */
 const NAV_CATEGORIES = 4;
 
@@ -92,13 +99,29 @@ export function Header() {
 
   const links: NavItem[] = [
     { to: PRODUCTS, label: "Shop all" },
-    ...(categories ?? []).slice(0, NAV_CATEGORIES).map((category) => ({
-      to: categoryPath(category.slug),
-      label: category.name,
-      category: category.slug,
-    })),
+    ...topLevelCategories(categories ?? [])
+      .slice(0, NAV_CATEGORIES)
+      .map((category) => ({
+        to: categoryPath(category.slug),
+        label: category.name,
+        category: category.slug,
+      })),
     { to: CATEGORIES, label: "Categories", exactPath: CATEGORIES },
   ];
+
+  /**
+   * Which heading the bar should light up.
+   *
+   * Browsing a subcategory lights its PARENT, because that is the link the bar
+   * carries and the visitor is inside it — leaving nothing lit would read as
+   * having navigated out of the shop's structure. Resolves to the category
+   * itself for a top-level one, and to nothing while the categories are still
+   * in flight, which is the state the bar already renders.
+   */
+  const currentBranch =
+    (currentCategory && categories
+      ? parentOfCategory(categories, currentCategory)?.slug
+      : undefined) ?? currentCategory;
 
   /**
    * Every category link points at the SAME path and differs only by
@@ -110,7 +133,7 @@ export function Header() {
   const isActive = (link: NavItem) =>
     link.exactPath
       ? pathname === link.exactPath
-      : isProducts && link.category === currentCategory;
+      : isProducts && link.category === currentBranch;
 
   /** Submitting from the header always lands on a fresh search, never inside
    *  whatever category the visitor happened to be looking at. */

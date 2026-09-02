@@ -37,6 +37,8 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   categories_pkey: "A category with this slug already exists. Choose a different one.",
   products_category_slug_fkey:
     "That category no longer exists. Reload the page and pick another one.",
+  categories_parent_slug_fkey:
+    "That parent category no longer exists. Reload the page and pick another one.",
   product_sizes_pkey: "That size is already listed for this product.",
   reviews_order_id_product_id_key:
     "That order already has a review for this product.",
@@ -59,6 +61,23 @@ export function describeError(value: unknown): string {
   // A unique or foreign key violation, matched on the constraint name that
   // Postgres puts in the message.
   if (error.code === "23505" || error.code === "23503") {
+    /*
+     * A RESTRICTED DELETE names the same constraint as a bad insert, from the
+     * other side of it, and means the opposite thing — so the direction has to
+     * be read before the constraint name. Postgres says "update or delete on
+     * table X violates ..." when the row being removed is still pointed AT, and
+     * "insert or update on table X violates ..." when the row being written
+     * points at something missing.
+     */
+    if (/update or delete on table/i.test(raw)) {
+      if (raw.includes("categories_parent_slug_fkey")) {
+        return "This category has subcategories inside it. Move or delete those first.";
+      }
+      if (raw.includes("products_category_slug_fkey")) {
+        return "This category still has products in it. Move or delete them first.";
+      }
+    }
+
     for (const [constraint, message] of Object.entries(CONSTRAINT_MESSAGES)) {
       if (raw.includes(constraint)) return message;
     }

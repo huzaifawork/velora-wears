@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { topLevelCategories } from "@shared/categories";
 import { Logo } from "@/components/brand/Logo";
 import { Container } from "@/components/layout/Container";
 import { useAsync } from "@/hooks/useAsync";
@@ -63,7 +64,9 @@ export function Footer() {
 
   const shopLinks = [
     { to: PRODUCTS, label: "All products" },
-    ...(categories ?? [])
+    // Top-level only, like the header bar: a footer column is a shortcut, not
+    // a site map, and "Browse categories" below reaches every subcategory.
+    ...topLevelCategories(categories ?? [])
       .slice(0, FOOTER_CATEGORIES)
       .map((category) => ({ to: categoryPath(category.slug), label: category.name })),
     { to: CATEGORIES, label: "Browse categories" },

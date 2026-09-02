@@ -32,6 +32,7 @@ import {
   type StockFilter,
 } from "@admin/services/products";
 import { CATEGORY_LIST_KEY, listCategories } from "@admin/services/categories";
+import { categorySelectOptions } from "@admin/lib/categoryOptions";
 import { SETTINGS_KEY, getSettings } from "@admin/services/settings";
 import { formatPrice, prettifySlug } from "@admin/lib/format";
 import * as routes from "@admin/lib/routes";
@@ -282,12 +283,15 @@ export function ProductsPage() {
                 value={category}
                 onChange={(value) => url.set({ category: value || null, page: null })}
                 className="min-w-[9rem]"
+                /* Grouped, so a subcategory reads as being inside its parent.
+                   The filter is EXACT — picking "Shirts" lists the products
+                   whose category is Shirts, not the ones in its subcategories —
+                   which is what the count beside each row on the categories
+                   screen links to, and what an admin means by "the rows I would
+                   be editing". The shop rolls a parent up; this does not. */
                 options={[
                   { value: "", label: "All categories" },
-                  ...(categories.data ?? []).map((c) => ({
-                    value: c.slug,
-                    label: c.name,
-                  })),
+                  ...categorySelectOptions(categories.data ?? []),
                 ]}
               />
 

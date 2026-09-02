@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
+import { parentOfCategory, subcategoriesOf } from "@shared/categories";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { Container } from "@/components/layout/Container";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -15,7 +16,7 @@ import { useAsync } from "@/hooks/useAsync";
 import { formatPieceCount, prettifySlug } from "@/lib/format";
 import { DEFAULT_SORT, SORT_OPTIONS, getCategories, listProducts } from "@/lib/queries";
 import type { SortOption } from "@/lib/queries";
-import { CATEGORIES, HOME, PRODUCTS } from "@/lib/routes";
+import { CATEGORIES, HOME, PRODUCTS, categoryPath } from "@/lib/routes";
 
 /**
  * The products page — the catalog (section 3), a single category (section 5),
@@ -116,6 +117,18 @@ export function ProductsPage() {
   const [products, categories] = state.data ?? [undefined, undefined];
   const category = categorySlug ? categories?.find((c) => c.slug === categorySlug) : undefined;
 
+  /**
+   * Where this category sits (requirements section 5 — subcategories).
+   *
+   * A subcategory has a `parent`; a parent category has `children`. Both are
+   * resolved from the SAME categories read the chips already use, so knowing
+   * the shape of the branch costs nothing extra. Both are empty/undefined for
+   * a flat catalog, which is what every shop had before subcategories existed
+   * — so every line below that reads them is inert until one is created.
+   */
+  const parent = categories && categorySlug ? parentOfCategory(categories, categorySlug) : undefined;
+  const children = categories && categorySlug ? subcategoriesOf(categories, categorySlug) : [];
+
   /** A `?category=` that no category matches — a stale or hand-typed link. */
   const unknownCategory = Boolean(categorySlug && categories && !category);
 
@@ -133,6 +146,14 @@ export function ProductsPage() {
   // does not flip from "the whole collection" to "Hoodies" as the data lands.
   const categoryName = category?.name ?? (categorySlug ? prettifySlug(categorySlug) : undefined);
 
+  /**
+   * A subcategory carries no tile art of its own — the shop renders children as
+   * links under their parent's tile, never as tiles — so it borrows its
+   * parent's rather than dropping the image and leaving the header visibly
+   * plainer than the category it sits inside.
+   */
+  const categoryThumb = category?.thumb ?? parent?.thumb;
+
   const title = searching
     ? `Results for “${search}”`
     : (categoryName ?? "The whole collection");
@@ -143,9 +164,13 @@ export function ProductsPage() {
       : "Search matches the beginning of a product name — try “hood” or “oxford”."
     : category?.description
       ? category.description
-      : categorySlug
-        ? "Every piece in this edit. Open any one for its fabric, fit and available sizes."
-        : "Oversized shirts, winter layers, trousers, shoes and everyday essentials, made in small runs. Open any piece for its fabric, fit and available sizes.";
+      : children.length > 0
+        ? // A parent shows its own products AND its subcategories' — the chips
+          // under the title are how a visitor narrows from here.
+          `Everything in ${categoryName}, including its ${children.length === 1 ? "sub-collection" : "sub-collections"}. Narrow it below, or open any piece for its fabric, fit and available sizes.`
+        : categorySlug
+          ? "Every piece in this edit. Open any one for its fabric, fit and available sizes."
+          : "Oversized shirts, winter layers, trousers, shoes and everyday essentials, made in small runs. Open any piece for its fabric, fit and available sizes.";
 
   return (
     <>
@@ -155,23 +180,32 @@ export function ProductsPage() {
           ...(searching
             ? [{ label: "Shop", to: PRODUCTS }, { label: "Search" }]
             : categorySlug
-              ? [{ label: "Categories", to: CATEGORIES }, { label: title }]
+              ? [
+                  { label: "Categories", to: CATEGORIES },
+                  // A subcategory sits under its parent, so the trail says so —
+                  // Home / Categories / Shirts / Oxford & Poplin. Absent for a
+                  // top-level category, which is every category in a flat shop.
+                  ...(parent ? [{ label: parent.name, to: categoryPath(parent.slug) }] : []),
+                  { label: title },
+                ]
               : [{ label: "Shop" }]),
         ]}
       />
 
       <PageHeader
-        eyebrow={searching ? "Search" : categorySlug ? "Category" : "Shop"}
+        /* A subcategory's eyebrow names the category it is inside, so the
+           heading pair reads "Shirts / Oxford & Poplin". */
+        eyebrow={searching ? "Search" : categorySlug ? (parent?.name ?? "Category") : "Shop"}
         title={title}
         description={unknownCategory ? undefined : description}
         media={
           categorySlug && !searching && !unknownCategory ? (
             state.loading ? (
               <Skeleton className="aspect-4/5 w-full rounded-sm" />
-            ) : category?.thumb ? (
+            ) : categoryThumb ? (
               <Image
-                src={category.thumb}
-                alt={`${category.name} at Velora Wears`}
+                src={categoryThumb}
+                alt={`${categoryName} at Velora Wears`}
                 width={CATEGORY_IMAGE.width}
                 height={CATEGORY_IMAGE.height}
                 eager

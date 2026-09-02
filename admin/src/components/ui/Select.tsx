@@ -21,6 +21,20 @@ export interface SelectOption<T extends string> {
   value: T;
   label: string;
   disabled?: boolean;
+  /**
+   * Heading this option belongs under, rendered as a native `<optgroup>`.
+   *
+   * Added for subcategories (requirements section 5): a category picker has to
+   * show "Oxford & Poplin" as being INSIDE "Shirts", and indenting the label
+   * with spaces only looks indented — a screen reader reads a flat list and a
+   * phone's picker wheel strips the whitespace. `<optgroup>` is the element
+   * that actually carries the relationship, on every platform.
+   *
+   * Consecutive options sharing a group are collected into one; ungrouped
+   * options render exactly as they always have, so every existing dropdown in
+   * the dashboard is untouched.
+   */
+  group?: string;
 }
 
 export function Select<T extends string>({
@@ -67,11 +81,15 @@ export function Select<T extends string>({
           onChange={(event) => onChange(event.target.value as T)}
           className="h-10 w-full appearance-none rounded-lg border border-line-strong bg-surface pr-9 pl-3 text-sm text-ink transition duration-200 ease-brand hover:border-ink-muted focus:border-accent focus:ring-2 focus:ring-accent/25 focus:outline-none disabled:cursor-not-allowed"
         >
-          {options.map((option) => (
-            <option key={option.value} value={option.value} disabled={option.disabled}>
-              {option.label}
-            </option>
-          ))}
+          {groupRuns(options).map((run) =>
+            run.group ? (
+              <optgroup key={`group:${run.group}:${run.options[0].value}`} label={run.group}>
+                {run.options.map(renderOption)}
+              </optgroup>
+            ) : (
+              run.options.map(renderOption)
+            ),
+          )}
         </select>
 
         <svg
@@ -91,4 +109,34 @@ export function Select<T extends string>({
       {hint && <p className="mt-1.5 text-xs leading-relaxed text-ink-muted">{hint}</p>}
     </div>
   );
+}
+
+function renderOption<T extends string>(option: SelectOption<T>) {
+  return (
+    <option key={option.value} value={option.value} disabled={option.disabled}>
+      {option.label}
+    </option>
+  );
+}
+
+/**
+ * Consecutive options that share a `group`, collected into runs.
+ *
+ * A run rather than a sort, deliberately: the caller has already put the
+ * options in the order it wants them, and regrouping would silently reorder a
+ * dropdown. An ungrouped option between two groups stays exactly where it was
+ * put — which is what "All categories" at the top of a filter needs.
+ */
+function groupRuns<T extends string>(
+  options: readonly SelectOption<T>[],
+): Array<{ group?: string; options: SelectOption<T>[] }> {
+  const runs: Array<{ group?: string; options: SelectOption<T>[] }> = [];
+
+  for (const option of options) {
+    const last = runs[runs.length - 1];
+    if (last && last.group === option.group) last.options.push(option);
+    else runs.push({ group: option.group, options: [option] });
+  }
+
+  return runs;
 }

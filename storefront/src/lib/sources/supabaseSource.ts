@@ -100,6 +100,7 @@ interface CategoryRow {
   sort_order: number;
   thumb: string | null;
   description: string | null;
+  parent_slug: string | null;
 }
 
 interface ReviewRow {
@@ -193,6 +194,9 @@ function toCategory(row: CategoryRow, productCount: number): Category {
     sortOrder: row.sort_order,
     thumb: row.thumb ?? undefined,
     description: row.description ?? undefined,
+    // Null is "top level", which is what every category was before
+    // `20260902000001_subcategories.sql` — see shared/types.ts.
+    parentSlug: row.parent_slug ?? undefined,
     productCount,
   };
 }
@@ -248,6 +252,7 @@ function escapeLike(term: string): string {
  */
 async function listProducts({
   categorySlug,
+  categorySlugs,
   search,
   inStockOnly,
   sort,
@@ -258,7 +263,18 @@ async function listProducts({
     .select(SUMMARY_COLUMNS)
     .eq("active", true);
 
-  if (categorySlug) q = q.eq("category_slug", categorySlug);
+  // A category filter covers the category AND its subcategories (section 5).
+  // `queries.ts` expands it; the singular field is the fallback for a caller
+  // that has not, and for the ordinary case of a category with no children.
+  const branch = categorySlugs?.length
+    ? categorySlugs
+    : categorySlug
+      ? [categorySlug]
+      : undefined;
+
+  if (branch) {
+    q = branch.length === 1 ? q.eq("category_slug", branch[0]) : q.in("category_slug", branch);
+  }
   if (inStockOnly) q = q.eq("in_stock", true);
 
   const term = normaliseSearch(search);
@@ -334,11 +350,32 @@ async function getProductSummaryBySlug(slug: string): Promise<ProductSummary | n
  * the admin on every product change. Postgres counts the related rows in the
  * same query, so the number cannot be wrong.
  */
+const CATEGORY_COLUMNS = "slug, name, sort_order, thumb, description, parent_slug";
+
 async function getCategories(): Promise<Category[]> {
-  const { data, error } = await getSupabase()
-    .from("categories")
-    .select("slug, name, sort_order, thumb, description, products(count)")
-    .order("sort_order", { ascending: true });
+  const read = (columns: string) =>
+    getSupabase()
+      .from("categories")
+      .select(`${columns}, products(count)`)
+      .order("sort_order", { ascending: true });
+
+  let { data, error } = await read(CATEGORY_COLUMNS);
+
+  /*
+   * A database that predates `20260902000001_subcategories.sql` has no
+   * `parent_slug`, and PostgREST rejects the whole select rather than ignoring
+   * the unknown column — so every category would vanish from the shop's
+   * navigation until the migration is applied. Reading again without it keeps
+   * the navigation the shop has always had, which is the same call
+   * `listSiteImages` makes below for the same reason.
+   *
+   * Narrowed to Postgres's "undefined column" (42703), so a network failure or
+   * a permissions problem still surfaces on the first attempt instead of being
+   * retried and then reported against the wrong query.
+   */
+  if (error?.code === "42703") {
+    ({ data, error } = await read("slug, name, sort_order, thumb, description"));
+  }
 
   if (error) throw new Error(error.message);
 
