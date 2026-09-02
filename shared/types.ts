@@ -8,10 +8,20 @@
  */
 
 import type { PaymentMethod } from "./payment";
+import type { Size, SizeScaleId } from "./sizes";
 
 export type { PaymentMethod };
 
-export type Size = "S" | "M" | "L";
+/**
+ * A size code, and the scale it belongs to.
+ *
+ * **This used to be `"S" | "M" | "L"`.** It is now an open string, because a
+ * shoe is not sized on the same scale as a shirt — see `shared/sizes.ts` for
+ * the whole reasoning and for the helpers that order and label a code. Which
+ * codes a PARTICULAR product accepts is answered by its own `sizes` map, never
+ * by a global list.
+ */
+export type { Size, SizeScaleId };
 
 export type OrderStatus =
   | "pending"
@@ -63,6 +73,13 @@ export interface ProductSummary {
    * "unknown", not as zero, and fall back to the two flags above.
    */
   totalStock?: number;
+  /**
+   * The product's size scale, denormalised onto the summary so the inventory
+   * screen can label a stock column without reading the full product.
+   *
+   * ADDITIVE and optional, like `totalStock`: read a missing value as `alpha`.
+   */
+  sizeScale?: SizeScaleId;
   ratingAvg: number;
   ratingCount: number;
   active: boolean;
@@ -92,6 +109,30 @@ export interface Product {
   price: number;
   categorySlug: string;
   images: ProductImage[];
+  /**
+   * Which scale this product is sized on — see `shared/sizes.ts`.
+   *
+   * Decides the ORDER and the WORDING of the codes in `sizes` below, and
+   * nothing else. Optional so that a read which predates size scales is still a
+   * valid product; treat a missing value as `alpha`, which is what
+   * `sizeScale()` does and what the database column defaults to.
+   */
+  sizeScale?: SizeScaleId;
+  /**
+   * Per-size stock, keyed by size code — **only the sizes this product is
+   * actually sold in**.
+   *
+   * THIS CHANGED WITH SIZE SCALES. It used to be a complete S/M/L record where
+   * a missing key was impossible and a zero meant sold out. Now a key that is
+   * ABSENT means "this piece does not come in that size" and a key present with
+   * `stock: 0` means "it does, and it is sold out" — two different sentences
+   * that the product page says differently: an absent size is not rendered at
+   * all, a sold-out one is rendered struck through and disabled.
+   *
+   * Collapsing them back into one would mean a shirt stocked in S, M and L
+   * showing seven buttons with four permanently struck out, which is how the
+   * scale's full range would read if presence stopped carrying meaning.
+   */
   sizes: Record<Size, SizeStock>;
   active: boolean;
   /** See `ProductSummary.featured`. Additive and optional for the same reason. */
@@ -175,6 +216,15 @@ export interface Category {
    * in its children too; that roll-up is `categoryBranchSlugs()`.
    */
   parentSlug?: string;
+  /**
+   * Which size scale NEW products in this category should start on — so nobody
+   * has to remember that shoes are EU-sized and trousers go by the waist.
+   *
+   * A SUGGESTION and nothing else. A product's own `sizeScale` is the
+   * authority, and changing this never rewrites products already in the
+   * category; the product editor reads it once, when creating.
+   */
+  defaultSizeScale?: SizeScaleId;
   thumb?: string;
   /**
    * One line of copy introducing the category, shown on the category tiles and
@@ -217,6 +267,21 @@ export interface OrderItem {
   slug: string;
   thumb: string;
   size: Size;
+  /**
+   * How that size was WORDED when the order was placed — "Extra large",
+   * "EU 42", "32 inch waist".
+   *
+   * Snapshotted for exactly the reason `name`, `slug`, `thumb` and `unitPrice`
+   * above are: an order is a record of what someone bought, and it must keep
+   * reading correctly after the product has been edited. The code alone is not
+   * enough to recover the wording, because the wording lives on the product's
+   * SCALE — move a sneaker from EU to UK sizing and a stored "42" would start
+   * rendering as "UK 42", which is a shoe that does not exist.
+   *
+   * Optional: rows written before this column carry none. Fall back to the raw
+   * `size` code, never to a guess from the current scale.
+   */
+  sizeLabel?: string;
   qty: number;
   /** Price at the time of ordering, written by the server — never sent by the client. */
   unitPrice: number;

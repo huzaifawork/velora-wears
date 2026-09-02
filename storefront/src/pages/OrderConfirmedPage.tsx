@@ -7,7 +7,7 @@ import { OrderSuccessAnimation } from "@/features/checkout/OrderSuccessAnimation
 import { formatPrice } from "@/lib/format";
 import { readReceipt, receiptSubtotal } from "@/lib/orderReceipt";
 import { CART, HOME, PRODUCTS, productPath } from "@/lib/routes";
-import { SIZE_LABELS } from "@/lib/sizes";
+import { orderLineSize } from "@/lib/sizes";
 import { paymentMethodCopy } from "@shared/payment";
 import { REVIEW_AFTER_DELIVERY_MESSAGE } from "@shared/reviews";
 
@@ -136,7 +136,7 @@ export function OrderConfirmedPage() {
                       {line.name}
                     </Link>
                     <p className="mt-1 text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
-                      Size {SIZE_LABELS[line.size]} &middot; Quantity {line.qty}
+                      Size {orderLineSize(line)} &middot; Quantity {line.qty}
                     </p>
                   </div>
 

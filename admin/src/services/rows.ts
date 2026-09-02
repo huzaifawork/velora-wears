@@ -12,7 +12,7 @@ import type {
   Size,
   SizeStock,
 } from "@shared/types";
-import { SIZES } from "@shared/stock";
+import { isSizeScaleId } from "@shared/sizes";
 
 /**
  * The BOUNDARY between Postgres and the application contract.
@@ -59,6 +59,7 @@ export interface SummaryRow {
   search_text: string;
   featured: boolean;
   featured_position: number;
+  size_scale: string | null;
 }
 
 /**
@@ -71,7 +72,8 @@ export interface SummaryRow {
  */
 export const SUMMARY_COLUMNS =
   "id, slug, name, price, category_slug, thumb, in_stock, low_stock, total_stock, " +
-  "rating_avg, rating_count, active, created_at, search_text, featured, featured_position";
+  "rating_avg, rating_count, active, created_at, search_text, featured, featured_position, " +
+  "size_scale";
 
 export function toSummary(row: SummaryRow): ProductSummary {
   return {
@@ -92,6 +94,9 @@ export function toSummary(row: SummaryRow): ProductSummary {
     searchText: row.search_text,
     featured: row.featured,
     featuredPosition: row.featured_position,
+    // The inventory screen labels its stock columns from this without having to
+    // read the full product for every row on the page.
+    sizeScale: isSizeScaleId(row.size_scale) ? row.size_scale : undefined,
   };
 }
 
@@ -122,13 +127,14 @@ export interface ProductRow {
   featured_position: number;
   created_at: string;
   updated_at: string;
+  size_scale: string | null;
   product_images: ImageRow[] | null;
   product_sizes: SizeRow[] | null;
 }
 
 export const PRODUCT_COLUMNS =
   "id, slug, name, description, price, category_slug, active, featured, featured_position, " +
-  "created_at, updated_at, " +
+  "created_at, updated_at, size_scale, " +
   "product_images(id, position, thumb_url, full_url, alt, width, height), " +
   "product_sizes(size, stock)";
 
@@ -162,15 +168,14 @@ export function toProduct(row: ProductRow): AdminProduct {
       height: opt(image.height),
     }));
 
-  // The contract is a COMPLETE S/M/L record. A size with no row is genuinely
-  // zero stock, not a missing key — the storefront's size selector has to be
-  // able to strike it out, and the stock editor here has to show a 0 to type
-  // over rather than an empty cell.
+  // THE ROWS ARE THE CONTRACT — the same rule the storefront's source follows.
+  // This used to materialise a fixed S/M/L record and zero-fill the gaps, which
+  // is all it could do while sizes were a global enum. Now a stock row existing
+  // is the statement that this piece is SOLD in that size, so the editor shows
+  // a field per row and an "add a size" control, rather than three fields that
+  // were the same three for a sneaker and a shirt.
   const sizes = Object.fromEntries(
-    SIZES.map((size) => [
-      size,
-      { stock: row.product_sizes?.find((s) => s.size === size)?.stock ?? 0 },
-    ]),
+    (row.product_sizes ?? []).map((s) => [s.size, { stock: Math.max(0, s.stock) } as SizeStock]),
   ) as Record<Size, SizeStock>;
 
   return {
@@ -181,6 +186,7 @@ export function toProduct(row: ProductRow): AdminProduct {
     price: row.price,
     categorySlug: row.category_slug,
     images,
+    sizeScale: isSizeScaleId(row.size_scale) ? row.size_scale : undefined,
     sizes,
     active: row.active,
     featured: row.featured,
@@ -202,11 +208,12 @@ export interface CategoryRow {
   description: string | null;
   active: boolean;
   parent_slug: string | null;
+  default_size_scale: string | null;
   products?: { count: number }[];
 }
 
 export const CATEGORY_COLUMNS =
-  "slug, name, sort_order, thumb, description, active, parent_slug";
+  "slug, name, sort_order, thumb, description, active, parent_slug, default_size_scale";
 
 export function toCategory(row: CategoryRow): Category {
   return {
@@ -219,6 +226,7 @@ export function toCategory(row: CategoryRow): Category {
     // Null is "top level" — the state of every category before
     // `20260902000001_subcategories.sql`. See shared/types.ts.
     parentSlug: opt(row.parent_slug),
+    defaultSizeScale: isSizeScaleId(row.default_size_scale) ? row.default_size_scale : undefined,
     // Counted live by the same query (`products(count)`), never stored — see
     // the note on `Category.productCount` in shared/types.ts.
     productCount: row.products?.[0]?.count ?? 0,
@@ -236,6 +244,7 @@ export interface OrderItemRow {
   slug: string;
   thumb: string;
   size: Size;
+  size_label: string | null;
   qty: number;
   unit_price: number;
 }
@@ -278,7 +287,7 @@ export const ORDER_LIST_COLUMNS =
 export const ORDER_DETAIL_COLUMNS =
   "id, order_number, status, full_name, email, phone, address, city, postal_code, notes, " +
   "subtotal, delivery_charge, total, payment_method, is_guest, user_id, created_at, updated_at, " +
-  "order_items(id, product_id, name, slug, thumb, size, qty, unit_price)";
+  "order_items(id, product_id, name, slug, thumb, size, size_label, qty, unit_price)";
 
 /**
  * An order as the dashboard holds it.
@@ -300,6 +309,9 @@ export function toOrderItem(row: OrderItemRow): OrderItem {
     slug: row.slug,
     thumb: row.thumb,
     size: row.size,
+    // The wording frozen onto the line when the order was placed. Never
+    // re-derived from the product's current scale — see `OrderItem.sizeLabel`.
+    sizeLabel: row.size_label ?? undefined,
     qty: row.qty,
     unitPrice: row.unit_price,
   };

@@ -1,8 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import type { Category, Size } from "@shared/types";
-import { SIZES, SIZE_LABELS, stockLevel } from "@shared/stock";
+import type { Category, Size, SizeScaleId } from "@shared/types";
+import { stockLevel } from "@shared/stock";
+import {
+  DEFAULT_SIZE_SCALE,
+  SIZE_SCALE_LIST,
+  orderSizeCodes,
+  scaleSizeCodes,
+  sizeLabel,
+  sizeScale,
+} from "@shared/sizes";
 import { Button, buttonClasses } from "@admin/components/ui/Button";
 import { Card, CardHeader, PageHeader } from "@admin/components/ui/Card";
 import { Badge, StockBadge } from "@admin/components/ui/Badge";
@@ -60,6 +68,17 @@ interface Draft {
   categorySlug: string;
   active: boolean;
   featured: boolean;
+  /** Which set of sizes this piece is sold in — see `shared/sizes.ts`. */
+  sizeScale: SizeScaleId;
+  /**
+   * Size code to stock, as TYPED — so a half-deleted field stays half-deleted
+   * while the admin is in it, rather than snapping to 0.
+   *
+   * The KEYS are the real content of this panel: they are the sizes the piece
+   * is sold in, and ticking a size on or off adds or removes a key. A size with
+   * "0" in it is offered and sold out; a size that is absent is one this piece
+   * does not come in, and the shop does not draw a button for it at all.
+   */
   stock: Record<Size, string>;
 }
 
@@ -71,7 +90,11 @@ const EMPTY: Draft = {
   categorySlug: "",
   active: true,
   featured: false,
-  stock: { S: "0", M: "0", L: "0" },
+  sizeScale: DEFAULT_SIZE_SCALE,
+  // No sizes ticked. A new piece is asked which sizes it comes in rather than
+  // being assumed to come in three — that assumption is what put "Small,
+  // Medium, Large" under every sneaker in the shop.
+  stock: {},
 };
 
 /**
@@ -126,6 +149,7 @@ export function ProductEditorPage() {
   }
 
   const loaded = product.data;
+  const firstCategory = categories.data?.[0];
 
   const initial: Draft = loaded
     ? {
@@ -136,17 +160,24 @@ export function ProductEditorPage() {
         categorySlug: loaded.categorySlug,
         active: loaded.active,
         featured: loaded.featured ?? false,
-        stock: {
-          S: String(loaded.sizes.S.stock),
-          M: String(loaded.sizes.M.stock),
-          L: String(loaded.sizes.L.stock),
-        },
+        sizeScale: loaded.sizeScale ?? DEFAULT_SIZE_SCALE,
+        // Exactly the sizes it is stocked in — whatever they are. A product
+        // whose scale was changed underneath it keeps any codes that no longer
+        // belong; the panel shows those separately so they can be retired
+        // deliberately rather than silently dropped on the next save.
+        stock: Object.fromEntries(
+          Object.entries(loaded.sizes).map(([code, value]) => [code, String(value.stock)]),
+        ),
       }
     : {
         ...EMPTY,
         // A new product defaults to the first category, so the commonest case
         // is one fewer decision to make.
-        categorySlug: categories.data?.[0]?.slug ?? "",
+        categorySlug: firstCategory?.slug ?? "",
+        // ...and to that category's own scale, so nobody has to remember that
+        // shoes are EU-sized. It is only a starting point: the dropdown is
+        // right there, and changing the category re-suggests until it is used.
+        sizeScale: firstCategory?.defaultSizeScale ?? DEFAULT_SIZE_SCALE,
       };
 
   return (
@@ -190,6 +221,74 @@ function ProductForm({
   const [saving, setSaving] = useState(false);
   /** True once the slug is fixed — after that it stops following the name. */
   const [slugPinned, setSlugPinned] = useState(!isNew);
+  /**
+   * True once the admin has chosen a scale themselves. Until then the scale
+   * follows the category's suggestion, the same way the slug follows the name —
+   * and for the same reason: a default that keeps up with what is being typed
+   * is helpful, and one that overwrites a deliberate choice is not.
+   */
+  const [scalePinned, setScalePinned] = useState(!isNew);
+
+  const scale = sizeScale(draft.sizeScale);
+
+  /**
+   * Codes on this product that its CURRENT scale does not contain.
+   *
+   * Real, and worth showing rather than hiding: a sneaker migrated off the old
+   * S/M/L enum keeps `S`, `M` and `L` rows until somebody clears them, and a
+   * silent drop on the next save would delete stock the shop still has on a
+   * shelf. They are listed apart, with their numbers, and removed on purpose.
+   */
+  const offScale = orderSizeCodes(
+    draft.sizeScale,
+    Object.keys(draft.stock).filter((code) => !scaleSizeCodes(draft.sizeScale).includes(code)),
+  );
+
+  /** Tick a size on (defaulting to zero stock) or off. */
+  const toggleSize = (code: Size, on: boolean) =>
+    setDraft((current) => {
+      const stock = { ...current.stock };
+      if (on) stock[code] = stock[code] ?? "0";
+      else delete stock[code];
+      return { ...current, stock };
+    });
+
+  /**
+   * Switching scale keeps nothing but the codes the new scale also has.
+   *
+   * Which is usually none — "L" is not a shoe size and "42" is not a shirt
+   * size — so the panel empties and asks again. Carrying the numbers across
+   * would be worse than losing them: it would assert that the eight Larges in
+   * the stockroom are eight EU 42s.
+   */
+  const onScale = (next: SizeScaleId) => {
+    setScalePinned(true);
+    setDraft((current) => {
+      const allowed = new Set(scaleSizeCodes(next));
+      const stock = Object.fromEntries(
+        Object.entries(current.stock).filter(([code]) => allowed.has(code)),
+      );
+      return { ...current, sizeScale: next, stock };
+    });
+  };
+
+  const onCategory = (slug: string) =>
+    setDraft((current) => {
+      const suggested = categories.find((category) => category.slug === slug)?.defaultSizeScale;
+      // Only while the admin has not picked a scale themselves.
+      if (scalePinned || !suggested || suggested === current.sizeScale) {
+        return { ...current, categorySlug: slug };
+      }
+      const allowed = new Set(scaleSizeCodes(suggested));
+      return {
+        ...current,
+        categorySlug: slug,
+        sizeScale: suggested,
+        stock: Object.fromEntries(
+          Object.entries(current.stock).filter(([code]) => allowed.has(code)),
+        ),
+      };
+    });
 
   const errors = useMemo(() => validate(draft), [draft]);
   const hasErrors = Object.keys(errors).length > 0;
@@ -233,11 +332,12 @@ function ProductForm({
       categorySlug: draft.categorySlug,
       active: draft.active,
       featured: draft.featured,
-      stock: {
-        S: Number(draft.stock.S),
-        M: Number(draft.stock.M),
-        L: Number(draft.stock.L),
-      },
+      sizeScale: draft.sizeScale,
+      // Exactly the ticked sizes. `writeSizes` upserts these and deletes the
+      // rows for anything no longer here, which is how a size stops being sold.
+      stock: Object.fromEntries(
+        Object.entries(draft.stock).map(([code, value]) => [code, Number(value)]),
+      ),
     };
 
     setSaving(true);
@@ -257,8 +357,8 @@ function ProductForm({
     }
   };
 
-  const totalStock = SIZES.reduce(
-    (sum, size) => sum + Math.max(0, Number(draft.stock[size]) || 0),
+  const totalStock = Object.values(draft.stock).reduce(
+    (sum, value) => sum + Math.max(0, Number(value) || 0),
     0,
   );
   const threshold = lowStockThreshold;
@@ -363,7 +463,7 @@ function ProductForm({
                 <Select
                   label="Category"
                   value={draft.categorySlug}
-                  onChange={(value) => setField("categorySlug", value)}
+                  onChange={onCategory}
                   /* Subcategories appear grouped under the category they are
                      inside — a product belongs to ONE of them, parent or child
                      alike (`products.category_slug` is unchanged). */
@@ -430,56 +530,132 @@ function ProductForm({
             </div>
           </Card>
 
-          {/* --- Per-size stock (requirements section 11) ------------- */}
+          {/* --- Sizes and per-size stock (requirements section 11) --- */}
           <Card>
             <CardHeader
-              title="Stock by size"
-              description="A size with zero stock is struck out on the product page and cannot be bought."
+              title="Sizes and stock"
+              description="Tick the sizes this piece is sold in, then count them. A size with zero stock is struck out on the product page and cannot be bought; a size left unticked is not shown at all."
             />
 
-            <div className="mt-5 space-y-3">
-              {SIZES.map((size) => (
-                <div key={size} className="flex items-center gap-3">
-                  <div className="w-24 shrink-0">
-                    <span className="text-sm font-medium text-ink">{SIZE_LABELS[size]}</span>
-                  </div>
+            <div className="mt-5 space-y-5">
+              <div>
+                <Select
+                  label="Sized by"
+                  value={draft.sizeScale}
+                  options={SIZE_SCALE_LIST.map((option) => ({
+                    value: option.id,
+                    label: option.name,
+                  }))}
+                  onChange={onScale}
+                />
+                <p className="mt-2 text-xs leading-relaxed text-ink-muted">{scale.description}</p>
+              </div>
 
-                  <Field
-                    label={`${SIZE_LABELS[size]} stock`}
-                    className="flex-1 [&_label]:sr-only"
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    step={1}
-                    value={draft.stock[size]}
-                    onChange={(value) =>
-                      setDraft((current) => ({
-                        ...current,
-                        stock: { ...current.stock, [size]: value },
-                      }))
-                    }
-                    suffix="units"
-                  />
+              <div className="space-y-2">
+                {scale.sizes.map((option) => {
+                  const on = option.code in draft.stock;
+                  const typed = draft.stock[option.code] ?? "";
+                  const level = stockLevel(Number(typed) || 0, threshold);
 
-                  <div className="w-24 shrink-0 text-right">
-                    <Badge
-                      tone={
-                        stockLevel(Number(draft.stock[size]) || 0, threshold) === "out-of-stock"
-                          ? "danger"
-                          : stockLevel(Number(draft.stock[size]) || 0, threshold) === "low-stock"
-                            ? "warning"
-                            : "success"
-                      }
+                  return (
+                    <div
+                      key={option.code}
+                      className={`flex items-center gap-3 rounded-lg border px-3 py-2 transition ${
+                        on ? "border-line-strong bg-surface" : "border-line"
+                      }`}
                     >
-                      {stockLevel(Number(draft.stock[size]) || 0, threshold) === "out-of-stock"
-                        ? "Sold out"
-                        : stockLevel(Number(draft.stock[size]) || 0, threshold) === "low-stock"
-                          ? "Low"
-                          : "OK"}
-                    </Badge>
-                  </div>
+                      <label className="flex w-32 shrink-0 cursor-pointer items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={on}
+                          onChange={(event) => toggleSize(option.code, event.target.checked)}
+                          className="h-4 w-4 shrink-0 rounded border-line-strong accent-accent"
+                        />
+                        <span
+                          className={`truncate text-sm ${on ? "font-medium text-ink" : "text-ink-muted"}`}
+                        >
+                          {option.label}
+                        </span>
+                      </label>
+
+                      {on ? (
+                        <>
+                          <Field
+                            label={`${option.label} stock`}
+                            className="flex-1 [&_label]:sr-only"
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            step={1}
+                            value={typed}
+                            onChange={(value) =>
+                              setDraft((current) => ({
+                                ...current,
+                                stock: { ...current.stock, [option.code]: value },
+                              }))
+                            }
+                            suffix="units"
+                          />
+
+                          <div className="w-20 shrink-0 text-right">
+                            <Badge
+                              tone={
+                                level === "out-of-stock"
+                                  ? "danger"
+                                  : level === "low-stock"
+                                    ? "warning"
+                                    : "success"
+                              }
+                            >
+                              {level === "out-of-stock"
+                                ? "Sold out"
+                                : level === "low-stock"
+                                  ? "Low"
+                                  : "OK"}
+                            </Badge>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="flex-1 text-xs text-ink-muted">Not sold in this size</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Sizes that do not belong to the chosen scale. See `offScale`. */}
+              {offScale.length > 0 && (
+                <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+                  <p className="text-xs font-medium text-ink">
+                    Not part of {scale.name.toLowerCase()}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+                    These sizes still have stock recorded against them, from before this piece was
+                    sized this way. They are shown in the shop until you remove them, so clear them
+                    once the stock has been counted under the new sizes.
+                  </p>
+
+                  <ul className="mt-3 space-y-2">
+                    {offScale.map((code) => (
+                      <li key={code} className="flex items-center gap-3">
+                        <span className="w-32 shrink-0 truncate text-sm text-ink">
+                          {sizeLabel(draft.sizeScale, code)}
+                        </span>
+                        <span className="flex-1 text-sm tabular-nums text-ink-soft">
+                          {draft.stock[code] || "0"} units
+                        </span>
+                        <Button
+                          variant="secondary"
+                          onClick={() => toggleSize(code, false)}
+                          aria-label={`Remove ${sizeLabel(draft.sizeScale, code)}`}
+                        >
+                          Remove
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              ))}
+              )}
             </div>
 
             {errors.stock && touched.stock && (
@@ -526,9 +702,24 @@ function validate(draft: Draft): Record<string, string> {
 
   if (!draft.categorySlug) errors.categorySlug = "Choose a category.";
 
-  for (const size of SIZES) {
-    const value = Number(draft.stock[size]);
-    if (draft.stock[size].trim() === "" || !Number.isFinite(value) || value < 0 || !Number.isInteger(value)) {
+  const codes = Object.keys(draft.stock);
+
+  // A live product with no sizes cannot be bought — the size selector is the
+  // gate on Add to bag, and with nothing to select the page is a dead end. It
+  // is only an error when the piece is actually in the shop, so a draft can be
+  // saved and photographed before anyone has counted the stockroom.
+  if (codes.length === 0 && draft.active) {
+    errors.stock = "Tick at least one size, or turn off “Live in the shop” until you have.";
+  }
+
+  for (const code of codes) {
+    const value = Number(draft.stock[code]);
+    if (
+      draft.stock[code].trim() === "" ||
+      !Number.isFinite(value) ||
+      value < 0 ||
+      !Number.isInteger(value)
+    ) {
       errors.stock = "Stock must be a whole number, zero or more, for every size.";
       break;
     }

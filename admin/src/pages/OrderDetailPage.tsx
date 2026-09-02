@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { OrderStatus } from "@shared/types";
-import { SIZE_LABELS } from "@shared/stock";
+import { orderLineSize } from "@shared/sizes";
 import { paymentMethodCopy } from "@shared/payment";
 import { Button, buttonClasses } from "@admin/components/ui/Button";
 import { Card, CardHeader, Detail, PageHeader } from "@admin/components/ui/Card";
@@ -157,7 +157,7 @@ export function OrderDetailPage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-ink">{item.name}</p>
                     <p className="mt-0.5 text-xs text-ink-muted">
-                      {SIZE_LABELS[item.size]} · {item.qty} ×{" "}
+                      {orderLineSize(item)} · {item.qty} ×{" "}
                       {formatPrice(item.unitPrice)}
                     </p>
                   </div>

@@ -27,6 +27,7 @@ interface OrderItemRow {
   slug: string;
   thumb: string;
   size: string;
+  size_label: string | null;
   qty: number;
   unit_price: number;
 }
@@ -62,7 +63,11 @@ function toOrderItem(row: OrderItemRow): OrderItem {
     name: row.name,
     slug: row.slug,
     thumb: row.thumb,
-    size: row.size as OrderItem["size"],
+    size: row.size,
+    // The wording as it was AT THE TIME. Never re-derived from the product's
+    // current scale — see `OrderItem.sizeLabel`. Older rows carry none, and the
+    // bare code is the honest fallback.
+    sizeLabel: row.size_label ?? undefined,
     qty: row.qty,
     unitPrice: row.unit_price,
   };
@@ -99,7 +104,7 @@ const SELECT =
   "id, order_number, status, full_name, email, phone, address, city, postal_code, notes, " +
   "subtotal, delivery_charge, total, payment_method, is_guest, user_id, review_token, " +
   "created_at, updated_at, " +
-  "order_items(id, product_id, name, slug, thumb, size, qty, unit_price)";
+  "order_items(id, product_id, name, slug, thumb, size, size_label, qty, unit_price)";
 
 /** Every order the signed-in customer has placed, newest first. */
 export async function listMyOrders(): Promise<Order[]> {

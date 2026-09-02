@@ -34,6 +34,7 @@
  */
 
 import type { Size, SizeStock } from "./types";
+import { orderSizeCodes } from "./sizes";
 
 /**
  * At or below this many units, a piece is running low. It is admin-configurable
@@ -43,23 +44,22 @@ import type { Size, SizeStock } from "./types";
  */
 export const FALLBACK_LOW_STOCK_THRESHOLD = 4;
 
-/**
- * Every size the shop sells, in the order they are always shown.
+/* ---------------------------------------------------------------------------
+ * WHERE `SIZES` AND `SIZE_LABELS` WENT
+ * ---------------------------------------------------------------------------
+ * They used to live here: one frozen `["S", "M", "L"]` and one label map, read
+ * by every screen. They are gone, and their absence is the point.
  *
- * `Record<Size, SizeStock>` is an unordered map, so something has to decide the
- * order — and it belongs in shared code rather than in the storefront, because
- * the admin dashboard edits per-size stock and has to show the same three in
- * the same order. `storefront/src/lib/sizes.ts` re-exports these two so the
- * order is not decided twice.
- */
-export const SIZES: readonly Size[] = ["S", "M", "L"];
-
-/** Full names, for labels and screen readers — the letter alone reads poorly. */
-export const SIZE_LABELS: Record<Size, string> = {
-  S: "Small",
-  M: "Medium",
-  L: "Large",
-};
+ * There is no longer a single list of sizes the shop sells, because a sneaker
+ * and a shirt are not measured on the same scale. The ordered list belongs to a
+ * PRODUCT — it is that product's own stock rows, put into the order of its
+ * scale — so every function below that used to close over the global list now
+ * takes the sizes map (and, where order matters, the scale) as an argument.
+ *
+ * Wording moved to `sizeLabel()` / `sizeShort()` in `shared/sizes.ts`, which
+ * need the scale to answer at all: "42" is "EU 42" on a shoe and "42 inch
+ * waist" on a trouser, and a global map cannot know which.
+ * ------------------------------------------------------------------------ */
 
 export type StockLevel = "out-of-stock" | "low-stock" | "in-stock";
 
@@ -85,25 +85,54 @@ export const STOCK_LEVEL_LABEL: Record<StockLevel, string> = {
   "in-stock": "In stock",
 };
 
-/** Total units across every size. What a list view's badge counts. */
+/**
+ * Total units across every size the product is sold in. What a list view's
+ * badge counts.
+ *
+ * Sums the map itself rather than a fixed list of keys — with scales, the keys
+ * ARE the answer to "which sizes does this come in", and a product on the
+ * one-size scale has exactly one of them.
+ */
 export function totalStock(sizes: Record<Size, SizeStock> | undefined): number {
   if (!sizes) return 0;
-  return SIZES.reduce((sum, size) => sum + Math.max(0, sizes[size]?.stock ?? 0), 0);
+  return Object.values(sizes).reduce((sum, entry) => sum + Math.max(0, entry?.stock ?? 0), 0);
 }
 
-/** Stock in one size. Zero for a size that does not exist on the record. */
+/**
+ * Stock in one size. Zero for a size the product is not sold in at all, which
+ * is the same answer as a size that is sold out — deliberately, because the
+ * question this answers is "can one be bought", and both mean no. Use
+ * `offeredSizes()` when the difference matters.
+ */
 export function stockInSize(sizes: Record<Size, SizeStock> | undefined, size: Size): number {
   return Math.max(0, sizes?.[size]?.stock ?? 0);
 }
 
 /**
- * The sizes a visitor can actually buy. Section 11 requires that an
- * out-of-stock size is not purchasable AND that the visitor is told — a page
- * that lists "Small, Medium and Large" under a piece whose Medium is gone has
- * failed the second half while passing the first.
+ * Every size this product is SOLD in, in its scale's order — sold out ones
+ * included. What the product page draws a button for.
+ *
+ * The keys of the map are the offered sizes (see `Product.sizes`); this only
+ * decides what order they come in, which is why it needs the scale.
  */
-export function availableSizes(sizes: Record<Size, SizeStock> | undefined): Size[] {
-  return SIZES.filter((size) => stockInSize(sizes, size) > 0);
+export function offeredSizes(
+  sizes: Record<Size, SizeStock> | undefined,
+  scaleId: string | undefined,
+): Size[] {
+  return orderSizeCodes(scaleId, Object.keys(sizes ?? {}));
+}
+
+/**
+ * The sizes a visitor can actually buy — offered AND in stock. Section 11
+ * requires that an out-of-stock size is not purchasable AND that the visitor is
+ * told; a page that lists "Small, Medium and Large" under a piece whose Medium
+ * is gone has failed the second half while passing the first.
+ */
+export function availableSizes(
+  sizes: Record<Size, SizeStock> | undefined,
+  scaleId: string | undefined,
+): Size[] {
+  return offeredSizes(sizes, scaleId).filter((size) => stockInSize(sizes, size) > 0);
 }
 
 /**

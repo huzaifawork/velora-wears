@@ -34,6 +34,15 @@ export interface ReceiptLine {
   slug: string;
   thumb: string;
   size: Size;
+  /**
+   * How that size reads — "Extra large", "EU 42", "32 inch waist".
+   *
+   * Snapshotted here for the same reason the server snapshots it onto the order
+   * line: the wording depends on the product's SIZE SCALE, and a receipt that
+   * stored only the code would have to look the product up again to render
+   * itself. This page deliberately never touches the database.
+   */
+  sizeLabel?: string;
   qty: number;
   unitPrice: number;
 }

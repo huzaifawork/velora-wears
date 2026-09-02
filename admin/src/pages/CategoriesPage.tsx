@@ -1,7 +1,8 @@
 import { Fragment, useState } from "react";
 import { Link } from "react-router-dom";
 
-import type { Category } from "@shared/types";
+import type { Category, SizeScaleId } from "@shared/types";
+import { SIZE_SCALE_LIST } from "@shared/sizes";
 import { buildCategoryTree, type CategoryNode } from "@shared/categories";
 import { PRODUCT_IMAGE } from "@shared/media";
 import { Button } from "@admin/components/ui/Button";
@@ -413,6 +414,15 @@ function CategoryRow({
 /** The value the "sits inside" dropdown uses for "nothing — top level". */
 const TOP_LEVEL = "";
 
+/**
+ * The value the size-scale dropdown uses for "no suggestion".
+ *
+ * A separate sentinel from `TOP_LEVEL` despite both being the empty string,
+ * because they answer different questions and a shared constant would make a
+ * later change to one silently change the other.
+ */
+const NO_SUGGESTION = "";
+
 function CategoryDialog({
   category,
   /** Every category, flat — for the slug check and the parent picker. */
@@ -435,6 +445,14 @@ function CategoryDialog({
   const [parentSlug, setParentSlug] = useState(category?.parentSlug ?? TOP_LEVEL);
   const [active, setActive] = useState(category?.active ?? true);
   const [thumb, setThumb] = useState<string | undefined>(category?.thumb);
+  /**
+   * The size scale NEW products in this category start on. `NO_SUGGESTION` is a
+   * real choice, not an empty one: a category holding a mix of things is better
+   * off letting each product say how it is sized.
+   */
+  const [defaultSizeScale, setDefaultSizeScale] = useState<SizeScaleId | typeof NO_SUGGESTION>(
+    category?.defaultSizeScale ?? NO_SUGGESTION,
+  );
 
   const [uploading, setUploading] = useState(false);
   const [stage, setStage] = useState<UploadStage>();
@@ -519,6 +537,7 @@ function CategoryDialog({
       active,
       thumb: thumb ?? null,
       parentSlug: parentSlug || null,
+      defaultSizeScale: defaultSizeScale === NO_SUGGESTION ? null : defaultSizeScale,
     };
 
     setSaving(true);
@@ -625,6 +644,24 @@ function CategoryDialog({
                 ? "There is no other category to sit inside yet."
                 : "A subcategory appears under its parent on the shop's category page, and as a chip when someone browses the parent. Browsing the parent shows its products too."
           }
+        />
+
+        {/*
+          What products in here are sized by. A SUGGESTION for the product
+          editor and nothing more — it is read once, when a product is created,
+          and changing it never re-sizes anything already in the category. Shoes
+          are the reason it exists: nobody should have to remember that the
+          sneakers go by EU numbers every single time they add a pair.
+        */}
+        <Select
+          label="New products in here are sized by"
+          value={defaultSizeScale}
+          onChange={setDefaultSizeScale}
+          options={[
+            { value: NO_SUGGESTION, label: "No suggestion — ask each time" },
+            ...SIZE_SCALE_LIST.map((scale) => ({ value: scale.id, label: scale.name })),
+          ]}
+          hint="Only a starting point for the product editor. Every product carries its own sizing, and this never changes one that already exists."
         />
 
         <Field

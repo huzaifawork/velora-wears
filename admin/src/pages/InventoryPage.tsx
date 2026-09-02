@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import type { ProductSummary, Size } from "@shared/types";
-import { SIZES, SIZE_LABELS, stockLevel } from "@shared/stock";
+import { stockLevel } from "@shared/stock";
+import { orderSizeCodes, sizeLabel, sizeShort } from "@shared/sizes";
 import { buttonClasses } from "@admin/components/ui/Button";
 import { Card, PageHeader } from "@admin/components/ui/Card";
 import { StockBadge } from "@admin/components/ui/Badge";
@@ -200,6 +201,11 @@ function InventoryRow({
   loading: boolean;
   threshold?: number;
 }) {
+  // The sizes THIS product is sold in, in the order of its own scale — read off
+  // the stock rows rather than a global list, so a sneaker shows EU 41/42/43
+  // and a trouser shows 30/32/34 instead of all three showing S/M/L.
+  const sizes = orderSizeCodes(product.sizeScale, Object.keys(stock ?? {}));
+
   return (
     <li className="flex flex-col gap-4 px-4 py-4 sm:px-5 lg:flex-row lg:items-center">
       <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -224,18 +230,38 @@ function InventoryRow({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 lg:w-[26rem] lg:shrink-0">
-        {SIZES.map((size) => (
-          <StockField
-            key={size}
-            productId={product.id}
-            productName={product.name}
-            size={size}
-            value={stock?.[size]}
-            loading={loading}
-            threshold={threshold}
-          />
-        ))}
+      <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:w-[30rem] lg:shrink-0 lg:grid-cols-5">
+        {sizes.length === 0 ? (
+          // No stock rows at all. Not "sold out" — there is nothing here to
+          // count yet, and the only useful action is to open the editor and say
+          // which sizes this piece comes in.
+          <p className="col-span-full text-xs text-ink-muted">
+            {loading ? (
+              " "
+            ) : (
+              <>
+                No sizes set.{" "}
+                <Link to={routes.productPath(product.id)} className="underline hover:text-accent">
+                  Choose them in the editor
+                </Link>
+                .
+              </>
+            )}
+          </p>
+        ) : (
+          sizes.map((size) => (
+            <StockField
+              key={size}
+              productId={product.id}
+              productName={product.name}
+              scaleId={product.sizeScale}
+              size={size}
+              value={stock?.[size]}
+              loading={loading}
+              threshold={threshold}
+            />
+          ))
+        )}
       </div>
     </li>
   );
@@ -252,6 +278,7 @@ function InventoryRow({
 function StockField({
   productId,
   productName,
+  scaleId,
   size,
   value,
   loading,
@@ -259,6 +286,8 @@ function StockField({
 }: {
   productId: string;
   productName: string;
+  /** Decides how this size is worded — "Large", "EU 42", "32 inch waist". */
+  scaleId: ProductSummary["sizeScale"];
   size: Size;
   value: number | undefined;
   loading: boolean;
@@ -309,7 +338,11 @@ function StockField({
 
   return (
     <label className="block">
-      <span className="block text-xs font-medium text-ink-soft">{SIZE_LABELS[size]}</span>
+      {/* The short form in the column head — a grid of five needs "42", not
+          "EU 42" — with the full wording carried by the input's own label. */}
+      <span className="block truncate text-xs font-medium text-ink-soft" title={sizeLabel(scaleId, size)}>
+        {sizeShort(scaleId, size)}
+      </span>
 
       <span
         className={`mt-1 flex h-9 items-center gap-1.5 rounded-lg border bg-surface px-2.5 transition focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/25 ${border}`}
@@ -320,7 +353,7 @@ function StockField({
           step={1}
           inputMode="numeric"
           disabled={loading}
-          aria-label={`${productName}, ${SIZE_LABELS[size]} stock`}
+          aria-label={`${productName}, ${sizeLabel(scaleId, size)} stock`}
           value={loading ? "" : shown}
           onChange={(event) => setDraft(event.target.value)}
           onBlur={() => void commit()}

@@ -28,7 +28,7 @@ import {
   listProducts,
   listReviews,
 } from "@/lib/queries";
-import { SIZE_LABELS } from "@/lib/sizes";
+import { sizeLabel } from "@/lib/sizes";
 import { CATEGORIES, CHECKOUT, HOME, PRODUCTS, categoryPath } from "@/lib/routes";
 
 /**
@@ -143,7 +143,7 @@ export function ProductDetailPage() {
   /** Set only when this product's category sits inside another one. */
   const parentCategory = parentOfCategory(categories ?? [], product.categorySlug);
 
-  const soldOut = availableSizes(product.sizes).length === 0;
+  const soldOut = availableSizes(product.sizes, product.sizeScale).length === 0;
 
   /** Stock in the chosen size — the cap on what can go into the bag. */
   const availableInSize = size ? stockInSize(product.sizes, size) : 0;
@@ -229,6 +229,7 @@ export function ProductDetailPage() {
             <div className="border-t border-line pt-7">
               <SizeSelector
                 sizes={product.sizes}
+                scaleId={product.sizeScale}
                 selected={size}
                 onSelect={(next) => setChosen({ slug, size: next, qty: 1 })}
                 lowStockThreshold={settings?.lowStockThreshold ?? FALLBACK_LOW_STOCK_THRESHOLD}
@@ -297,7 +298,11 @@ export function ProductDetailPage() {
                 <dd className="text-ink-soft">
                   {soldOut
                     ? "None left — every size is sold out"
-                    : joinNames(availableSizes(product.sizes).map((s) => SIZE_LABELS[s]))}
+                    : joinNames(
+                        availableSizes(product.sizes, product.sizeScale).map((s) =>
+                          sizeLabel(product.sizeScale, s),
+                        ),
+                      )}
                 </dd>
               </div>
               <div className="flex gap-3">

@@ -5,6 +5,7 @@ import type {
   Review,
   Settings,
   Size,
+  SizeScaleId,
 } from "@shared/types";
 import { FALLBACK_LOW_STOCK_THRESHOLD, stockLevel, totalStock } from "@shared/stock";
 
@@ -43,6 +44,14 @@ interface Seed {
   description: string;
   /** Alt text for the front image — describes the garment, not the file. */
   alt: string;
+  /** Which scale this piece is sized on. Defaults to `alpha` when absent. */
+  sizeScale?: SizeScaleId;
+  /**
+   * Stock per size code — and the KEYS say which sizes the piece is sold in.
+   * A shoe carries EU numbers here and a trouser carries waist inches; nothing
+   * is sold in "Small, Medium and Large" merely because it used to be the only
+   * option the type allowed.
+   */
   sizes: Record<Size, number>;
   /** Days after T0 the product was added; drives `newest` ordering. */
   addedOn: number;
@@ -57,7 +66,7 @@ const seeds: Seed[] = [
     alt: "Meridian Oversized Drop Shoulder Shirt in ecru, laid flat",
     description:
       "An oversized drop-shoulder cut in a mid-weight oxford cotton that holds its shape after a wash. The shoulder seam sits low on the arm for a relaxed line through the body. Mother-of-pearl buttons, a single chest pocket, and a collar with enough structure to wear open or closed.",
-    sizes: { S: 12, M: 8, L: 5 },
+    sizes: { XS: 4, S: 12, M: 8, L: 5, XL: 6, XXL: 3 },
     addedOn: 26,
   },
   {
@@ -68,7 +77,7 @@ const seeds: Seed[] = [
     alt: "Noor Oversized Drop Shoulder Shirt in warm sand, laid flat",
     description:
       "An oversized drop-shoulder cut in pure linen, washed soft before it reaches you, so it drapes from the first wear rather than the tenth. Built for Karachi humidity and long afternoons — breathable, light, and unbothered by creasing.",
-    sizes: { S: 3, M: 9, L: 0 },
+    sizes: { S: 3, M: 9, L: 0, XL: 4, XXL: 2 },
     addedOn: 24,
   },
   {
@@ -79,7 +88,7 @@ const seeds: Seed[] = [
     alt: "Kohl Oversized Drop Shoulder Shirt in deep charcoal, laid flat",
     description:
       "A crisp poplin in a near-black charcoal — the shirt that works for a dinner, an interview, and the office on the same week. Slim through the sleeve, straight at the hem, finished with a hidden button stand.",
-    sizes: { S: 0, M: 0, L: 0 },
+    sizes: { XS: 0, S: 0, M: 0, L: 0, XL: 0 },
     addedOn: 21,
   },
   {
@@ -90,7 +99,7 @@ const seeds: Seed[] = [
     alt: "Sahil Oversized Drop Shoulder Shirt in sage green, laid flat",
     description:
       "An open camp collar in a soft sage viscose blend, cut oversized with a dropped shoulder through the chest. Short sleeves, a boxy hem you can wear untucked, and a colour that sits well against every skin tone.",
-    sizes: { S: 6, M: 2, L: 7 },
+    sizes: { S: 6, M: 2, L: 7, XL: 5, XXL: 4, "3XL": 2 },
     addedOn: 18,
   },
   {
@@ -101,7 +110,7 @@ const seeds: Seed[] = [
     alt: "Marble Oversized Drop Shoulder Overshirt in stone grey, laid flat",
     description:
       "Half shirt, half light jacket. Heavy cotton twill, two chest pockets, and an oversized dropped shoulder that layers over a tee in October and under a coat in January.",
-    sizes: { S: 4, M: 5, L: 11 },
+    sizes: { XS: 2, S: 4, M: 5, L: 11, XL: 7 },
     addedOn: 15,
   },
   {
@@ -112,7 +121,7 @@ const seeds: Seed[] = [
     alt: "Anwar Heavyweight Hoodie in deep plum, laid flat",
     description:
       "400 GSM brushed fleece with a double-layer hood that actually stands up. Ribbed cuffs and hem, a deep kangaroo pocket, and flat drawcords that do not fray. The one you will reach for all winter.",
-    sizes: { S: 9, M: 14, L: 6 },
+    sizes: { S: 9, M: 14, L: 6, XL: 8, XXL: 5 },
     addedOn: 27,
   },
   {
@@ -123,7 +132,7 @@ const seeds: Seed[] = [
     alt: "Dune Zip Hoodie in warm sand, laid flat",
     description:
       "A full-zip in a warm sand fleece, with a YKK zip and split kangaroo pockets. Cut slightly cropped so it sits at the waist, not below it.",
-    sizes: { S: 2, M: 0, L: 3 },
+    sizes: { S: 2, M: 0, L: 3, XL: 1 },
     addedOn: 22,
   },
   {
@@ -134,7 +143,7 @@ const seeds: Seed[] = [
     alt: "Ravi Cropped Hoodie in clay, laid flat",
     description:
       "Boxy, cropped, and dyed a warm clay that softens with every wash. Loop-back cotton inside, so it breathes far better than a brushed fleece in mid-season weather.",
-    sizes: { S: 7, M: 5, L: 0 },
+    sizes: { XS: 3, S: 7, M: 5, L: 0, XL: 4, XXL: 6 },
     addedOn: 19,
   },
   {
@@ -145,7 +154,7 @@ const seeds: Seed[] = [
     alt: "Sable Essential Hoodie in black, laid flat",
     description:
       "The plain one, done properly. A true black that stays black, a regular fit with room to layer, and reinforced seams at every stress point.",
-    sizes: { S: 0, M: 3, L: 8 },
+    sizes: { S: 0, M: 3, L: 8, XL: 9, XXL: 4, "3XL": 1 },
     addedOn: 16,
   },
   {
@@ -156,7 +165,7 @@ const seeds: Seed[] = [
     alt: "Sadaf Boxy Tee in off-white, laid flat",
     description:
       "A heavyweight 240 GSM cotton tee with a boxy body and a ribbed neck that holds. Pre-shrunk, so the fit you buy is the fit you keep.",
-    sizes: { S: 18, M: 22, L: 15 },
+    sizes: { XS: 6, S: 18, M: 22, L: 15, XL: 12, XXL: 7 },
     addedOn: 25,
   },
   {
@@ -167,7 +176,7 @@ const seeds: Seed[] = [
     alt: "Core Ribbed Tee in black, laid flat",
     description:
       "A fine rib that follows the body without clinging to it. Stretches, recovers, and layers under a shirt or an overshirt without bunching.",
-    sizes: { S: 2, M: 1, L: 0 },
+    sizes: { S: 2, M: 1, L: 0, XL: 3 },
     addedOn: 12,
   },
   {
@@ -178,7 +187,7 @@ const seeds: Seed[] = [
     alt: "Rehan Crew Sweatshirt in oat, laid flat",
     description:
       "A classic crew in an oat-toned loop-back cotton, with ribbed cuffs and a clean, unbranded chest. Quietly the most worn thing in the collection.",
-    sizes: { S: 5, M: 8, L: 4 },
+    sizes: { S: 5, M: 8, L: 4, XL: 6, XXL: 2 },
     addedOn: 9,
   },
 
@@ -191,7 +200,8 @@ const seeds: Seed[] = [
     alt: "Amir Wide-Leg Trouser in deep plum, laid flat",
     description:
       "A wide leg that falls straight from the knee, in a mid-weight cotton twill with a little body to it. Sits at the natural waist, with belt loops, slant pockets and an unfussy plain hem.",
-    sizes: { S: 7, M: 9, L: 6 },
+    sizeScale: "waist-in",
+    sizes: { "30": 6, "32": 9, "34": 7, "36": 4, "38": 2 },
     addedOn: 30,
   },
   {
@@ -202,7 +212,8 @@ const seeds: Seed[] = [
     alt: "Slate Pleated Trouser in graphite, laid flat",
     description:
       "A single forward pleat gives room through the hip and lets the leg hang clean. Graphite, pressed crease, and a fabric with just enough weight to keep its line through a long day.",
-    sizes: { S: 4, M: 6, L: 3 },
+    sizeScale: "waist-in",
+    sizes: { "28": 3, "30": 5, "32": 8, "34": 6, "36": 3 },
     addedOn: 28,
   },
   {
@@ -213,7 +224,8 @@ const seeds: Seed[] = [
     alt: "Yusuf Tapered Trouser in tobacco, laid flat",
     description:
       "Roomy through the thigh and tapered from the knee down, in a warm tobacco cotton. The one to wear with everything in the essentials edit.",
-    sizes: { S: 9, M: 11, L: 8 },
+    sizeScale: "waist-in",
+    sizes: { "30": 0, "32": 4, "34": 5, "36": 2 },
     addedOn: 23,
   },
   {
@@ -224,7 +236,8 @@ const seeds: Seed[] = [
     alt: "Basalt Cargo Trouser in olive, laid flat",
     description:
       "Two flap pockets set low on the leg, in a washed olive ripstop that softens with wear. Cut straight, not baggy, so it reads considered rather than utility.",
-    sizes: { S: 2, M: 3, L: 0 },
+    sizeScale: "waist-in",
+    sizes: { "28": 2, "30": 7, "32": 11, "34": 8, "36": 5, "38": 3, "40": 1 },
     addedOn: 20,
   },
 
@@ -237,7 +250,8 @@ const seeds: Seed[] = [
     alt: "Rahi Low-Top Sneaker in off-white, side profile",
     description:
       "A clean off-white low-top on a slim cupsole, with a padded collar and a leather-look upper that wipes down. Made to sit under a wide trouser without shouting.",
-    sizes: { S: 6, M: 8, L: 5 },
+    sizeScale: "shoe-eu",
+    sizes: { "38": 2, "39": 4, "40": 6, "41": 8, "42": 9, "43": 7, "44": 4, "45": 2 },
     addedOn: 29,
   },
   {
@@ -248,7 +262,8 @@ const seeds: Seed[] = [
     alt: "Onyx Court Sneaker in black, side profile",
     description:
       "A court silhouette in near-black, with a tonal panel and a gum-free white sole for contrast. The pair that works with the winter collection and with a shirt.",
-    sizes: { S: 3, M: 4, L: 2 },
+    sizeScale: "shoe-eu",
+    sizes: { "39": 0, "40": 3, "41": 5, "42": 6, "43": 4, "44": 2 },
     addedOn: 25,
   },
   {
@@ -259,7 +274,8 @@ const seeds: Seed[] = [
     alt: "Talha Runner in tobacco and cream, side profile",
     description:
       "A soft runner in tobacco suede-look panels on a cream midsole, cushioned enough for a full day of walking and quiet enough to wear with everything else here.",
-    sizes: { S: 10, M: 12, L: 7 },
+    sizeScale: "shoe-eu",
+    sizes: { "38": 3, "39": 5, "40": 7, "41": 10, "42": 12, "43": 8, "44": 5, "45": 3, "46": 1 },
     addedOn: 17,
   },
 ];
@@ -304,11 +320,12 @@ export const demoProducts: Product[] = seeds.map((seed, i) => ({
       height: IMAGE_SIZE.full.height,
     },
   ],
-  sizes: {
-    S: { stock: seed.sizes.S },
-    M: { stock: seed.sizes.M },
-    L: { stock: seed.sizes.L },
-  },
+  sizeScale: seed.sizeScale ?? "alpha",
+  // Exactly the sizes the seed names — see `Product.sizes`. A key that is not
+  // here is a size the piece is not made in, and the shop draws no button.
+  sizes: Object.fromEntries(
+    Object.entries(seed.sizes).map(([code, stock]) => [code, { stock }]),
+  ),
   active: true,
   createdAt: T0 + seed.addedOn * day,
   updatedAt: T0 + seed.addedOn * day,
