@@ -66,6 +66,18 @@ export function useOrderAlerts(): void {
           invalidate("orders");
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "orders" },
+        () => {
+          // An order was deleted permanently (`delete_order()`), almost
+          // certainly in another tab belonging to this same admin. No toast for
+          // the same reason as an update — but the list MUST re-read, because
+          // the row it is showing no longer exists and opening it would give a
+          // "that order does not exist" screen.
+          invalidate("orders");
+        },
+      )
       .subscribe();
 
     return () => {

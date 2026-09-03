@@ -87,6 +87,14 @@ export function describeError(value: unknown): string {
 
   // A check constraint — a negative price, negative stock, a second settings row.
   if (error.code === "23514") {
+    // Only a delivered or cancelled order may carry an `archived_at`, which
+    // means moving an ARCHIVED order back to pending, confirmed or shipped is
+    // refused by the database rather than by the screen. The dashboard hides
+    // the status control on an archived order, so reaching this needs a second
+    // tab or a stale page — and the sentence has to say what to do about it.
+    if (raw.includes("orders_archive_requires_settled")) {
+      return "This order is archived, so its status cannot be changed. Restore it first, then move it.";
+    }
     if (raw.includes("stock")) return "Stock cannot be negative.";
     if (raw.includes("price")) return "Price cannot be negative.";
     if (raw.includes("delivery_charge")) return "The delivery charge cannot be negative.";
