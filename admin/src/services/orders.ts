@@ -17,13 +17,17 @@ import { DEFAULT_PAGE_SIZE } from "@admin/services/products";
  * stored and visible in the Admin Dashboard for order management").
  *
  * ---------------------------------------------------------------------------
- * THE DASHBOARD READS ORDERS AND CHANGES THEIR STATUS. NOTHING ELSE.
+ * THE DASHBOARD READS ORDERS, CHANGES THEIR STATUS, AND FILES THEM AWAY.
  * ---------------------------------------------------------------------------
  * `orders` has NO insert policy for anyone (`developerb.md` §4). Orders are
  * written exclusively by the storefront's `place-order` Edge Function, which
  * recomputes every price and the delivery charge from the database inside one
  * transaction and decrements stock under a row lock. Row level security grants
  * this dashboard `select` and `update`.
+ *
+ * It has no DELETE policy either, and this file does not add one. Archiving and
+ * deletion both go through the three functions in
+ * `20260903000001_order_archive_delete.sql` — see `archiveOrder` below.
  *
  * The money columns are technically writable through that update policy, and
  * this file never touches them — deliberately. `place_order()` computed
@@ -74,7 +78,46 @@ export const ORDER_STATUS_COPY: Record<OrderStatus, { label: string; hint: strin
   },
 };
 
+/**
+ * Whether an order may be filed away yet.
+ *
+ * The SAME rule as the database's `orders_archive_requires_settled` check, and
+ * a deliberate second copy of it: the constraint is what makes it true, this is
+ * what stops the dashboard offering a button that would fail. An order still
+ * being fulfilled must not be archivable, because the sidebar's open-orders
+ * badge counts pending + confirmed + shipped and would then be counting work
+ * that has been hidden from the list.
+ */
+export function canArchive(status: OrderStatus): boolean {
+  return status === "delivered" || status === "cancelled";
+}
+
 export type OrderSort = "newest" | "oldest" | "total-desc" | "total-asc";
+
+/**
+ * Which drawer of the filing cabinet the list is looking in.
+ *
+ * This is deliberately NOT a sixth value on the status dropdown. An archived
+ * order still HAS a status — it is a delivered order that has been filed away,
+ * or a cancelled one — and folding the two into one control would make
+ * "Delivered" and "Archived" look mutually exclusive when they are not.
+ */
+export type OrderView = "active" | "archived" | "all";
+
+export const ORDER_VIEW_COPY: Record<OrderView, { label: string; hint: string }> = {
+  active: {
+    label: "Active orders",
+    hint: "Everything except what you have filed away. This is the working list.",
+  },
+  archived: {
+    label: "Archived",
+    hint: "Finished orders you have filed away. Nothing here is gone — each one can be put back, and each one still counts towards the shop's revenue.",
+  },
+  all: {
+    label: "All orders",
+    hint: "Active and archived together — the shop's complete history.",
+  },
+};
 
 export interface OrderListOptions {
   search?: string;
@@ -83,6 +126,8 @@ export interface OrderListOptions {
   from?: string;
   to?: string;
   sort?: OrderSort;
+  /** Defaults to `"active"` — archived orders are out of the way unless asked for. */
+  view?: OrderView;
   page?: number;
   pageSize?: number;
 }
@@ -94,11 +139,12 @@ export function orderListKey(options: OrderListOptions): string {
     from = "",
     to = "",
     sort = "newest",
+    view = "active",
     page = 1,
     pageSize = DEFAULT_PAGE_SIZE,
   } = options;
 
-  return ["orders", (search ?? "").trim().toLowerCase() || "-", status, from || "-", to || "-", sort, page, pageSize].join(":");
+  return ["orders", (search ?? "").trim().toLowerCase() || "-", status, from || "-", to || "-", sort, view, page, pageSize].join(":");
 }
 
 function escapeLike(term: string): string {
@@ -112,11 +158,20 @@ export async function listOrders(options: OrderListOptions): Promise<Page<AdminO
     from,
     to,
     sort = "newest",
+    view = "active",
     page = 1,
     pageSize = DEFAULT_PAGE_SIZE,
   } = options;
 
   let q = getSupabase().from("orders").select(ORDER_LIST_COLUMNS, { count: "exact" });
+
+  // The archive filter comes FIRST because it is the one that is almost always
+  // on: `orders_active_created` and `orders_active_status` are partial indexes
+  // over exactly this predicate, so the default list reads an index that
+  // contains only the rows it wants rather than filtering archived ones out
+  // afterwards (§19).
+  if (view === "active") q = q.is("archived_at", null);
+  if (view === "archived") q = q.not("archived_at", "is", null);
 
   if (status !== "all") q = q.eq("status", status);
 
@@ -190,11 +245,90 @@ export async function setOrderStatus(id: string, status: OrderStatus): Promise<v
   invalidate("orders");
 }
 
-/** The newest few orders, for the dashboard home. Deliberately tiny. */
+/**
+ * ---------------------------------------------------------------------------
+ * ARCHIVING, AND THE DELETE THAT SITS BEHIND IT
+ * ---------------------------------------------------------------------------
+ * The shop's owner asked to be able to delete an order. `orders` is the sales
+ * record, so the dashboard offers two actions and puts the reversible one
+ * first:
+ *
+ *   ARCHIVE  takes a finished order off this list and nothing more. The row
+ *            stays, the customer still sees it in their own order history, and
+ *            it still counts towards revenue and that customer's lifetime
+ *            spend. One click puts it back.
+ *
+ *   DELETE   erases the row, its line items and any reviews written from it.
+ *            Only offered on an order that is already archived.
+ *
+ * NONE OF THE THREE IS A TABLE WRITE. `orders` has no delete policy for any
+ * role and this file does not add one — a `DELETE /orders?id=neq.…` from a
+ * stolen admin session would otherwise take the shop's whole history with it.
+ * All three are `security definer` functions that re-check `is_admin()`
+ * themselves, refuse an order that has not been archived, and write a row to
+ * `deleted_orders` before removing anything. See
+ * `20260903000001_order_archive_delete.sql`.
+ *
+ * NEVER OPTIMISTIC, for the same reason `setOrderStatus` is not: a list that
+ * shows an order as gone before the database agrees is a list showing incorrect
+ * order information. Each one waits, then invalidates.
+ */
+
+/** File a finished order away. Returns when it was archived. */
+export async function archiveOrder(id: string): Promise<number> {
+  const { data, error } = await getSupabase().rpc("archive_order", {
+    target_order: id,
+  });
+
+  if (error) throw new Error(describeError(error));
+
+  invalidate("orders");
+  return data ? new Date(data as string).getTime() : Date.now();
+}
+
+/** Put an archived order back on the working list. */
+export async function restoreOrder(id: string): Promise<void> {
+  const { error } = await getSupabase().rpc("restore_order", { target_order: id });
+  if (error) throw new Error(describeError(error));
+  invalidate("orders");
+}
+
+/** What a delete actually removed, so the toast can say so rather than guess. */
+export interface DeletedOrderSummary {
+  orderNumber: string;
+  itemsDeleted: number;
+  reviewsDeleted: number;
+}
+
+/**
+ * Permanently remove an archived order.
+ *
+ * `reviews` is invalidated alongside `orders` because deleting an order deletes
+ * the reviews written from it — the moderation screen open in another tab is
+ * now showing rows that no longer exist.
+ */
+export async function deleteOrder(id: string): Promise<DeletedOrderSummary> {
+  const { data, error } = await getSupabase().rpc("delete_order", {
+    target_order: id,
+  });
+
+  if (error) throw new Error(describeError(error));
+
+  invalidate("orders", "reviews");
+  return data as DeletedOrderSummary;
+}
+
+/**
+ * The newest few orders, for the dashboard home. Deliberately tiny.
+ *
+ * Archived orders are left out: this panel is "what has just come in", and an
+ * order the admin has explicitly filed away is the opposite of that.
+ */
 export async function listRecentOrders(limit = 6): Promise<AdminOrder[]> {
   const { data, error } = await getSupabase()
     .from("orders")
     .select(ORDER_LIST_COLUMNS)
+    .is("archived_at", null)
     .order("created_at", { ascending: false })
     .limit(limit);
 

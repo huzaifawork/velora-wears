@@ -266,6 +266,7 @@ export interface OrderRow {
   payment_method: string | null;
   is_guest: boolean;
   user_id: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
   order_items?: OrderItemRow[] | null;
@@ -281,12 +282,13 @@ export interface OrderRow {
  */
 export const ORDER_LIST_COLUMNS =
   "id, order_number, status, full_name, email, phone, city, subtotal, delivery_charge, " +
-  "total, payment_method, is_guest, user_id, created_at, updated_at";
+  "total, payment_method, is_guest, user_id, archived_at, created_at, updated_at";
 
 /** The detail read: everything the list has, plus the address and the lines. */
 export const ORDER_DETAIL_COLUMNS =
   "id, order_number, status, full_name, email, phone, address, city, postal_code, notes, " +
-  "subtotal, delivery_charge, total, payment_method, is_guest, user_id, created_at, updated_at, " +
+  "subtotal, delivery_charge, total, payment_method, is_guest, user_id, archived_at, " +
+  "created_at, updated_at, " +
   "order_items(id, product_id, name, slug, thumb, size, size_label, qty, unit_price)";
 
 /**
@@ -300,6 +302,13 @@ export const ORDER_DETAIL_COLUMNS =
  */
 export interface AdminOrder extends Omit<Order, "items" | "reviewToken"> {
   items?: OrderItem[];
+  /**
+   * When an administrator filed this order away, or `undefined` while it is
+   * still on the working list. It is a dashboard-side fact and not part of
+   * `shared/types.ts` on purpose: the storefront reads the same row and must
+   * never behave differently because the shop has tidied its own list.
+   */
+  archivedAt?: number;
 }
 
 export function toOrderItem(row: OrderItemRow): OrderItem {
@@ -343,6 +352,7 @@ export function toOrder(row: OrderRow): AdminOrder {
     paymentMethod: (row.payment_method ?? undefined) as Order["paymentMethod"],
     isGuest: row.is_guest,
     userId: opt(row.user_id),
+    archivedAt: row.archived_at ? epoch(row.archived_at) : undefined,
     createdAt: epoch(row.created_at),
     updatedAt: epoch(row.updated_at),
   };

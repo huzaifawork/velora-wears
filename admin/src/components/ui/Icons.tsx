@@ -108,6 +108,21 @@ export const TrashIcon = (p: IconProps) => (
   />
 );
 
+/**
+ * The archive box, and the arrow that takes something back out of it.
+ *
+ * They are drawn as a PAIR on purpose: archive and restore are one action and
+ * its undo, so the lid on the box and the lid on the arrow's box sit at the
+ * same height and the two read as opposites in a row of icon buttons.
+ */
+export const ArchiveIcon = (p: IconProps) => (
+  <Glyph {...p} d="M3.5 7.5h17v12h-17v-12zM3 4.5h18v3H3v-3zM10 11.5h4" />
+);
+
+export const RestoreIcon = (p: IconProps) => (
+  <Glyph {...p} d="M3.5 7.5h17v12h-17v-12zM3 4.5h18v3H3v-3zM12 16.5v-5m0 0-2 2m2-2 2 2" />
+);
+
 export const ExternalIcon = (p: IconProps) => (
   <Glyph {...p} d="M14 4h6v6M20 4l-8 8M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
 );
