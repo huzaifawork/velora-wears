@@ -59,7 +59,7 @@ export function OrderConfirmedPage() {
       <div className="mx-auto max-w-2xl">
         {/* Print-only letterhead — the header carrying the logo is hidden while
             printing (see Header.tsx), so the receipt needs its own. */}
-        <div className="hidden print:mb-8 print:block">
+        <div className="hidden print:mb-5 print:block">
           <p className="font-display text-xl text-ink">Velora Wears</p>
           <p className="text-xs text-ink-soft">Order receipt</p>
         </div>
@@ -77,15 +77,15 @@ export function OrderConfirmedPage() {
           <p className="mt-8 text-[0.625rem] tracking-eyebrow text-accent uppercase">
             Order received
           </p>
-          <h1 className="mt-5 text-3xl leading-tight text-balance sm:text-4xl">
+          <h1 className="mt-5 text-3xl leading-tight text-balance print:mt-3 print:text-2xl sm:text-4xl">
             Thank you — your order is placed.
           </h1>
-          <p className="mx-auto mt-5 max-w-prose leading-relaxed text-ink-soft">
+          <p className="mx-auto mt-5 max-w-prose leading-relaxed text-ink-soft print:mt-3">
             We are preparing it now. Our team will call you on the number you gave to confirm
             delivery to {receipt.city}, and you pay the courier in cash when it arrives.
           </p>
 
-          <div className="mt-8 inline-flex flex-col items-center rounded-sm border border-line bg-canvas-alt px-8 py-5">
+          <div className="mt-8 inline-flex flex-col items-center rounded-sm border border-line bg-canvas-alt px-8 py-5 print:mt-5 print:py-3">
             <span className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
               Your order number
             </span>
@@ -102,7 +102,7 @@ export function OrderConfirmedPage() {
           </p>
         </div>
 
-        <section aria-labelledby="ordered-heading" className="mt-14">
+        <section aria-labelledby="ordered-heading" className="mt-14 print:mt-8">
           <h2
             id="ordered-heading"
             className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase"
@@ -112,9 +112,9 @@ export function OrderConfirmedPage() {
 
           <ul className="mt-5 divide-y divide-line border-y border-line">
             {receipt.lines.map((line) => (
-              <li key={`${line.slug}-${line.size}`} className="flex flex-col gap-4 py-4">
+              <li key={`${line.slug}-${line.size}`} className="flex flex-col gap-4 py-4 print:py-2.5">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 shrink-0 overflow-hidden rounded-sm bg-canvas-deep">
+                  <div className="w-16 shrink-0 overflow-hidden rounded-sm bg-canvas-deep print:w-10">
                     {line.thumb ? (
                       <Image
                         src={line.thumb}
@@ -167,7 +167,7 @@ export function OrderConfirmedPage() {
             ))}
           </ul>
 
-          <dl className="mt-6 flex flex-col gap-3">
+          <dl className="mt-6 flex flex-col gap-3 print:mt-4 print:gap-2">
             {breakdownAdvisable && (
               <>
                 <div className="flex items-baseline justify-between gap-4 text-sm">
