@@ -98,7 +98,7 @@ export function OrderDetailPage() {
   const arithmeticHolds = data.subtotal + data.deliveryCharge === data.total;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:space-y-4">
       {/* Print-only letterhead — the sidebar and top bar carrying the shop's
           name are hidden while printing (see AdminLayout.tsx). */}
       <div className="hidden print:mb-6 print:block">
@@ -129,11 +129,11 @@ export function OrderDetailPage() {
         }
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[1.5fr_1fr]">
+      <div className="grid items-start gap-6 print:grid-cols-[1.5fr_1fr] print:gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="space-y-6">
           {/* --- What was bought --------------------------------------- */}
           <Card padded={false}>
-            <div className="p-5 sm:p-6 sm:pb-4">
+            <div className="p-5 print:p-3 sm:p-6 sm:pb-4">
               <CardHeader
                 title="Items"
                 description="What the customer bought, at the price they were charged."
@@ -144,7 +144,7 @@ export function OrderDetailPage() {
               {(data.items ?? []).map((item, index) => (
                 <li
                   key={`${item.productId}-${item.size}-${index}`}
-                  className="flex items-center gap-4 px-5 py-4 sm:px-6"
+                  className="flex items-center gap-4 px-5 py-4 print:px-3 print:py-2 sm:px-6"
                 >
                   <Thumb
                     src={item.thumb}
@@ -170,7 +170,7 @@ export function OrderDetailPage() {
             </ul>
 
             {/* --- The arithmetic ------------------------------------- */}
-            <dl className="space-y-2 border-t border-line bg-surface-raised px-5 py-4 text-sm sm:px-6">
+            <dl className="space-y-2 border-t border-line bg-surface-raised px-5 py-4 text-sm print:px-3 print:py-3 sm:px-6">
               <Row label="Subtotal" value={formatPrice(data.subtotal)} />
               <Row
                 label="Delivery"
@@ -196,11 +196,18 @@ export function OrderDetailPage() {
             )}
 
             <p className="border-t border-line px-5 py-3 text-xs leading-relaxed text-ink-muted sm:px-6">
-              {payment.label}. {payment.amountLabel}: {formatPrice(data.total)}. These
-              figures were computed by the shop's server when the order was
-              placed — they are not editable here, and the items are a snapshot,
-              so repricing a product later does not change what this customer
-              paid.
+              {payment.label}. {payment.amountLabel}: {formatPrice(data.total)}.{" "}
+              {/* How the money works in this dashboard, addressed to the person
+                  at the keyboard. The courier reading the slip in the parcel is
+                  owed the sentence above it and nothing else — and this is the
+                  longest block of text on the page, so it is also the cheapest
+                  thing to leave off the sheet. */}
+              <span className="print:hidden">
+                These figures were computed by the shop's server when the order
+                was placed — they are not editable here, and the items are a
+                snapshot, so repricing a product later does not change what this
+                customer paid.
+              </span>
             </p>
           </Card>
         </div>

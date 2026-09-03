@@ -417,3 +417,64 @@ input[type="number"]::-webkit-inner-spin-button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/*
+ * ---------------------------------------------------------------------------
+ * PRINT - A RECEIPT IS ONE SHEET
+ * ---------------------------------------------------------------------------
+ * The only two things anyone here ever prints are receipts: the customer's on
+ * `/order/confirmed`, and the shop's on an order detail screen. Both were
+ * running onto a second sheet, and for a cash-on-delivery slip that travels
+ * with the parcel that is worse than long - the half that carries the total
+ * can end up on the page nobody staples on.
+ *
+ * The squeeze is done once, here, instead of as a `print:` variant on every
+ * margin of those two pages:
+ *
+ *  - `@page` sets the margin, so the browser's own generous default is not the
+ *    thing deciding how much sheet the receipt gets. The paper SIZE is
+ *    deliberately not set: forcing A4 onto a printer loaded with Letter makes
+ *    the browser scale the whole page down to fit, and the layout below is
+ *    sized to fit the shorter of the two anyway.
+ *  - Dropping the ROOT font size scales every rem-based Tailwind spacing and
+ *    type utility in one move. It has to be the root: `mt-8` is `2rem`
+ *    whatever font size its parent inherits, so shrinking a wrapper would
+ *    shrink the text and leave every gap around it exactly where it was.
+ *    13px puts body copy at roughly 8.5pt - receipt-sized, and still an easy
+ *    read on paper.
+ *
+ * With the line-item thumbnails printing small (see `OrderConfirmedPage`),
+ * that fits an order of around eight lines on one sheet. Past that, no amount
+ * of CSS can fold paper, so the rest of these rules are about breaking
+ * cleanly when it does: no line item, and no set of figures, is ever split
+ * across the fold.
+ */
+@media print {
+  @page {
+    margin: 12mm;
+  }
+
+  html {
+    font-size: 13px;
+  }
+
+  body {
+    /* The sitewide ambient wash is `background-attachment: fixed`, which a
+       printer resolves per SHEET rather than per document - it would be
+       stamped onto every page, and it is atmosphere, not information. */
+    background-image: none;
+    background-color: #fff;
+  }
+
+  li,
+  dl,
+  tr {
+    break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+}
