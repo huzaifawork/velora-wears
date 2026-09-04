@@ -25,6 +25,20 @@ import { useId, type ReactNode } from "react";
  * required, so marking those would put an asterisk almost everywhere and say
  * nothing; "Optional" on the two that are genuinely optional is the smaller
  * and more useful mark.
+ *
+ * ### `floating`
+ *
+ * The checkout redesign (client reference, 2026-09-04) asks for the label to
+ * sit INSIDE the box — as the placeholder while the field is empty, shrinking
+ * to a caption above the value once it is filled. That is a second appearance,
+ * not a second component: the label association, the error wiring, the
+ * `maxLength` and the hint slot are all the same, and duplicating them into a
+ * checkout-only input is exactly what section 18 is about.
+ *
+ * It is done with `peer-placeholder-shown` rather than focus state, so the
+ * label position is decided by CSS from the input's own value — no re-render
+ * per keystroke, and it is correct on the first paint after a browser autofill,
+ * which a React `focused` flag would miss.
  */
 export function Field({
   label,
@@ -42,6 +56,7 @@ export function Field({
   maxLength,
   placeholder,
   disabled = false,
+  floating = false,
   className = "",
 }: {
   label: string;
@@ -61,6 +76,8 @@ export function Field({
   maxLength?: number;
   placeholder?: string;
   disabled?: boolean;
+  /** Label inside the box, floating up once there is a value. Checkout's look. */
+  floating?: boolean;
   className?: string;
 }) {
   // Generated rather than passed in: the label and the control have to share an
@@ -82,7 +99,9 @@ export function Field({
     value,
     disabled,
     maxLength,
-    placeholder,
+    // A floating label needs a placeholder to exist for `:placeholder-shown` to
+    // have anything to match, and a blank one so nothing shows through under it.
+    placeholder: floating ? " " : placeholder,
     autoComplete,
     inputMode,
     "aria-invalid": invalid || undefined,
@@ -90,6 +109,60 @@ export function Field({
     onBlur,
     onChange: (event: { target: { value: string } }) => onChange(event.target.value),
   };
+
+  const message = invalid ? (
+    <p id={errorId} className="mt-2 text-xs leading-relaxed text-danger">
+      {error}
+    </p>
+  ) : hint ? (
+    <p id={hintId} className="mt-2 text-xs leading-relaxed text-ink-muted">
+      {hint}
+    </p>
+  ) : null;
+
+  if (floating) {
+    /** "Postal code (optional)", the way the reference design words it — the
+     *  label is the placeholder here, so a separate marker beside it would be
+     *  a caption floating over an empty box. */
+    const text = optional ? `${label} (optional)` : label;
+
+    // Resting (empty) vs floated (filled or focused). `peer-*` reads the
+    // input's own state, so the two variants below are the whole animation.
+    const floatingLabel =
+      "pointer-events-none absolute left-4 text-[0.6875rem] text-ink-muted transition-all duration-200 ease-brand peer-focus:text-[0.6875rem] peer-disabled:text-ink-muted";
+
+    return (
+      <div className={className}>
+        <div className="relative">
+          {/* The control comes FIRST so the label can be its `peer`. The two are
+              still associated by `htmlFor`/`id`, which is what a screen reader
+              and a click on the label both follow. */}
+          {multiline ? (
+            <textarea
+              {...shared}
+              rows={rows}
+              className={`peer ${control} resize-y pt-6 pb-2.5 leading-relaxed`}
+            />
+          ) : (
+            <input {...shared} type={type} className={`peer ${control} h-14 pt-5 pb-1`} />
+          )}
+
+          <label
+            htmlFor={id}
+            className={
+              multiline
+                ? `${floatingLabel} top-2 peer-placeholder-shown:top-4 peer-placeholder-shown:text-sm peer-focus:top-2`
+                : `${floatingLabel} top-2.5 peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-sm peer-focus:top-2.5 peer-focus:translate-y-0`
+            }
+          >
+            {text}
+          </label>
+        </div>
+
+        {message}
+      </div>
+    );
+  }
 
   return (
     <div className={className}>
@@ -107,15 +180,7 @@ export function Field({
         <input {...shared} type={type} className={`${control} mt-2 h-12`} />
       )}
 
-      {invalid ? (
-        <p id={errorId} className="mt-2 text-xs leading-relaxed text-danger">
-          {error}
-        </p>
-      ) : hint ? (
-        <p id={hintId} className="mt-2 text-xs leading-relaxed text-ink-muted">
-          {hint}
-        </p>
-      ) : null}
+      {message}
     </div>
   );
 }

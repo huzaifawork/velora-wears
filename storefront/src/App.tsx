@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 
 import { Container } from "@/components/layout/Container";
 import { AuthProvider } from "@/features/account/AuthProvider";
@@ -10,6 +10,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { ScrollToTop } from "@/components/layout/ScrollToTop";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { CHECKOUT } from "@/lib/routes";
 
 /**
  * Routes are code-split, so the first load ships only the page being viewed
@@ -116,6 +117,21 @@ function Storefront() {
    */
   useCatalogRealtime();
 
+  /**
+   * CHECKOUT WEARS NO SHOP CHROME (client reference design, 2026-09-04).
+   *
+   * Every link in the site header — five categories, search, the bag — is an
+   * invitation to leave a form the customer has already started filling in,
+   * and the footer below it is another twenty. So this one route renders its
+   * own frame instead: the brand mark, the form, and a short row of ways out
+   * (`pages/CheckoutPage`). It is the layout the client's reference shows, and
+   * the same one every checkout worth copying uses.
+   *
+   * Checkout only. The bag, the confirmation and everything else keep the shop
+   * around them.
+   */
+  const bare = useLocation().pathname === CHECKOUT;
+
   return (
     /* The bag is the one piece of global client state in the shop, and it
        wraps everything because the header badge, the drawer and the cart
@@ -123,7 +139,7 @@ function Storefront() {
        outside it: an admin has no shopping bag. */
     <CartProvider>
       <div className="flex min-h-screen flex-col">
-        <Header />
+        {!bare && <Header />}
         <main className="flex-1">
           <Suspense fallback={<RouteFallback />}>
             <Routes>
@@ -149,7 +165,7 @@ function Storefront() {
             </Routes>
           </Suspense>
         </main>
-        <Footer />
+        {!bare && <Footer />}
 
         {/* Outside <main> and rendered once: it is a sheet over the whole shop,
             not part of any one page. */}

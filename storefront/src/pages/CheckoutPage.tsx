@@ -1,27 +1,25 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { OrderCustomer } from "@shared/types";
 import type { CheckoutErrors } from "@shared/checkout";
 import type { CheckoutDraft } from "@shared/checkout";
-import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
-import { Container } from "@/components/layout/Container";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { Logo } from "@/components/brand/Logo";
 import { buttonClasses } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/features/account/AuthContext";
-import { CartLineRow } from "@/features/cart/CartLineRow";
-import { CartSummary } from "@/features/cart/CartSummary";
 import { useCart } from "@/features/cart/CartContext";
 import { useCartContents } from "@/features/cart/useCartContents";
 import { CheckoutForm } from "@/features/checkout/CheckoutForm";
+import { CheckoutSummary } from "@/features/checkout/CheckoutSummary";
 import { useAsync } from "@/hooks/useAsync";
 import { clearCatalogCache, isLiveSource } from "@/lib/queries";
 import { PlaceOrderError, isBagProblem, placeOrder } from "@/lib/placeOrder";
 import { listMyOrders } from "@/lib/myOrders";
 import { sizeLabel } from "@/lib/sizes";
 import { saveReceipt, type ReceiptLine } from "@/lib/orderReceipt";
-import { CART, CHECKOUT, HOME, ORDER_CONFIRMED, PRODUCTS, SIGN_IN } from "@/lib/routes";
+import { clearSavedCheckout, readSavedCheckout, saveCheckout } from "@/lib/savedCheckout";
+import { CART, HOME, ORDER_CONFIRMED, PRODUCTS } from "@/lib/routes";
 
 /**
  * Checkout (requirements section 7).
@@ -30,11 +28,36 @@ import { CART, CHECKOUT, HOME, ORDER_CONFIRMED, PRODUCTS, SIGN_IN } from "@/lib/
  * checkout without authentication mandatory, so nothing here requires an
  * account. What optional accounts (the note added to section 12) add is
  * strictly additive: a signed-in customer's order carries an `Authorization`
- * header so the Edge Function links it to them (`placeOrder` already had this
- * parameter, unused, since section 7), and the form opens pre-filled from
- * their most recent order rather than blank — "skip re-typing details next
- * time", as the note puts it. A guest sees neither: no header sent, an empty
- * form, exactly as before.
+ * header so the Edge Function links it to them, and the form opens pre-filled
+ * from their most recent order rather than blank. A guest is no longer left
+ * with an empty form either — see "What the form opens with" below.
+ *
+ * ### The layout is the client's reference design (2026-09-04)
+ *
+ * A checkout of its own rather than a page inside the shop: the site header,
+ * its navigation and the footer are all suppressed on this route (see
+ * `App.tsx`), and what replaces them is the brand mark at the top and a short
+ * row of ways out at the bottom. That is deliberate and standard — every link
+ * in a full site header at this point is an invitation to abandon a filled-in
+ * form — and it is what the reference shows.
+ *
+ * Below it the page is two columns from `lg` up: the form, and the order
+ * beside it on its own ground. On a phone they stack, with the order collapsed
+ * into a single "Order summary" bar above the form (`CheckoutSummary`), so the
+ * first field is reachable without scrolling past the bag (section 15).
+ *
+ * ### What the form opens with
+ *
+ * In order of precedence:
+ *
+ *  1. **What this device remembers** — the details of the last order placed on
+ *     it, if the customer left "Save this information" ticked. This is the
+ *     client's second ask on 2026-09-04, and it works for a guest, which is
+ *     the point: most orders here are guest orders. `lib/savedCheckout.ts` has
+ *     the storage rules.
+ *  2. **The signed-in customer's most recent order**, read from the database.
+ *     Still the better source across devices — a new phone knows nothing.
+ *  3. **The account's email address**, when there is no order to read.
  *
  * The page composes, like the rest of the storefront. The form and its rules
  * are `features/checkout/CheckoutForm`, the bag beside it is the same
@@ -73,9 +96,18 @@ export function CheckoutPage() {
   const alert = useRef<HTMLDivElement>(null);
 
   /**
-   * The signed-in customer's most recent order, read once to pre-fill the
-   * form. Resolves to `[]` immediately for a guest, so this never waits on a
-   * network call that a guest's session was never going to make.
+   * What this device remembers, read ONCE — a lazy initial state rather than a
+   * read per render. Storage can change under a mounted page (another tab
+   * placing an order), and re-reading it would move values inside a form the
+   * customer is typing into.
+   */
+  const [saved] = useState(readSavedCheckout);
+
+  /**
+   * The signed-in customer's most recent order, read to pre-fill anything the
+   * device does not already know. Resolves to `[]` immediately for a guest, so
+   * this never waits on a network call that a guest's session was never going
+   * to make.
    */
   const prefill = useAsync(
     () => (authStatus === "signed-in" ? listMyOrders() : Promise.resolve([])),
@@ -83,26 +115,28 @@ export function CheckoutPage() {
   );
 
   const authReady = authStatus !== "loading" && (authStatus !== "signed-in" || !prefill.loading);
+  const latest = authStatus === "signed-in" ? prefill.data?.[0] : undefined;
+
   const initialValues: Partial<CheckoutDraft> | undefined =
-    authStatus === "signed-in"
-      ? (() => {
-          const latest = prefill.data?.[0];
-          return {
-            fullName: latest?.customer.fullName ?? "",
-            email: latest?.customer.email ?? user?.email ?? "",
-            phone: latest?.customer.phone ?? "",
-            address: latest?.customer.address ?? "",
-            city: latest?.customer.city ?? "",
-            postalCode: latest?.customer.postalCode ?? "",
-          };
-        })()
+    latest || saved || user?.email
+      ? {
+          fullName: latest?.customer.fullName ?? "",
+          email: latest?.customer.email ?? user?.email ?? "",
+          phone: latest?.customer.phone ?? "",
+          address: latest?.customer.address ?? "",
+          city: latest?.customer.city ?? "",
+          postalCode: latest?.customer.postalCode ?? "",
+          // Last, so this device's own remembered details win over an older
+          // order read from the database. Only non-empty fields are in here.
+          ...(saved ?? {}),
+        }
       : undefined;
 
   const empty = !cart.loading && cart.lines.length === 0;
   const blocked = cart.hasProblems || cart.subtotal === 0;
   const preparing = cart.loading || !authReady;
 
-  async function submit(customer: OrderCustomer) {
+  async function submit(customer: OrderCustomer, remember: boolean) {
     setSubmitting(true);
     setFailure(undefined);
     setFieldErrors(undefined);
@@ -154,6 +188,15 @@ export function CheckoutPage() {
         placedAt: Date.now(),
       });
 
+      /**
+       * The client's "auto-fill it next time" (2026-09-04), and only now that
+       * the order has actually landed — a form the customer abandoned leaves
+       * nothing behind. Unticking the box is an instruction to forget, not
+       * merely to skip this one, so it clears what is already there.
+       */
+      if (remember) saveCheckout(customer);
+      else clearSavedCheckout();
+
       setPlaced(true);
       // The bag is done with, and stock has moved for everyone — the cached
       // catalog would otherwise keep showing the pre-order counts for a minute.
@@ -183,89 +226,119 @@ export function CheckoutPage() {
   if (placed) return null;
 
   return (
-    <>
-      <Breadcrumbs
-        items={[{ label: "Home", to: HOME }, { label: "Your bag", to: CART }, { label: "Checkout" }]}
-      />
-
-      <PageHeader
-        eyebrow="Checkout"
-        title="Complete your order"
-        description={
-          empty
-            ? "There is nothing to check out yet."
-            : "Cash on delivery, nationwide. No account needed — fill in where the order is going and we will do the rest."
-        }
-      />
-
-      <Container className="py-14 sm:py-20">
-        {preparing ? (
-          <CheckoutSkeleton />
-        ) : cart.error ? (
-          <p className="py-10 text-center text-sm text-ink-soft">
+    <CheckoutShell>
+      {preparing ? (
+        <CheckoutSkeleton />
+      ) : cart.error ? (
+        <Centered>
+          <p className="text-sm leading-relaxed text-ink-soft">
             Your bag could not be priced just now, so checkout is not safe to open. Please refresh
             the page — nothing has been lost.
           </p>
-        ) : empty ? (
+        </Centered>
+      ) : empty ? (
+        <Centered>
           <EmptyBag />
-        ) : (
-          <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start lg:gap-14">
-            <div className="min-w-0">
+        </Centered>
+      ) : (
+        /* Two columns from `lg`, and the ORDER COMES FIRST in the document so a
+           phone meets the collapsed summary bar before the form. `lg:order-2`
+           puts it back on the right on a wide screen, where reading order and
+           visual order agree again. */
+        <div className="lg:grid lg:grid-cols-2">
+          <aside className="border-b border-line bg-canvas-deep lg:order-2 lg:border-b-0 lg:border-l">
+            <div className="mx-auto w-full max-w-lg px-4 sm:px-6 lg:sticky lg:top-0 lg:mr-auto lg:ml-0 lg:px-10 lg:py-12">
+              <CheckoutSummary cart={cart} />
+            </div>
+          </aside>
+
+          <div className="lg:order-1">
+            <div className="mx-auto w-full max-w-lg px-4 py-10 sm:px-6 lg:mr-0 lg:ml-auto lg:px-10 lg:py-12">
               <div ref={alert}>
                 {!isLiveSource() && <DemoNotice />}
                 {blocked && <BlockedNotice />}
                 {failure && <FailureNotice error={failure} />}
-                {authStatus === "signed-out" && <SignInPrompt />}
               </div>
 
               <CheckoutForm
                 total={cart.total}
+                deliveryCharge={cart.deliveryCharge}
                 submitting={submitting}
                 serverErrors={fieldErrors}
                 disabled={blocked}
                 initialValues={initialValues}
+                /* `initialRemember` is left at its default, ticked. The box is
+                   a standing offer rather than a memory of the last answer:
+                   someone who unticked it placed an order that cleared this
+                   device, so there is nothing of theirs left to protect, and
+                   the reference design shows it the same way every time. */
+                showSignIn={authStatus === "signed-out"}
                 onSubmit={submit}
               />
             </div>
-
-            {/* The bag, restated beside the form. Requirements section 6 asks
-                the customer to see product, size, quantity and total before
-                they confirm, and taking them back to /cart to check would be
-                a step out of the thing they are trying to finish. */}
-            <aside className="lg:sticky lg:top-28">
-              <div className="rounded-sm border border-line bg-canvas-alt p-6 sm:p-7">
-                <div className="flex items-baseline justify-between gap-3">
-                  <h2 className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
-                    Your order
-                  </h2>
-                  <Link
-                    to={CART}
-                    className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase underline underline-offset-4 transition hover:text-accent"
-                  >
-                    Edit bag
-                  </Link>
-                </div>
-
-                <ul className="divide-y divide-line border-b border-line">
-                  {cart.lines.map((line) => (
-                    <CartLineRow
-                      key={`${line.item.productId}-${line.item.size}`}
-                      line={line}
-                      compact
-                      readOnly
-                    />
-                  ))}
-                </ul>
-
-                <div className="mt-6">
-                  <CartSummary cart={cart} compact showActions={false} />
-                </div>
-              </div>
-            </aside>
           </div>
-        )}
-      </Container>
-    </>
+        </div>
+      )}
+    </CheckoutShell>
+  );
+}
+
+/* --------------------------------------------------------------------------
+ * The checkout's own chrome. The site header and footer are suppressed on this
+ * route (`App.tsx`), so these two are the whole frame.
+ * ----------------------------------------------------------------------- */
+
+function CheckoutShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-h-screen flex-col bg-canvas">
+      <header className="border-b border-line">
+        <div className="mx-auto flex w-full max-w-6xl justify-center px-4 py-6 sm:px-6 lg:px-8">
+          <Link
+            to={HOME}
+            aria-label="Velora Wears — home"
+            className="text-ink transition hover:opacity-80"
+          >
+            <Logo size="lg" />
+          </Link>
+        </div>
+      </header>
+
+      <main className="flex-1">{children}</main>
+
+      {/* The ways out, and one way to ask a question. The support address is the
+          brand's real one, the same the site footer carries — repeated here
+          rather than reached by rendering the whole footer, which is the thing
+          this layout deliberately does without. */}
+      <footer className="border-t border-line">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap justify-center gap-x-8 gap-y-3 px-4 py-6 sm:px-6 lg:px-8">
+          {[
+            { label: "Continue shopping", to: PRODUCTS },
+            { label: "Your bag", to: CART },
+          ].map((link) => (
+            <Link
+              key={link.label}
+              to={link.to}
+              className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase transition hover:text-accent"
+            >
+              {link.label}
+            </Link>
+          ))}
+          <a
+            href="mailto:wearvelora84@gmail.com"
+            className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase transition hover:text-accent"
+          >
+            Contact
+          </a>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+/** The one-column states — empty bag, and a bag that could not be priced. */
+function Centered({ children }: { children: ReactNode }) {
+  return (
+    <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center sm:px-6 lg:px-8">{children}</div>
   );
 }
 
@@ -277,8 +350,8 @@ const notice = "mb-8 rounded-sm border p-5 text-sm leading-relaxed";
 
 function EmptyBag() {
   return (
-    <div className="py-10 text-center">
-      <h2 className="text-2xl">There is nothing to check out</h2>
+    <>
+      <h1 className="text-2xl">There is nothing to check out</h1>
       <p className="mx-auto mt-4 max-w-prose leading-relaxed text-ink-soft">
         Add a piece to your bag and it will be waiting here. Nothing is reserved until an order is
         placed.
@@ -291,7 +364,7 @@ function EmptyBag() {
           View your bag
         </Link>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -302,26 +375,6 @@ function BlockedNotice() {
       Something in your bag is no longer available, so the order cannot be confirmed yet. Remove it
       using the control in the order summary, or go back to your bag to change the size.
     </div>
-  );
-}
-
-/**
- * The one place checkout mentions accounts at all — a convenience, not a
- * gate. `?next=` sends the customer straight back here after signing in, so
- * `SignInPage` lands them where they left off rather than on `/account`.
- */
-function SignInPrompt() {
-  return (
-    <p className="mb-8 text-sm text-ink-soft">
-      Have an account?{" "}
-      <Link
-        to={`${SIGN_IN}?next=${encodeURIComponent(CHECKOUT)}`}
-        className="text-ink underline underline-offset-4 transition hover:text-accent"
-      >
-        Sign in to use your saved details
-      </Link>
-      .
-    </p>
   );
 }
 
@@ -370,18 +423,24 @@ function DemoNotice() {
 /** Mirrors the real layout, so nothing jumps once the bag is priced. */
 function CheckoutSkeleton() {
   return (
-    <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_22rem] lg:gap-14">
-      <div className="flex flex-col gap-5">
-        <Skeleton className="h-3 w-32" />
-        <Skeleton className="h-12 w-full" />
-        <div className="grid gap-5 sm:grid-cols-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
+    <div className="lg:grid lg:grid-cols-2">
+      <div className="border-b border-line bg-canvas-deep lg:order-2 lg:border-b-0 lg:border-l">
+        <div className="mx-auto w-full max-w-lg px-4 py-6 sm:px-6 lg:mr-auto lg:ml-0 lg:px-10 lg:py-12">
+          <Skeleton className="h-6 w-full lg:h-72" />
         </div>
-        <Skeleton className="h-28 w-full" />
-        <Skeleton className="h-13 w-full" />
       </div>
-      <Skeleton className="h-96 w-full" />
+
+      <div className="lg:order-1">
+        <div className="mx-auto flex w-full max-w-lg flex-col gap-5 px-4 py-10 sm:px-6 lg:mr-0 lg:ml-auto lg:px-10 lg:py-12">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-14 w-full" />
+          <Skeleton className="h-13 w-full" />
+        </div>
+      </div>
     </div>
   );
 }

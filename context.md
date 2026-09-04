@@ -213,7 +213,7 @@ Storefront builds, typechecks and lints clean.
 | Product details | **Done (section 4).** `/products/:slug` — gallery, size selection, reviews, related |
 | Categories | **Done (section 5).** `/categories` index, the category view on `/products?category=`, category chips, data-driven header and footer nav |
 | Shopping cart | **Done (section 6).** `/cart`, a mini-bag drawer, quantity and removal, live re-pricing against the catalog. **localStorage — there is no server** |
-| Checkout | **Done (section 7).** Guest-first form, shared validation rules, COD, delivery charge, and `/order/confirmed`; now also links to a signed-in customer's account and pre-fills from it. **No order can complete while the catalog is demo data** |
+| Checkout | **Done (section 7), and rebuilt to the client's reference design 2026-09-04.** Guest-first form, shared validation rules, COD, delivery charge, and `/order/confirmed`. `/checkout` now renders **without the site header or footer** (`App.tsx` suppresses them on that one route) — brand mark on top, two columns from `lg`, the order collapsed into one summary bar on a phone. **Delivery details are remembered on the device** (`lib/savedCheckout.ts`, opt out on the form) and pre-fill the next order for a GUEST as well as an account holder. **No order can complete while the catalog is demo data** |
 | Order success animation | **Done (section 12).** A one-shot package/truck/checkmark sequence on `/order/confirmed` |
 | Optional customer accounts | **Done (section 12's note).** `/account`, `/account/sign-in`, `/account/sign-up` — email/password via Supabase Auth, order history, checkout prefill. **Guest checkout is unaffected.** Password reset not built (needs an email provider) |
 | Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
@@ -251,6 +251,8 @@ storefront/          React + Vite (Developer A)
                            CartDrawerPanel, CartLineRow, CartSummary, QuantityStepper,
                            useCartContents - the hook that prices the bag
   src/features/checkout/   CheckoutForm - the section 7 form and when it reports an error
+                           CheckoutSummary - the bag beside the form; one collapsed bar on
+                           a phone, the open rail from lg. Renders CartLineRow/CartSummary
                            OrderSuccessAnimation - the section 12 animated confirmation
   src/features/account/    optional customer accounts - AuthContext + AuthProvider,
                            AccountMenu (header) + AccountMobileLink, AuthLayout + FormError
@@ -278,6 +280,9 @@ storefront/          React + Vite (Developer A)
   src/lib/placeOrder.ts    the POST to the place-order Edge Function + its error mapping
   src/lib/orderReceipt.ts  the placed order, in sessionStorage - the client cannot read it back
                            (ReceiptLine now carries productId, for section 16's review link)
+  src/lib/savedCheckout.ts the customer's delivery details, in localStorage, so the NEXT order
+                           opens pre-filled (client, 2026-09-04). Written only after an order
+                           lands, never the order note, and the form can untick it
   src/lib/submitReview.ts  the POST to the submit-review Edge Function (section 16)
   src/lib/reviewLookup.ts  the guest order-number+email lookup RPC + "do I already have a
                            review here" read - both public, neither goes through the Edge Function
