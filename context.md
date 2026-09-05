@@ -153,12 +153,23 @@ demo mode, clearly marked `DEMO-` so it can never be mistaken for a real one.
 > - **Unverified reviews count towards a product's rating.** `product_summaries.rating_avg`
 >   averages every visible review and always has; nothing there changed. Worth knowing, because
 >   it means the stars on a product card are no longer a claim about buyers.
-> - **NOT YET DEPLOYED.** `supabase/migrations/20260905000001_open_reviews.sql` needs
->   `npm run db:push`, and both Edge Functions need `npm run functions:deploy` — that script
->   now deploys all three (it only ever deployed `place-order`, which is why `submit-review`
->   had to be pushed by hand in the past). Until the migration is applied the storefront reads
->   `photos` as null and renders reviews without pictures, which is handled, but every write
->   will fail on the missing column.
+> - **The landing-page testimonial strip no longer requires a verified purchase either** (same
+>   instruction). That filter cost nothing when every review carried the badge; keeping it would
+>   have shown a shrinking minority, and an empty strip on a shop whose customers do not bother
+>   verifying. `reviews_testimonials`, a partial index on `(created_at desc) where not hidden
+>   and rating >= 4`, lands with the migration — the strip's query has always been a full scan
+>   and this is the migration that changes it (§19).
+> - **On `feat/open-reviews`, [PR #10](https://github.com/huzaifawork/velora-wears/pull/10),
+>   based on `main`** (the checkout work merged as PR #9 first, so `main` was the right base).
+> - **NOT YET DEPLOYED — and it cannot be deployed from a session without the access token.**
+>   `supabase/migrations/20260905000001_open_reviews.sql` needs `npm run db:push`, and the Edge
+>   Functions need `npm run functions:deploy` — that script now deploys all three (it only ever
+>   deployed `place-order`, which is why `submit-review` had to be pushed by hand in the past).
+>   The CLI in the 2026-09-05 session reported `Access token not provided`; see the Credentials
+>   table below. Until the migration is applied the storefront reads `photos` as null and
+>   renders reviews without pictures, which is handled, but **every review WRITE fails on the
+>   missing column** — so the live site is worse off between this merging and the push than it
+>   is now. Deploy before merging, or merge and push in the same sitting.
 
 ---
 

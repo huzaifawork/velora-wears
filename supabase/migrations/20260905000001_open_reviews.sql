@@ -51,7 +51,7 @@
 --
 -- Each element is `{ "thumbUrl": …, "fullUrl": …, "width": n, "height": n }`,
 -- written only by the Edge Function, with the URLs pointing into the same
--- public `media` bucket everything else uses (see section 3 below).
+-- public `media` bucket everything else uses (see section 4 below).
 
 alter table public.reviews
   add column if not exists photos jsonb not null default '[]'::jsonb;
@@ -99,12 +99,13 @@ alter table public.reviews
 alter table public.reviews
   add column if not exists author_token_hash text;
 
--- Editing looks a review up by id and then compares the hash, so this index is
--- for the OTHER direction: "does this browser already have a review on this
--- product?", asked once per product page load by a returning reviewer.
-create index if not exists reviews_author_token
-  on public.reviews (author_token_hash, product_id)
-  where author_token_hash is not null;
+-- NO INDEX ON THIS COLUMN, deliberately. Nothing ever filters by it: the
+-- browser remembers its own review's ID, so both the storefront's read and the
+-- Edge Function's ownership check find the row by primary key and then compare
+-- the hash in code. An index here would be a write cost on every review to
+-- serve a query nobody makes (requirements section 19 asks for an index behind
+-- each query, which is also an argument against the ones with no query behind
+-- them).
 
 
 -- ===========================================================================
@@ -167,7 +168,38 @@ create unique index if not exists reviews_one_open_per_user
 
 
 -- ===========================================================================
--- 5. What did NOT change, and why it is worth saying
+-- 5. The landing page's testimonial strip needs an index now
+-- ===========================================================================
+--
+-- `listTestimonials` reads the newest four-star-and-up reviews across the whole
+-- table. It has always done that, but two things changed underneath it:
+--
+--   - it no longer also filters on `verified_purchase`, since requiring a badge
+--     the client has just made optional would have left the strip empty on a
+--     shop whose customers do not bother verifying;
+--   - reviews are open, so this table now grows at the rate people write
+--     opinions rather than at the rate they take delivery of parcels.
+--
+-- The only index it could have used before was `reviews_product`, which leads
+-- on `product_id` and is no help to a query that spans every product. So the
+-- query has in practice always been a sequential scan and a sort — invisible at
+-- thirty-six demo reviews, and exactly the kind of thing requirements section
+-- 19 is about ("any column used for filtering or ordering needs an index in the
+-- migration that introduces the query"). The query is being changed here, so
+-- the index belongs here.
+--
+-- Partial on the same two conditions the read applies, so it is small and the
+-- planner can serve the whole thing from it: hidden reviews are excluded by RLS
+-- on every public read anyway, and the four-star floor is what makes a
+-- testimonial a testimonial.
+
+create index if not exists reviews_testimonials
+  on public.reviews (created_at desc)
+  where not hidden and rating >= 4;
+
+
+-- ===========================================================================
+-- 6. What did NOT change, and why it is worth saying
 -- ===========================================================================
 --
 -- `product_summaries.rating_avg` / `rating_count` average every VISIBLE review
