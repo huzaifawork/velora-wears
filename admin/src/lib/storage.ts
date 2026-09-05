@@ -1,5 +1,5 @@
 import { MEDIA_BUCKET, type ImageVariantSpec } from "@shared/media";
-import { encodeVariants } from "@admin/lib/image";
+import { encodeVariants } from "@shared/image";
 import { describeError } from "@admin/lib/errors";
 import { getSupabase } from "@admin/lib/supabase";
 

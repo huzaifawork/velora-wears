@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 
 import type { Order } from "@shared/types";
-import { REVIEW_AFTER_DELIVERY_MESSAGE, canReviewOrder } from "@shared/reviews";
+import { canReviewOrder } from "@shared/reviews";
 import { Badge, type BadgeTone } from "@/components/ui/Badge";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/features/account/AuthContext";
@@ -81,24 +81,27 @@ export function OrderHistory() {
                 </div>
 
                 {/* Signed-in customers can review from here too, not only
-                    from the order confirmation page (requirements section
-                    16) — the order id is already known, so there is nothing
-                    to verify. Only once it has been DELIVERED, though: until
-                    then the row says so instead of offering a form the server
-                    would refuse (`shared/reviews.ts`). */}
-                {accessToken &&
-                  (canReviewOrder(order.status) ? (
-                    <ReviewComposer
-                      productId={item.productId}
-                      productName={item.name}
-                      orderId={order.id}
-                      identity={{ mode: "session", accessToken }}
-                    />
-                  ) : (
-                    order.status !== "cancelled" && (
-                      <p className="text-xs text-ink-muted">{REVIEW_AFTER_DELIVERY_MESSAGE}</p>
-                    )
-                  ))}
+                    from the product page (requirements section 16).
+
+                    The status no longer decides whether the form appears —
+                    reviews are open to everybody now (`shared/reviews.ts`) —
+                    it decides whether the review is TIED TO THIS ORDER, and so
+                    whether it carries the Verified badge. Passing the order for
+                    a delivered one is also what makes this row show the review
+                    they already wrote against it, rather than an empty form. */}
+                {accessToken && (
+                  <ReviewComposer
+                    key={`${order.id}:${item.productId}`}
+                    productId={item.productId}
+                    productName={item.name}
+                    accessToken={accessToken}
+                    order={
+                      canReviewOrder(order.status)
+                        ? { orderId: order.id, reviewToken: order.reviewToken }
+                        : undefined
+                    }
+                  />
+                )}
               </li>
             ))}
           </ul>

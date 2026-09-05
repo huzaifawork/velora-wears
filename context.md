@@ -3,9 +3,9 @@
 **Read this first in a new session, then read [`Requirements.md`](Requirements.md) in full.**
 This file is the *state of the work*; `Requirements.md` is the spec.
 
-Last updated: 2026-08-31 (late — the pending-orders/delivered-reviews deploy). **Read the
-2026-08-31 block at the end of this section first — it is newer than the four paragraphs that
-follow, and it corrects two things they say.**
+Last updated: 2026-09-05 (reviews opened to everyone, with photos). **Read the 2026-09-05
+block at the end of this section first, then the 2026-08-31 one — both are newer than the four
+paragraphs that follow, and between them they correct several things those paragraphs say.**
 
 Scaffold complete. **Requirements sections 1-17 are
 built, and sections 18-20 are audited** — brand, landing, products, product details, categories, the cart, checkout, payment,
@@ -121,6 +121,45 @@ demo mode, clearly marked `DEMO-` so it can never be mistaken for a real one.
 >   Vercel rebuilds. Until then the live site will offer a review form in a place the server
 >   now refuses — the correct outcome by a clumsy route, not a break. Write-up below.
 
+> **2026-09-05 — REVIEWS ARE OPEN TO EVERYONE, AND THEY CARRY PHOTOS. This reverses the rule
+> the 2026-08-31 block above is entirely about.** The client's instruction, verbatim: *"without
+> creating an account or with creating an account, with buying the product and without buying
+> the product — howsoever, at this moment allow everyone to write a review for the product below
+> every product, and if they also want to upload pictures as well."* So:
+>
+> - **Anybody can write a review on any product page.** No account, no order, no verification
+>   step in front of the form. `WriteReview` no longer decides whether a review is allowed; it
+>   renders the composer.
+> - **The delivered-order check did not go away — it changed jobs.** It now decides
+>   `verified_purchase`, which is the **Verified** badge on the review card, and nothing else.
+>   A signed-in customer gets it automatically from their session; a guest can claim it through
+>   the old order-number-and-email lookup, which is now an OPTIONAL step folded inside the open
+>   form. Failing it costs a badge, not a review. `find_order_for_review` and its
+>   `status = 'delivered'` rule are untouched.
+> - **Up to four photographs per review**, resized in the browser (`shared/image.ts`, moved
+>   there from `admin/src/lib/` so both applications share one encoder) and uploaded through a
+>   NEW Edge Function, **`upload-review-photo`**, into the existing `media` bucket under
+>   `reviews/<uuid>/`. The bucket's anon-insert policy is unchanged and still `is_admin()` —
+>   a customer never writes to storage directly.
+> - **An anonymous reviewer is identified by a token** their browser mints and keeps in
+>   `localStorage` (`storefront/src/lib/myReviews.ts`); only its SHA-256 is stored, in
+>   `reviews.author_token_hash`. That is what still makes a review editable and removable for
+>   thirty days (§16) when there is no account and no order behind it. Clearing the browser
+>   loses the edit link, which is the accepted cost.
+> - **Moderation is now the only check on content.** Reviews publish immediately, exactly as
+>   before, but the gate that used to keep the queue small is gone — the dashboard's Reviews
+>   screen gained an "Unverified only" filter, a Verified/Unverified badge on every row, and
+>   renders each review's photographs, because a review can now need hiding for a picture.
+> - **Unverified reviews count towards a product's rating.** `product_summaries.rating_avg`
+>   averages every visible review and always has; nothing there changed. Worth knowing, because
+>   it means the stars on a product card are no longer a claim about buyers.
+> - **NOT YET DEPLOYED.** `supabase/migrations/20260905000001_open_reviews.sql` needs
+>   `npm run db:push`, and both Edge Functions need `npm run functions:deploy` — that script
+>   now deploys all three (it only ever deployed `place-order`, which is why `submit-review`
+>   had to be pushed by hand in the past). Until the migration is applied the storefront reads
+>   `photos` as null and renders reviews without pictures, which is handled, but every write
+>   will fail on the missing column.
+
 ---
 
 ## 1. The project
@@ -139,8 +178,10 @@ An e-commerce storefront for **Velora Wears**, a Pakistani fashion brand. Two de
   streams row changes from it. Every table is published to Realtime.
 - **Guest checkout is mandatory** — orders without signing in (§7).
 - **Cash on Delivery only** in v1 (§9).
-- **Reviews are tied to a purchase, not an account** — signed-in buyers *and* guests with a
-  confirmed order can review (§16).
+- **Anyone can review; a purchase only earns a badge** (§16, as amended by the client on
+  2026-09-05). Account or no account, purchase or no purchase. A delivered order matched by the
+  server sets `verified_purchase`, which shows as **Verified** on the card — it grants nothing.
+  Reviews may carry up to four photographs.
 - **Never trust client-sent prices or totals.** Recompute server-side (§17).
 - **Reusable components, no duplicated code** (§18).
 - **Speed is a stated requirement** — indexed queries, small list payloads, image
@@ -219,7 +260,7 @@ Storefront builds, typechecks and lints clean.
 | Search | **Done (section 13).** Header search row + the products page. Enter or the button, never per keystroke. Prefix match |
 | Filters and sorting | **Done (section 14).** Category chips, in-stock filter, four sorts, Load more |
 | Mobile responsiveness | **Audited (section 15).** Every page checked at 375/768/1280/1600px with a headless browser for console errors and horizontal overflow. One real bug found and fixed — see the write-up below |
-| Reviews and ratings | **Done, both halves (section 16).** Write, edit, remove — signed in or guest, verified two ways. `submit-review` Edge Function **deployed**, migration **applied**. **Admin moderation IS built now** — the dashboard's Reviews screen hides or deletes one. **A product can be reviewed only once its order is `delivered` — LIVE on the database and the Edge Function; the storefront half waits on PR #2** |
+| Reviews and ratings | **Done, both halves (section 16), and OPENED on 2026-09-05.** Anyone can write, edit and remove a review — no account and no purchase needed — with up to four photographs. A delivered order now only earns the **Verified** badge. Admin moderation is built and carries the weight: hide, delete, filter by unverified, see attached photos. **Migration `20260905000001` and the `upload-review-photo` function are NOT deployed yet** |
 | Order status | **Live on the database; the UI copy waits on PR #2.** A new order is written `pending` and stays there; the admin's status dropdown moves it on. `place_order()` no longer confirms an order on the customer's behalf |
 | Demo catalog | **19 products, 5 categories**, settings — all typed against `shared/types.ts` |
 | Demo reviews | **36 mock reviews across all 12 products**, one hidden as spam. Product ratings are derived from them, not typed by hand |
@@ -258,9 +299,10 @@ storefront/          React + Vite (Developer A)
                            AccountMenu (header) + AccountMobileLink, AuthLayout + FormError
                            (shared shell for the auth pages), OrderHistory
   src/features/categories/ CategoryTile (shared: landing bento + /categories), CategoryNav
-  src/features/reviews/    ReviewCard (shared with the landing strip), ProductReviews (read),
-                           ReviewComposer (section 16 - write/edit/remove, reused everywhere),
-                           WriteReview (product page entry point - signed-in lookup or guest verify)
+  src/features/reviews/    ReviewCard (shared with the landing strip; photo strip + lightbox),
+                           ProductReviews (read), ReviewComposer (write/edit/remove + the photo
+                           picker, reused everywhere), WriteReview (product page entry point -
+                           renders the composer for everyone, offers the optional order check)
   src/pages/               HomePage, ProductsPage, ProductDetailPage, CategoriesPage,
                            CartPage, CheckoutPage, OrderConfirmedPage, NotFoundPage,
                            AccountPage, SignInPage, SignUpPage
@@ -284,6 +326,9 @@ storefront/          React + Vite (Developer A)
                            opens pre-filled (client, 2026-09-04). Written only after an order
                            lands, never the order note, and the form can untick it
   src/lib/submitReview.ts  the POST to the submit-review Edge Function (section 16)
+  src/lib/reviewPhotos.ts  encode + upload a review photo via upload-review-photo
+  src/lib/myReviews.ts     localStorage: which reviews THIS browser wrote, and the tokens
+                           that let an anonymous author edit or remove them
   src/lib/reviewLookup.ts  the guest order-number+email lookup RPC + "do I already have a
                            review here" read - both public, neither goes through the Edge Function
   src/lib/cartStore.ts     the bag as an external store over localStorage

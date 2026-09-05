@@ -57,6 +57,40 @@ export const SITE_IMAGE = {
   full: { width: 1600, height: 2000, quality: 0.86 },
 } as const satisfies Record<"thumb" | "full", ImageVariantSpec>;
 
+/**
+ * A REVIEW photograph — a customer's own picture of the piece they bought
+ * (the client's 2026-09-05 change: anyone may review, and attach photos).
+ *
+ * Smaller than product imagery on both counts, for two reasons that pull the
+ * same way. These are snapshots taken on a phone in a bedroom, not styled
+ * studio shots, so there is no detail past 1200px worth carrying; and unlike a
+ * product image — uploaded once by an admin over office wifi — these are
+ * uploaded by a customer, on mobile data, through an Edge Function that has to
+ * hold the whole file in memory. `full` lands around 100-150 KB, which is the
+ * difference between an attachment that works on a train and one that times
+ * out.
+ *
+ * `thumb` is square-ish on purpose: review photos are rendered as a small
+ * strip of tiles under the comment, so the grid wants a consistent tile and
+ * the lightbox is what shows the whole picture.
+ */
+export const REVIEW_IMAGE = {
+  thumb: { width: 400, height: 400, quality: 0.78 },
+  full: { width: 1200, height: 1200, quality: 0.8 },
+} as const satisfies Record<"thumb" | "full", ImageVariantSpec>;
+
+/**
+ * How many photographs may hang off ONE review.
+ *
+ * Four is a strip that fits on a phone in one row of tiles without wrapping
+ * into a gallery, and it is enough to show the fit, the fabric and the colour —
+ * the three things a photograph adds to a written review. It is also the cap
+ * the Edge Function enforces (`supabase/functions/upload-review-photo`) and the
+ * one `reviews.photos` is CHECKed against, so a client that ignores it gets
+ * nowhere.
+ */
+export const MAX_REVIEW_PHOTOS = 4;
+
 /** Everything the uploader accepts. The `media` bucket enforces the same list. */
 export const ACCEPTED_IMAGE_TYPES: readonly string[] = [
   "image/webp",

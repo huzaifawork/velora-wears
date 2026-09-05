@@ -88,14 +88,22 @@ async function listReviews(productId: string, limit: number): Promise<Review[]> 
 /**
  * Testimonials take the best review of each product rather than the newest
  * overall, so the landing strip shows a spread of the collection instead of
- * three reviews of the same hoodie. Anything hidden, unverified, or below four
- * stars is never a testimonial.
+ * three reviews of the same hoodie. Hidden reviews and anything below four
+ * stars are never testimonials.
+ *
+ * VERIFIED PURCHASE IS NOT A CONDITION (client instruction, 2026-09-05). The
+ * strip used to require it, back when a review could only come from a delivered
+ * order and the badge was on every one of them. Reviews are open now
+ * (`shared/reviews.ts`), so requiring it here would have quietly made the
+ * landing page show a shrinking minority of what the shop actually receives —
+ * which is not what "let everyone review" was asked for. The card still shows
+ * the badge where it was earned, so a reader can tell the difference.
  */
 async function listTestimonials(limit: number): Promise<Review[]> {
   const bestPerProduct = new Map<string, Review>();
 
   for (const review of demoReviews) {
-    if (review.hidden || !review.verifiedPurchase || review.rating < 4) continue;
+    if (review.hidden || review.rating < 4) continue;
     const held = bestPerProduct.get(review.productId);
     const better =
       !held ||

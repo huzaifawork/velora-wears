@@ -1,7 +1,7 @@
 import { useRef, useState, type ReactNode } from "react";
 
 import { ACCEPTED_IMAGE_TYPES } from "@shared/media";
-import { rejectFile } from "@admin/lib/image";
+import { rejectFile } from "@shared/image";
 import { Spinner } from "@admin/components/ui/Button";
 
 /**

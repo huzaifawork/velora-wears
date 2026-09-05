@@ -52,8 +52,24 @@ import { formatDate } from "@admin/lib/format";
  * non-hidden reviews only.
  *
  * REVIEWS ARE NEVER CREATED HERE. They are written by the storefront's
- * `submit-review` Edge Function, which verifies that the order actually
- * contains the product being reviewed.
+ * `submit-review` Edge Function.
+ *
+ * ---------------------------------------------------------------------------
+ * SINCE REVIEWS WERE OPENED, THIS IS THE ONLY CHECK ON WHAT GETS SAID
+ * ---------------------------------------------------------------------------
+ * The client asked on 2026-09-05 that anybody be able to review any product,
+ * account or no account, purchase or no purchase, with photographs
+ * (`shared/reviews.ts`). The delivered-order gate that used to keep this
+ * screen quiet is gone, so two things are on it that were not:
+ *
+ *   **Verified / Unverified on every row.** The badge used to be on all of
+ *   them and told an admin nothing. Now it is the difference between a review
+ *   the shop matched to a delivered order and one from a visitor it cannot
+ *   identify — worth knowing before judging a complaint about sizing.
+ *
+ *   **The photographs.** A review can now need hiding for what is in a
+ *   picture, and this is the only place in either application where an admin
+ *   sees one attached to the review it belongs to.
  */
 export function ReviewsPage() {
   const [params] = useSearchParams();
@@ -116,7 +132,7 @@ export function ReviewsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Reviews"
-        description="Every review customers have left, including the ones already hidden. Hiding removes a review from the shop and recalculates the product's rating."
+        description="Every review left on the shop, including the ones already hidden. Anyone can write one — with an account or without, having bought the piece or not — so this is where abuse and spam are dealt with. Hiding removes a review from the shop and recalculates the product's rating."
       />
 
       <Card padded={false}>
@@ -140,6 +156,7 @@ export function ReviewsPage() {
                 options={[
                   { value: "all", label: "Every review" },
                   { value: "flagged", label: "Needs a look (1-2 stars)" },
+                  { value: "unverified", label: "Unverified only" },
                   { value: "visible", label: "Visible only" },
                   { value: "hidden", label: "Hidden only" },
                 ]}
@@ -182,7 +199,7 @@ export function ReviewsPage() {
             description={
               activeFilterCount > 0
                 ? "No review matches the filters you have set."
-                : "Customers can review a product after they have bought it. Reviews appear here as they are written."
+                : "Anyone can review a product on the shop. Reviews appear here as they are written."
             }
             action={
               activeFilterCount > 0 ? (
@@ -211,9 +228,13 @@ export function ReviewsPage() {
                         <span className="text-sm font-medium text-ink">
                           {review.displayName}
                         </span>
-                        {review.verifiedPurchase && (
-                          <Badge tone="success">Verified purchase</Badge>
-                        )}
+                        {/* Both states are labelled here, unlike on the shop
+                            where only "Verified" is shown. A customer reading
+                            reviews does not need every unverified one marked;
+                            an admin deciding what to do about one does. */}
+                        <Badge tone={review.verifiedPurchase ? "success" : "neutral"}>
+                          {review.verifiedPurchase ? "Verified purchase" : "Unverified"}
+                        </Badge>
                         {review.hidden && <Badge tone="neutral">Hidden</Badge>}
                       </div>
 
@@ -224,6 +245,35 @@ export function ReviewsPage() {
                       <p className="mt-2 text-sm leading-relaxed whitespace-pre-line text-ink-soft">
                         {review.comment}
                       </p>
+
+                      {review.photos.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {review.photos.map((photo) => (
+                            /* A plain link to the full file, opened in a new
+                               tab. A lightbox belongs on the shop, where a
+                               reader is looking at pictures; here the admin
+                               wants the biggest version of one image, once,
+                               without losing their place in the list. */
+                            <a
+                              key={photo.fullUrl}
+                              href={photo.fullUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="block h-16 w-16 overflow-hidden rounded-md border border-line transition hover:border-accent"
+                            >
+                              <img
+                                src={photo.thumbUrl}
+                                alt=""
+                                width={64}
+                                height={64}
+                                loading="lazy"
+                                decoding="async"
+                                className="h-full w-full object-cover"
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex shrink-0 items-center gap-1">
@@ -278,8 +328,9 @@ export function ReviewsPage() {
             shop just as completely and can be undone.
             <br />
             <br />
-            Deleting also frees this customer's review slot for that product, so
-            they can write another one.
+            Deleting also frees this reviewer's slot for that product, so they
+            can write another one — and any photographs attached to it stay in
+            storage, unused, since nothing points at them any more.
           </>
         }
       />

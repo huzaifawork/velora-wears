@@ -21,6 +21,13 @@ import { formatRating } from "@/lib/format";
  * rather than imported here, so this component stays about reading and
  * rendering a list. It sits between the rating summary and the individual
  * cards, which is also where it renders while there are no reviews yet.
+ *
+ * The copy on this section changed with the client's 2026-09-05 instruction
+ * (`shared/reviews.ts`): it used to tell every reader that reviews come only
+ * from people whose order arrived, which was the shop's strongest claim about
+ * them and is no longer true. Anyone can write one now, so the section says
+ * what IS still true — the Verified badge marks the ones matched to a
+ * delivered order — and leaves the reader to weigh the rest.
  */
 export function ProductReviews({
   reviews,
@@ -43,7 +50,7 @@ export function ProductReviews({
         <SectionHeading
           eyebrow="Customer reviews"
           title="What buyers said about this piece"
-          description="Reviews can only be left once an order has been delivered, so everything here comes from someone who actually received it."
+          description="Anyone can leave a review here. The ones marked Verified were matched to a delivered order, so you can tell at a glance which come from a confirmed buyer."
         />
 
         {ratingCount > 0 && (
@@ -69,8 +76,8 @@ export function ProductReviews({
           </div>
         ) : shown === 0 ? (
           <p className="mt-10 text-sm text-ink-soft">
-            No reviews yet. Reviews can be added as soon as an order is placed — be the first to
-            share what you thought.
+            No reviews yet — be the first to say what you thought. You do not need an account,
+            and you can add photos.
           </p>
         ) : (
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

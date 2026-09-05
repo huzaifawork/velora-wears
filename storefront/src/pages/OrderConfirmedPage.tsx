@@ -9,7 +9,6 @@ import { readReceipt, receiptSubtotal } from "@/lib/orderReceipt";
 import { CART, HOME, PRODUCTS, productPath } from "@/lib/routes";
 import { orderLineSize } from "@/lib/sizes";
 import { paymentMethodCopy } from "@shared/payment";
-import { REVIEW_AFTER_DELIVERY_MESSAGE } from "@shared/reviews";
 
 /**
  * The order success page (requirements section 7 — "an order confirmation
@@ -147,17 +146,18 @@ export function OrderConfirmedPage() {
 
                 {/* Requirements section 16: "the Order Success page should
                     offer a direct link or option to review the purchased
-                    product(s)." A brand new order is PENDING, and a piece can
-                    only be reviewed once it has been delivered
-                    (`shared/reviews.ts`) — so what belongs here is the direct
-                    link, not the form. Opening a composer the server would
-                    refuse would be a worse page than one that says when to
-                    come back. The order's `reviewToken` stays in the receipt
-                    for the guest path on the product page itself. */}
+                    product(s)." The direct link, not the form — a composer
+                    here would sit under a receipt the customer is still
+                    reading, and the piece is on its way rather than worn.
+
+                    This used to add that a review had to wait for delivery.
+                    It no longer does: reviews are open (`shared/reviews.ts`),
+                    so the only thing waiting on delivery is the Verified
+                    badge, and the product page explains that where it is
+                    actually offered. */}
                 <p className="text-xs leading-relaxed text-ink-muted print:hidden">
-                  {REVIEW_AFTER_DELIVERY_MESSAGE}{" "}
                   <Link
-                    to={productPath(line.slug)}
+                    to={`${productPath(line.slug)}#reviews`}
                     className="text-accent underline underline-offset-4 transition hover:text-ink"
                   >
                     Review {line.name}
