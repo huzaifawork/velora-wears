@@ -17,20 +17,54 @@
  * Deno, deployed on its own by the Supabase CLI, which bundles only what is
  * under `supabase/` — it cannot import this file, so it carries the same
  * constants inline. CHANGING A RULE MEANS CHANGING BOTH.
+ *
+ * ===========================================================================
+ * WHO MAY WRITE A REVIEW: ANYONE. (Client instruction, 2026-09-05.)
+ * ===========================================================================
+ * This file used to open with the opposite rule — a review had to come from a
+ * DELIVERED order, proved by a session, a checkout token, or an order number
+ * and email. The client has since asked for the plain thing instead:
+ *
+ *   "without creating an account or with creating an account, with buying the
+ *    product and without buying the product — howsoever, at this moment allow
+ *    everyone to write a review for the product below every product, and if
+ *    they also want to upload pictures as well."
+ *
+ * So the form is open. No sign-in, no order and no verification step stands in
+ * front of it, and photographs may be attached (`MAX_REVIEW_PHOTOS` in
+ * `shared/media.ts`).
+ *
+ * WHAT THE ORDER CHECK BECAME, rather than what it stopped being: proving a
+ * delivered order no longer grants PERMISSION, it earns the **Verified**
+ * badge on the review card. That check still runs — automatically for a
+ * signed-in customer, automatically for a guest still holding a checkout
+ * receipt, and on request for a guest who types an order number and email —
+ * but it now only ever ADDS something. Nothing is refused for failing it, and
+ * `verifiedPurchase` is still decided exclusively by the server, because a
+ * badge a browser could set for itself would mean nothing.
+ *
+ * The moderation half of section 16 now carries the weight this gate used to:
+ * reviews publish immediately, and an admin hides or removes anything abusive
+ * from the dashboard's Reviews screen. Rate limiting (section 17) covers the
+ * rest.
  */
 
 import { stripUnsafeChars } from "./sanitize";
-import type { OrderStatus } from "./types";
+import type { OrderStatus, ReviewPhoto } from "./types";
+import { MAX_REVIEW_PHOTOS } from "./media";
 
 /**
- * WHEN a customer may review a piece: once the order carrying it has been
- * DELIVERED, and not before.
+ * The order status that earns a review its **Verified** badge: delivered, and
+ * not before.
  *
  * A review is about wearing the thing, so "I paid for it ninety seconds ago"
- * is not enough to have an opinion worth publishing — and an order that was
- * cancelled never earns one. The storefront uses this to decide whether to
- * offer a review form at all; the decision itself belongs to the server, which
- * re-applies the same rule in two places that cannot import this file:
+ * is not yet an opinion the shop can vouch for — and an order that was
+ * cancelled never earns the badge at all. This is no longer a gate on writing
+ * (see the note at the top of this file); it is the one thing separating a
+ * review the shop stands behind from one it merely hosts.
+ *
+ * Applied in three places that have to agree, two of which cannot import this
+ * file:
  *
  *   `supabase/functions/submit-review/index.ts`   `REVIEWABLE_STATUS`
  *   `find_order_for_review` (the guest lookup)    `o.status = 'delivered'`
@@ -39,16 +73,16 @@ import type { OrderStatus } from "./types";
  */
 export const REVIEWABLE_ORDER_STATUS: OrderStatus = "delivered";
 
-/** Whether an order in this status may have its items reviewed. */
+/** Whether an order in this status can vouch for a review written against it. */
 export function canReviewOrder(status: OrderStatus | undefined): boolean {
   return status === REVIEWABLE_ORDER_STATUS;
 }
 
-/** The single line the storefront shows wherever a review is not yet possible,
- *  so the customer is told to expect it rather than left wondering where the
- *  form went. */
-export const REVIEW_AFTER_DELIVERY_MESSAGE =
-  "You can review this piece once your order has been delivered.";
+/** Shown beside the OPTIONAL verification step, so a customer whose parcel is
+ *  still in transit understands they can review now and simply will not carry
+ *  the badge — not that they have to wait for one. */
+export const REVIEW_VERIFIED_AFTER_DELIVERY_MESSAGE =
+  "An order counts once it has been delivered. You can write your review either way — verifying only adds the Verified badge.";
 
 export const REVIEW_RATINGS = [1, 2, 3, 4, 5] as const;
 export type ReviewRating = (typeof REVIEW_RATINGS)[number];
@@ -85,20 +119,36 @@ export function cleanReviewText(value: unknown): string {
   return typeof value === "string" ? stripUnsafeChars(value).trim().replace(/\s+/g, " ") : "";
 }
 
+/**
+ * The most photographs one review may carry — re-exported from
+ * `shared/media.ts` so a form validating a draft has one import rather than
+ * two. The Edge Function and a `check` constraint on `reviews.photos` enforce
+ * the same number.
+ */
+export const REVIEW_PHOTO_LIMIT = MAX_REVIEW_PHOTOS;
+
 export interface ReviewDraft {
   rating: number;
   comment: string;
   displayName: string;
+  /**
+   * Photographs ALREADY UPLOADED — `upload-review-photo` has run and handed
+   * back a pair of URLs (`storefront/src/lib/reviewPhotos.ts`). A draft never
+   * carries raw files: a photo is uploaded the moment it is picked, so the
+   * customer watches it appear rather than discovering at submit time that it
+   * could not be read.
+   */
+  photos: ReviewPhoto[];
 }
 
 export type ReviewField = keyof ReviewDraft;
 
-export const EMPTY_REVIEW_DRAFT: ReviewDraft = { rating: 0, comment: "", displayName: "" };
+export const EMPTY_REVIEW_DRAFT: ReviewDraft = { rating: 0, comment: "", displayName: "", photos: [] };
 
 export type ReviewErrors = Partial<Record<ReviewField, string>>;
 
 export interface ReviewValidation {
-  draft: { rating: ReviewRating; comment: string; displayName: string };
+  draft: { rating: ReviewRating; comment: string; displayName: string; photos: ReviewPhoto[] };
   errors: ReviewErrors;
   valid: boolean;
 }
@@ -128,12 +178,23 @@ export function validateReviewField(field: ReviewField, draft: Partial<ReviewDra
       }
       return null;
     }
+
+    case "photos": {
+      // A backstop, not something a customer normally reads: the picker stops
+      // offering its button at the limit. This is here so the field list below
+      // covers every key of a draft, and so a client that ignored the picker
+      // gets the same answer the Edge Function would give it.
+      if ((draft.photos ?? []).length > REVIEW_PHOTO_LIMIT) {
+        return `You can attach up to ${REVIEW_PHOTO_LIMIT} photos.`;
+      }
+      return null;
+    }
   }
 }
 
 export function validateReviewDraft(draft: Partial<ReviewDraft>): ReviewValidation {
   const errors: ReviewErrors = {};
-  for (const field of ["rating", "comment", "displayName"] as const) {
+  for (const field of ["rating", "comment", "displayName", "photos"] as const) {
     const message = validateReviewField(field, draft);
     if (message) errors[field] = message;
   }
@@ -143,6 +204,7 @@ export function validateReviewDraft(draft: Partial<ReviewDraft>): ReviewValidati
       rating: (isReviewRating(draft.rating) ? draft.rating : 1) as ReviewRating,
       comment: cleanReviewText(draft.comment),
       displayName: cleanReviewText(draft.displayName),
+      photos: (draft.photos ?? []).slice(0, REVIEW_PHOTO_LIMIT),
     },
     errors,
     valid: Object.keys(errors).length === 0,

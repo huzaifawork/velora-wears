@@ -2,11 +2,26 @@ import {
   ACCEPTED_IMAGE_TYPES,
   MAX_UPLOAD_BYTES,
   type ImageVariantSpec,
-} from "@shared/media";
+} from "./media";
 
 /**
  * Client-side image processing — resize and re-encode BEFORE anything is
  * uploaded.
+ *
+ * SHARED, and deliberately so: this used to live in `admin/src/lib/image.ts`
+ * because the dashboard was the only thing in the project that accepted a
+ * file. It has two callers now —
+ *
+ *   the ADMIN      uploading product and landing-page imagery (§19), straight
+ *                  into the `media` bucket with an admin's own session.
+ *   the STOREFRONT attaching photographs to a review, which a customer holding
+ *                  nothing but the anon key cannot write to a bucket, so those
+ *                  bytes go through the `upload-review-photo` Edge Function
+ *                  instead (`storefront/src/lib/reviewPhotos.ts`).
+ *
+ * The two differ only in WHERE the encoded blob is sent. Resizing a phone
+ * photograph is the same problem either way, and a second copy of it in the
+ * storefront would be the same file with a different set of bugs.
  *
  * ---------------------------------------------------------------------------
  * WHY THE BROWSER DOES THIS AND NOT THE SERVER
@@ -16,6 +31,11 @@ import {
  * image pipeline in this project — no Edge Function that transforms, no
  * transformation CDN in the plan — so the choice is: upload a 4 MB photograph
  * from a phone and serve it to every customer, or resize it here.
+ *
+ * For a review photograph the same arithmetic is the argument for letting a
+ * customer attach one at all: a 4 MB camera file is refused by the bucket and
+ * would be a cruel thing to ask a phone to upload over mobile data, while the
+ * ~120 KB it comes out as here is not.
  *
  * A `<canvas>` does this in a few milliseconds with no dependency, no upload of
  * the original, and no server cost. A 4 MB JPEG straight off a camera comes out

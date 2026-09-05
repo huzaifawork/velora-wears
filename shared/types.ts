@@ -324,17 +324,47 @@ export interface Order {
   updatedAt: number;
 }
 
+/**
+ * One photograph attached to a review — the customer's own picture of the
+ * piece, stored as the same two variants everything else in `media` is
+ * (`shared/media.ts` — `REVIEW_IMAGE`).
+ *
+ * The dimensions are those of the FULL file, so the lightbox can reserve the
+ * right box before the image arrives; the tile in the strip is a fixed square
+ * and does not need them.
+ */
+export interface ReviewPhoto {
+  thumbUrl: string;
+  fullUrl: string;
+  width: number;
+  height: number;
+}
+
 /** `reviews/{productId}/{reviewId}` */
 export interface Review {
   id: string;
   productId: string;
-  orderId: string;
+  /**
+   * The order this review is TIED to, when there is one.
+   *
+   * Absent for the reviews the shop has accepted since 2026-09-05, when the
+   * client asked that anybody be able to review any product — with an account
+   * or without one, having bought the piece or not (`shared/reviews.ts`
+   * explains the whole rule). An order is now what earns
+   * `verifiedPurchase`, not what grants permission to write, so most reviews
+   * will not have one.
+   */
+  orderId?: string;
   rating: 1 | 2 | 3 | 4 | 5;
   comment: string;
   /** Display name only. The customer's email must never be exposed publicly. */
   displayName: string;
+  /** True only where the server itself matched this review to a delivered
+   *  order of this product. Never sent by the browser. */
   verifiedPurchase: boolean;
   hidden: boolean;
+  /** Up to `MAX_REVIEW_PHOTOS`, in the order the reviewer picked them. */
+  photos: ReviewPhoto[];
   userId?: string;
   createdAt: number;
 }

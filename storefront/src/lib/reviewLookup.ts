@@ -1,4 +1,4 @@
-import type { Review, Size } from "@shared/types";
+import type { Review, ReviewPhoto, Size } from "@shared/types";
 
 /**
  * Two small reads that sit around `submitReview.ts`, both PUBLIC — neither
@@ -6,7 +6,13 @@ import type { Review, Size } from "@shared/types";
  *
  * **`findOrderForReview`** is the guest "verify with your order number and
  * email" path requirements section 16 asks for, for a guest who has no
- * session and whose `sessionStorage` receipt is long gone. It calls the
+ * session and whose `sessionStorage` receipt is long gone.
+ *
+ * SINCE 2026-09-05 THIS IS OPTIONAL. Reviews are open to everybody (the whole
+ * rule is in `shared/reviews.ts`), so this call no longer stands between a
+ * guest and the form — it is how a guest who DID buy the piece claims the
+ * **Verified** badge for the review they are about to write. Getting nothing
+ * back now costs them a badge rather than their say. It calls the
  * `find_order_for_review` Postgres function directly over PostgREST's RPC
  * endpoint with the anon key — a `SECURITY DEFINER` function is what lets it
  * read `orders` despite RLS closing that table to anon, and the columns it
@@ -15,12 +21,19 @@ import type { Review, Size } from "@shared/types";
  * pair a fresh checkout would have, so from here on the guest is
  * indistinguishable from one still on the confirmation page.
  *
- * **`getExistingReview`** is a plain, ordinary read of `reviews` — publicly
- * selectable already (`visible reviews are public`) — used only to decide
- * whether a review form should open in "write" or "edit" mode. It is a UX
- * nicety, not a security boundary: the Edge Function re-derives the truth
- * itself on every write regardless of what this returned (see its notes on
- * why an edit always un-hides).
+ * **`getExistingReview` / `getReviewById`** are plain, ordinary reads of
+ * `reviews` — publicly selectable already (`visible reviews are public`) —
+ * used only to decide whether a review form should open in "write" or "edit"
+ * mode. Which of the two applies depends on how the reviewer is known: by an
+ * order, or by the token this browser kept in `lib/myReviews.ts`.
+ *
+ * Both are a UX nicety, not a security boundary: neither proves anything, and
+ * the Edge Function re-derives ownership itself on every write regardless of
+ * what they returned (see its notes on why an edit always un-hides). A review
+ * an admin has HIDDEN comes back as `null` from either — RLS excludes it — so
+ * the form offers to write a new one. That is the right outcome: the customer
+ * is not shown moderation that was not addressed to them, and what they write
+ * next is moderated on its own merits.
  *
  * Both use `fetch` directly rather than the Supabase SDK, for the same
  * reason `lib/placeOrder.ts` does: reaching a review form must not pull the
@@ -107,16 +120,53 @@ export async function findOrderForReview(orderNumber: string, email: string): Pr
   }));
 }
 
-/** The reviewer's own review for this order and product, or `null`. */
-export async function getExistingReview(orderId: string, productId: string): Promise<Review | null> {
+/**
+ * Everything a review form needs to reopen the review it is editing, and
+ * nothing else.
+ *
+ * Named columns rather than `select("*")`, which is what this used to do. The
+ * table has since grown `author_token_hash`, and while a SHA-256 is safe to
+ * publish (that is the whole reason the column stores a hash — see migration
+ * 20260905000001), there is no reason to pull it into the browser.
+ */
+const OWN_REVIEW_COLUMNS =
+  "id, product_id, order_id, rating, comment, display_name, photos, verified_purchase, hidden, user_id, created_at";
+
+interface OwnReviewRow {
+  id: string;
+  product_id: string;
+  order_id: string | null;
+  rating: number;
+  comment: string;
+  display_name: string;
+  photos: ReviewPhoto[] | null;
+  verified_purchase: boolean;
+  hidden: boolean;
+  user_id: string | null;
+  created_at: string;
+}
+
+function toOwnReview(row: OwnReviewRow): Review {
+  return {
+    id: row.id,
+    productId: row.product_id,
+    orderId: row.order_id ?? undefined,
+    rating: row.rating as Review["rating"],
+    comment: row.comment,
+    displayName: row.display_name,
+    photos: Array.isArray(row.photos) ? row.photos : [],
+    verifiedPurchase: row.verified_purchase,
+    hidden: row.hidden,
+    userId: row.user_id ?? undefined,
+    createdAt: new Date(row.created_at).getTime(),
+  };
+}
+
+async function readOne(params: URLSearchParams): Promise<Review | null> {
   if (!SUPABASE_URL || !ANON_KEY) return null;
 
-  const params = new URLSearchParams({
-    order_id: `eq.${orderId}`,
-    product_id: `eq.${productId}`,
-    select: "*",
-    limit: "1",
-  });
+  params.set("select", OWN_REVIEW_COLUMNS);
+  params.set("limit", "1");
 
   const response = await fetch(`${SUPABASE_URL}/rest/v1/reviews?${params.toString()}`, {
     headers: { apikey: ANON_KEY, Authorization: `Bearer ${ANON_KEY}` },
@@ -125,18 +175,23 @@ export async function getExistingReview(orderId: string, productId: string): Pro
 
   const rows = await response.json().catch(() => []);
   const row = Array.isArray(rows) ? rows[0] : undefined;
-  if (!row) return null;
+  return row ? toOwnReview(row as OwnReviewRow) : null;
+}
 
-  return {
-    id: row.id,
-    productId: row.product_id,
-    orderId: row.order_id ?? "",
-    rating: row.rating,
-    comment: row.comment,
-    displayName: row.display_name,
-    verifiedPurchase: row.verified_purchase,
-    hidden: row.hidden,
-    userId: row.user_id ?? undefined,
-    createdAt: new Date(row.created_at).getTime(),
-  };
+/** The review written against this order for this product, or `null` — the
+ *  case where a delivered order identifies the reviewer. */
+export async function getExistingReview(orderId: string, productId: string): Promise<Review | null> {
+  return readOne(new URLSearchParams({ order_id: `eq.${orderId}`, product_id: `eq.${productId}` }));
+}
+
+/**
+ * One review by id, or `null` — the case where the reviewer is identified only
+ * by the token this browser kept (`lib/myReviews.ts`).
+ *
+ * The id alone is not proof of anything and is not treated as such: it is read
+ * here purely to fill the form in, and the token is what `submit-review`
+ * checks before letting the edit through.
+ */
+export async function getReviewById(reviewId: string): Promise<Review | null> {
+  return readOne(new URLSearchParams({ id: `eq.${reviewId}` }));
 }

@@ -1,54 +1,74 @@
-import { useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
-import type { Review } from "@shared/types";
+import type { Review, ReviewPhoto } from "@shared/types";
 import {
+  EMPTY_REVIEW_DRAFT,
   REVIEW_EDIT_WINDOW_DAYS,
   REVIEW_LIMITS,
+  REVIEW_PHOTO_LIMIT,
   validateReviewField,
   withinEditWindow,
+  type ReviewDraft,
   type ReviewErrors,
   type ReviewField,
 } from "@shared/reviews";
+import { ACCEPTED_IMAGE_TYPES } from "@shared/media";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
+import { Image } from "@/components/ui/Image";
 import { Rating } from "@/components/ui/Rating";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { getExistingReview } from "@/lib/reviewLookup";
-import { deleteReview, upsertReview, SubmitReviewError, type ReviewIdentity as WriteIdentity } from "@/lib/submitReview";
+import { getExistingReview, getReviewById } from "@/lib/reviewLookup";
+import { deleteReview, upsertReview, SubmitReviewError } from "@/lib/submitReview";
+import { ReviewPhotoError, uploadReviewPhoto } from "@/lib/reviewPhotos";
+import { forgetOwnReview, newAuthorToken, ownReviewFor, rememberOwnReview } from "@/lib/myReviews";
 import { useAsync } from "@/hooks/useAsync";
 import { formatDate } from "@/lib/format";
 
 /**
- * The write half of section 16 — "a review should include a star rating and
- * a written comment," editable or removable within a reasonable window, one
- * review per product per order. The read half is `ProductReviews`.
+ * The write half of section 16 — a star rating, a written comment, optional
+ * photographs, editable or removable within a reasonable window.
+ * `ProductReviews` is the read half.
  *
- * ONE component reused everywhere a customer can write a review (requirements
- * section 18): from order history, and — once a guest has verified an order
- * number and email — on the product page itself. What differs between those
- * call sites is only how ownership is proven, which is `identity`; everything
- * else about writing a review is identical.
+ * ONE component reused everywhere a review can be written (requirements
+ * section 18): the product page, and order history. What differs between call
+ * sites is only what is known about the author, which is `accessToken` and
+ * `order`; everything about writing a review is identical.
  *
- * Every call site only mounts this for a DELIVERED order (`shared/reviews.ts`),
- * which is why it takes no status of its own: by the time it renders, the
- * question of whether a review is allowed yet has already been answered — and
- * `submit-review` answers it again server-side regardless.
+ * ---------------------------------------------------------------------------
+ * IT NO LONGER ASKS WHETHER A REVIEW IS ALLOWED
+ * ---------------------------------------------------------------------------
+ * This component used to be mounted only for a DELIVERED order, and took an
+ * `identity` it could not render without. Since the client's 2026-09-05
+ * instruction (`shared/reviews.ts`) reviews are open to everybody, so it
+ * mounts for every visitor and both of those props are optional:
  *
- * It always knows `orderId` up front (the caller looked it up — from the
- * receipt, from `listMyOrders()`, or from `findOrderForReview`), so it can
- * fetch the reviewer's own existing review for this order and product on
- * mount and decide whether to open in "write" or "edit" state, with a
- * "Remove" action once one exists. This is a UX nicety only — the Edge
- * Function re-derives the truth itself on every write regardless.
+ *   accessToken   present when the visitor happens to be signed in.
+ *   order         present when they proved a delivered order, through the
+ *                 optional verification step in `WriteReview`.
+ *
+ * Neither gates anything. Both are forwarded to `submit-review`, which decides
+ * on its own whether the review earns the **Verified** badge — and re-derives
+ * that on every save, so nothing here has to be right about it.
+ *
+ * ---------------------------------------------------------------------------
+ * HOW IT FINDS THE REVIEW YOU ALREADY WROTE
+ * ---------------------------------------------------------------------------
+ * So that a returning visitor sees "your review" with Edit and Remove rather
+ * than an empty form inviting a second one:
+ *
+ *   with an order   by `(order_id, product_id)`, as before.
+ *   without one     by the id this browser kept in `lib/myReviews.ts`,
+ *                   alongside the token that proves the edit.
+ *
+ * Both are a convenience, not a check. `submit-review` re-derives ownership
+ * itself on every write, so the worst a stale entry here can do is open the
+ * form on a review that turns out not to be editable.
  */
 
-type Identity = { mode: "session"; accessToken: string } | { mode: "token"; reviewToken: string };
-
-function toWriteIdentity(identity: Identity, orderId: string): WriteIdentity {
-  return identity.mode === "session"
-    ? { mode: "session", accessToken: identity.accessToken }
-    : { mode: "token", orderId, reviewToken: identity.reviewToken };
-}
+/** Every image type the picker offers, as an `accept` attribute. */
+const ACCEPT = ACCEPTED_IMAGE_TYPES.join(",");
 
 function StarPicker({
   value,
@@ -91,27 +111,184 @@ function StarPicker({
   );
 }
 
+/**
+ * The photo strip inside the form — the client's "if they also want to upload
+ * pictures as well".
+ *
+ * Each file is UPLOADED THE MOMENT IT IS PICKED rather than held until submit
+ * (`lib/reviewPhotos.ts` explains why at length): the tile that appears is the
+ * real thumbnail from the bucket, so a photo that will not go through says so
+ * while the customer is still choosing, instead of taking a written review
+ * down with it later.
+ *
+ * The `<input type="file">` is hidden behind a real button rather than styled,
+ * because a file input cannot be made to match anything else in the shop and
+ * every attempt to style one ends up less accessible than the button it is
+ * pretending to be. `multiple` is on: picking four photos should be one trip
+ * through the phone's picker.
+ */
+function PhotoPicker({
+  photos,
+  onChange,
+  disabled,
+}: {
+  photos: ReviewPhoto[];
+  onChange: (photos: ReviewPhoto[]) => void;
+  disabled: boolean;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(0);
+  const [error, setError] = useState<string | undefined>();
+
+  const room = REVIEW_PHOTO_LIMIT - photos.length - busy;
+
+  const add = async (files: FileList) => {
+    setError(undefined);
+
+    // Sliced against the room left, so picking six when two fit uploads two
+    // rather than failing all six at the server.
+    const chosen = Array.from(files).slice(0, Math.max(0, room));
+    if (chosen.length === 0) return;
+
+    setBusy((count) => count + chosen.length);
+
+    // Accumulated locally rather than read back from the prop each time: the
+    // loop runs across several awaits, and `photos` is the value from the
+    // render that started it — appending to that repeatedly would keep only
+    // the last photo.
+    let next = photos;
+
+    // Sequential, not parallel: these are phone photographs on a phone
+    // connection, and four simultaneous uploads on a slow link is how you turn
+    // four slow uploads into four failed ones. Each tile appears as it lands.
+    for (const file of chosen) {
+      try {
+        next = [...next, await uploadReviewPhoto(file)].slice(0, REVIEW_PHOTO_LIMIT);
+        onChange(next);
+      } catch (failure) {
+        setError(
+          failure instanceof ReviewPhotoError
+            ? failure.message
+            : "That photo could not be added. Please try another.",
+        );
+      } finally {
+        setBusy((count) => count - 1);
+      }
+    }
+  };
+
+  return (
+    <div>
+      <p className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
+        Photos <span className="normal-case">— optional, up to {REVIEW_PHOTO_LIMIT}</span>
+      </p>
+
+      <div className="mt-2 flex flex-wrap gap-2">
+        {photos.map((photo) => (
+          <div key={photo.fullUrl} className="relative h-20 w-20 overflow-hidden rounded-sm border border-line">
+            <Image
+              src={photo.thumbUrl}
+              alt=""
+              width={80}
+              height={80}
+              className="h-full w-full object-cover"
+            />
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(photos.filter((kept) => kept.fullUrl !== photo.fullUrl))}
+              aria-label="Remove this photo"
+              className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-ink/70 text-canvas transition hover:bg-ink"
+            >
+              <svg viewBox="0 0 20 20" aria-hidden="true" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+              </svg>
+            </button>
+          </div>
+        ))}
+
+        {Array.from({ length: busy }, (_, index) => (
+          <Skeleton key={`uploading-${index}`} className="h-20 w-20 rounded-sm" />
+        ))}
+
+        {room > 0 && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => input.current?.click()}
+            className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-sm border border-dashed border-line-strong text-ink-muted transition hover:border-accent hover:text-ink disabled:opacity-50"
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M10 4v12M4 10h12" strokeLinecap="round" />
+            </svg>
+            <span className="text-[0.5625rem] tracking-eyebrow uppercase">Add</span>
+          </button>
+        )}
+      </div>
+
+      <input
+        ref={input}
+        type="file"
+        accept={ACCEPT}
+        multiple
+        hidden
+        onChange={(event) => {
+          const { files } = event.target;
+          if (files) void add(files);
+          // Cleared so picking the SAME file again still fires a change — the
+          // case where a customer removes a photo and adds it back.
+          event.target.value = "";
+        }}
+      />
+
+      {error && <p className="mt-2 text-xs leading-relaxed text-danger">{error}</p>}
+    </div>
+  );
+}
+
 export function ReviewComposer({
   productId,
   productName,
-  orderId,
-  identity,
+  accessToken,
+  order,
+  verifySlot,
 }: {
   productId: string;
   productName: string;
-  orderId: string;
-  identity: Identity;
+  /** A signed-in customer's session, when there is one. */
+  accessToken?: string;
+  /** A delivered order the reviewer proved, when they did. */
+  order?: { orderId: string; reviewToken: string };
+  /** The optional "I bought this" step, rendered inside the open form so it
+   *  reads as an extra rather than a hurdle in front of one. */
+  verifySlot?: ReactNode;
 }) {
-  const existing = useAsync(() => getExistingReview(orderId, productId), `own-review:${orderId}:${productId}`);
+  /**
+   * Read once, on mount, and held: the review this browser remembers writing
+   * about this piece, and the token that proves it. A fresh token is minted
+   * for the case where there is nothing remembered — unused unless a review is
+   * actually written.
+   */
+  const [mine] = useState(() => ownReviewFor(productId));
+  const [authorToken] = useState(() => mine?.authorToken ?? newAuthorToken());
+
+  const lookupKey = order
+    ? `own-review:order:${order.orderId}:${productId}`
+    : `own-review:mine:${mine?.reviewId ?? "none"}`;
+
+  const existing = useAsync(() => {
+    if (order) return getExistingReview(order.orderId, productId);
+    if (mine) return getReviewById(mine.reviewId);
+    return Promise.resolve(null);
+  }, lookupKey);
 
   /**
    * Overrides `existing.data` once the customer actually does something.
    * `undefined` means "no override yet — trust the fetch"; `null` means
-   * "confirmed removed"; a `Review` means "just written or edited". Writing
-   * or removing does not refetch — the Edge Function's own response (or the
-   * fact that a delete succeeded) is already the authoritative new state, so
-   * a round trip back to `getExistingReview` would only confirm the same
-   * thing a moment later.
+   * "confirmed removed"; a `Review` means "just written or edited". Writing or
+   * removing does not refetch — the Edge Function's own response (or the fact
+   * that a delete succeeded) is already the authoritative new state, so a round
+   * trip back would only confirm the same thing a moment later.
    */
   const [override, setOverride] = useState<Review | null | undefined>(undefined);
   const current = override !== undefined ? override : (existing.data ?? null);
@@ -121,16 +298,23 @@ export function ReviewComposer({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | undefined>();
 
-  const [draft, setDraft] = useState({ rating: 0, comment: "", displayName: "" });
+  const [draft, setDraft] = useState<ReviewDraft>(EMPTY_REVIEW_DRAFT);
   const [touched, setTouched] = useState<Partial<Record<ReviewField, boolean>>>({});
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
+  const authorship = { authorToken, reviewId: current?.id ?? mine?.reviewId, accessToken, order };
+
   const openToEdit = () => {
-    if (current) {
-      setDraft({ rating: current.rating, comment: current.comment, displayName: current.displayName });
-    } else {
-      setDraft({ rating: 0, comment: "", displayName: "" });
-    }
+    setDraft(
+      current
+        ? {
+            rating: current.rating,
+            comment: current.comment,
+            displayName: current.displayName,
+            photos: current.photos,
+          }
+        : EMPTY_REVIEW_DRAFT,
+    );
     setTouched({});
     setSubmitAttempted(false);
     setFormError(undefined);
@@ -156,14 +340,22 @@ export function ReviewComposer({
 
     setSubmitting(true);
     try {
-      const saved = await upsertReview(productId, draft, toWriteIdentity(identity, orderId));
+      const saved = await upsertReview(productId, draft, authorship);
+
+      // Remembered on EVERY save, not only the first: a customer who wrote
+      // their first review before this browser had an entry, and one whose
+      // review was found by order rather than by token, both end up recorded
+      // the same way — which is what lets them edit it on a later visit.
+      rememberOwnReview(productId, { reviewId: saved.id, authorToken });
+
       setOverride({
         id: saved.id,
         productId,
-        orderId,
+        orderId: order?.orderId,
         rating: saved.rating as Review["rating"],
         comment: saved.comment,
         displayName: saved.displayName,
+        photos: saved.photos,
         verifiedPurchase: saved.verifiedPurchase,
         hidden: false,
         createdAt: current?.createdAt ?? saved.createdAt,
@@ -184,10 +376,11 @@ export function ReviewComposer({
     setSubmitting(true);
     setFormError(undefined);
     try {
-      await deleteReview(productId, toWriteIdentity(identity, orderId));
+      await deleteReview(productId, authorship);
+      forgetOwnReview(productId);
       setConfirmingRemove(false);
       setOverride(null);
-      setDraft({ rating: 0, comment: "", displayName: "" });
+      setDraft(EMPTY_REVIEW_DRAFT);
     } catch (error) {
       setFormError(
         error instanceof SubmitReviewError
@@ -215,12 +408,31 @@ export function ReviewComposer({
     return (
       <div className="flex flex-col gap-3 rounded-sm border border-line bg-canvas-alt p-5">
         <div className="flex items-center justify-between gap-3">
-          <Rating rating={current.rating} />
+          <div className="flex items-center gap-2">
+            <Rating rating={current.rating} />
+            {current.verifiedPurchase && <Badge tone="success">Verified</Badge>}
+          </div>
           <time dateTime={new Date(current.createdAt).toISOString()} className="text-xs text-ink-muted">
             {formatDate(current.createdAt)}
           </time>
         </div>
         <p className="text-sm leading-relaxed text-ink-soft">{current.comment}</p>
+
+        {current.photos.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {current.photos.map((photo) => (
+              <Image
+                key={photo.fullUrl}
+                src={photo.thumbUrl}
+                alt=""
+                width={64}
+                height={64}
+                className="h-16 w-16 rounded-sm border border-line object-cover"
+              />
+            ))}
+          </div>
+        )}
+
         {editable ? (
           <div className="flex flex-wrap gap-4">
             <button
@@ -296,6 +508,12 @@ export function ReviewComposer({
         placeholder="What was it like to wear? How does the size run?"
       />
 
+      <PhotoPicker
+        photos={draft.photos}
+        onChange={(photos) => setDraft((d) => ({ ...d, photos }))}
+        disabled={submitting}
+      />
+
       <Field
         label="Display name"
         value={draft.displayName}
@@ -306,6 +524,8 @@ export function ReviewComposer({
         placeholder="e.g. Ayesha S."
         hint="Shown publicly with your review. Your email is never shown."
       />
+
+      {verifySlot}
 
       {formError && <p className="text-sm text-danger">{formError}</p>}
 

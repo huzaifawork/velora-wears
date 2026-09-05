@@ -1,22 +1,38 @@
 import type { ReviewErrors } from "@shared/reviews";
+import type { ReviewPhoto } from "@shared/types";
 
 /**
  * The call that writes, edits or removes a review (requirements section 16).
  *
  * Mirrors `lib/placeOrder.ts` exactly, for the same reasons: it posts to the
- * `submit-review` Edge Function — the ONLY way a review is ever written,
- * since `reviews` has no insert/update/delete policy for anon or
- * authenticated — and it uses `fetch` rather than the Supabase SDK so
- * reaching this code path does not pull the SDK into the bundle on its own.
+ * `submit-review` Edge Function — the ONLY way a review is ever written, since
+ * `reviews` has no insert/update/delete policy for anon or authenticated — and
+ * it uses `fetch` rather than the Supabase SDK so reaching this code path does
+ * not pull the SDK into the bundle on its own.
  *
- * Ownership is proven one of two ways here: a signed-in customer's access
- * token, or a guest's `orderId` + `reviewToken` — fresh from checkout
- * (`sessionStorage`), or obtained by verifying an order number and email
- * through `lib/reviewLookup.ts`'s `findOrderForReview`, which returns the
- * same `orderId` + `reviewToken` pair once ownership is proven. The Edge
- * Function also accepts an order-number-and-email body directly (see its own
- * notes) as a defence-in-depth re-check; nothing in the storefront needs to
- * call it that way, since the lookup already hands back a token.
+ * ---------------------------------------------------------------------------
+ * WHAT THE PAYLOAD SAYS ABOUT THE AUTHOR, SINCE REVIEWS WERE OPENED
+ * ---------------------------------------------------------------------------
+ * This used to send exactly ONE proof of purchase, because exactly one was
+ * required and the request failed without it. Reviews are open to everybody
+ * now (the client's 2026-09-05 instruction — `shared/reviews.ts`), so the
+ * request instead sends EVERYTHING TRUE ABOUT THE AUTHOR and lets the server
+ * decide what any of it is worth:
+ *
+ *   accessToken   they are signed in. The server looks for a delivered order
+ *                 on the account.
+ *   order         this browser still holds a checkout receipt naming an order
+ *                 and its review token (`lib/orderReceipt.ts`).
+ *   orderNumber   they typed an order number and email into the optional
+ *   + email       verification step.
+ *   authorToken   the random token this browser keeps for its own reviews
+ *                 (`lib/myReviews.ts`) — the only thing identifying a reviewer
+ *                 with neither an account nor an order.
+ *
+ * All four are optional and none of them can make the request fail. The first
+ * three only ever decide `verifiedPurchase`, which the server sets from an
+ * order it looked up itself and which is never sent from here — a badge the
+ * browser could ask for would mean nothing.
  */
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -28,12 +44,6 @@ const TIMEOUT_MS = 15_000;
 
 export type SubmitReviewErrorCode =
   | "VALIDATION"
-  | "NOT_PURCHASED"
-  /** The order is real and theirs, but has not been delivered yet — reviewing
-   *  waits for delivery (`shared/reviews.ts`). The UI normally never lets this
-   *  happen; it comes back when an order's status changed while the page was
-   *  open. */
-  | "NOT_DELIVERED"
   | "EDIT_WINDOW_EXPIRED"
   | "NOT_FOUND"
   | "REVIEW_FAILED"
@@ -55,16 +65,31 @@ export class SubmitReviewError extends Error {
   }
 }
 
-/** Exactly one of these identifies who is submitting and which order proves it. */
-export type ReviewIdentity =
-  | { mode: "session"; accessToken: string }
-  | { mode: "token"; orderId: string; reviewToken: string };
+/**
+ * Everything this browser can say about who is writing. Only `authorToken` is
+ * required, and only because a reviewer who turns out to be nobody in
+ * particular still has to be able to come back and edit.
+ */
+export interface ReviewAuthorship {
+  /** This browser's token for its own review of this product. */
+  authorToken: string;
+  /** The review being edited, when this browser knows it wrote one. */
+  reviewId?: string;
+  /** A signed-in customer's session. */
+  accessToken?: string;
+  /** A checkout receipt still in `sessionStorage`, or an order just verified
+   *  through `findOrderForReview`. */
+  order?: { orderId: string; reviewToken: string };
+  /** The optional "I bought this" step, typed by a guest. */
+  orderLookup?: { orderNumber: string; email: string };
+}
 
 export interface SubmittedReview {
   id: string;
   rating: number;
   comment: string;
   displayName: string;
+  photos: ReviewPhoto[];
   verifiedPurchase: boolean;
   createdAt: number;
   updatedAt: number;
@@ -72,8 +97,6 @@ export interface SubmittedReview {
 
 const KNOWN_CODES: readonly string[] = [
   "VALIDATION",
-  "NOT_PURCHASED",
-  "NOT_DELIVERED",
   "EDIT_WINDOW_EXPIRED",
   "NOT_FOUND",
   "REVIEW_FAILED",
@@ -85,7 +108,7 @@ interface ErrorBody {
   error?: { code?: string; message?: string; fields?: ReviewErrors };
 }
 
-async function call(body: Record<string, unknown>, identity: ReviewIdentity): Promise<unknown> {
+async function call(body: Record<string, unknown>, authorship: ReviewAuthorship): Promise<unknown> {
   if (!SUPABASE_URL || !ANON_KEY) {
     throw new SubmitReviewError(
       "NOT_CONFIGURED",
@@ -94,13 +117,17 @@ async function call(body: Record<string, unknown>, identity: ReviewIdentity): Pr
   }
 
   const headers: Record<string, string> = { "Content-Type": "application/json", apikey: ANON_KEY };
-  const payload = { ...body } as Record<string, unknown>;
+  const payload: Record<string, unknown> = { ...body, authorToken: authorship.authorToken };
 
-  if (identity.mode === "session") {
-    headers.Authorization = `Bearer ${identity.accessToken}`;
-  } else {
-    payload.orderId = identity.orderId;
-    payload.reviewToken = identity.reviewToken;
+  if (authorship.reviewId) payload.reviewId = authorship.reviewId;
+  if (authorship.accessToken) headers.Authorization = `Bearer ${authorship.accessToken}`;
+  if (authorship.order) {
+    payload.orderId = authorship.order.orderId;
+    payload.reviewToken = authorship.order.reviewToken;
+  }
+  if (authorship.orderLookup) {
+    payload.orderNumber = authorship.orderLookup.orderNumber;
+    payload.email = authorship.orderLookup.email;
   }
 
   let response: Response;
@@ -151,26 +178,36 @@ function toSubmittedReview(raw: unknown): SubmittedReview {
     rating: review.rating,
     comment: review.comment ?? "",
     displayName: review.displayName ?? "",
-    verifiedPurchase: review.verifiedPurchase ?? true,
+    photos: Array.isArray(review.photos) ? review.photos : [],
+    // Decided by the server from an order it found itself; `false` is the
+    // ordinary answer now, not a failure.
+    verifiedPurchase: review.verifiedPurchase ?? false,
     createdAt: review.createdAt ? new Date(review.createdAt as unknown as string).getTime() : Date.now(),
     updatedAt: review.updatedAt ? new Date(review.updatedAt as unknown as string).getTime() : Date.now(),
   };
 }
 
-/** Creates a review, or edits the reviewer's existing one for this order and product. */
+/** Creates a review, or edits the one this author already has for the product. */
 export async function upsertReview(
   productId: string,
-  draft: { rating: number; comment: string; displayName: string },
-  identity: ReviewIdentity,
+  draft: { rating: number; comment: string; displayName: string; photos: ReviewPhoto[] },
+  authorship: ReviewAuthorship,
 ): Promise<SubmittedReview> {
   const body = await call(
-    { action: "upsert", productId, rating: draft.rating, comment: draft.comment, displayName: draft.displayName },
-    identity,
+    {
+      action: "upsert",
+      productId,
+      rating: draft.rating,
+      comment: draft.comment,
+      displayName: draft.displayName,
+      photos: draft.photos,
+    },
+    authorship,
   );
   return toSubmittedReview(body);
 }
 
-/** Removes the reviewer's own review for this order and product. */
-export async function deleteReview(productId: string, identity: ReviewIdentity): Promise<void> {
-  await call({ action: "delete", productId }, identity);
+/** Removes this author's own review of the product. */
+export async function deleteReview(productId: string, authorship: ReviewAuthorship): Promise<void> {
+  await call({ action: "delete", productId }, authorship);
 }

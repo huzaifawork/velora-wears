@@ -16,7 +16,7 @@
     "typecheck": "npm run typecheck --workspace storefront",
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked > shared/database.types.ts",
-    "functions:deploy": "supabase functions deploy place-order",
+    "functions:deploy": "supabase functions deploy place-order submit-review upload-review-photo",
     "supabase:link": "supabase link"
   },
   "engines": {

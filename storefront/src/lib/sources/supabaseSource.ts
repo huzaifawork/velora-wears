@@ -4,6 +4,7 @@ import type {
   ProductImage,
   ProductSummary,
   Review,
+  ReviewPhoto,
   Settings,
   SiteImage,
   Size,
@@ -113,6 +114,7 @@ interface ReviewRow {
   rating: number;
   comment: string;
   display_name: string;
+  photos: ReviewPhoto[] | null;
   verified_purchase: boolean;
   hidden: boolean;
   user_id: string | null;
@@ -221,10 +223,14 @@ function toReview(row: ReviewRow): Review {
   return {
     id: row.id,
     productId: row.product_id,
-    orderId: row.order_id ?? "",
+    orderId: row.order_id ?? undefined,
     rating: row.rating as Review["rating"],
     comment: row.comment,
     displayName: row.display_name,
+    // Defended rather than trusted: `photos` arrived in a later migration, so a
+    // storefront pointed at a database that has not had it applied yet reads
+    // null here and should render a review without pictures, not crash on one.
+    photos: Array.isArray(row.photos) ? row.photos : [],
     verifiedPurchase: row.verified_purchase,
     hidden: row.hidden,
     userId: row.user_id ?? undefined,
@@ -245,11 +251,15 @@ const SUMMARY_COLUMNS =
  * to correlate a customer's reviews across products. Neither is "personal
  * data" the way an email or phone number is, but neither has any business
  * being public either. `getExistingReview` in `lib/reviewLookup.ts` is not
- * this — it is the REVIEWER checking their own review for one order they
- * already know, not a public listing, so it keeps `select("*")`.
+ * this — it is the REVIEWER checking their own review, not a public listing.
+ *
+ * `photos` IS public, and has to be: the pictures are the point of attaching
+ * them. `author_token_hash` is not listed for the same reason `user_id` is not
+ * — publicly selectable (it is a hash; see migration 20260905000001) but of no
+ * use to anything on a product page.
  */
 const PUBLIC_REVIEW_COLUMNS =
-  "id, product_id, rating, comment, display_name, verified_purchase, hidden, created_at";
+  "id, product_id, rating, comment, display_name, photos, verified_purchase, hidden, created_at";
 
 /** Postgres treats `%` and `_` as wildcards inside `like`; a search term must not. */
 function escapeLike(term: string): string {
@@ -444,12 +454,23 @@ async function listReviews(productId: string, limit: number): Promise<Review[]> 
  * Under Firebase this was impossible without a denormalised featured-reviews
  * node, because reviews were stored per product and there was no flat node to
  * read the newest few from. Here it is one indexed query across the table.
+ *
+ * FOUR STARS AND UP, VISIBLE, NEWEST FIRST — and nothing about who wrote it.
+ * This used to also require `verified_purchase`, which cost nothing back when
+ * every review had it. Since reviews were opened to everybody (client
+ * instruction, 2026-09-05 — `shared/reviews.ts`) that filter would have turned
+ * the landing strip into a view of the shrinking minority of reviews tied to a
+ * delivered order, and left it empty on a shop whose customers mostly do not
+ * bother verifying. The badge still appears on the card wherever it was earned.
+ *
+ * Hidden reviews are excluded by row level security rather than by a filter
+ * here, so an admin hiding spam takes it off the landing page too, with no
+ * further action.
  */
 async function listTestimonials(limit: number): Promise<Review[]> {
   const { data, error } = await getSupabase()
     .from("reviews")
     .select(PUBLIC_REVIEW_COLUMNS)
-    .eq("verified_purchase", true)
     .gte("rating", 4)
     .order("created_at", { ascending: false })
     .limit(limit);

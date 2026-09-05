@@ -26,11 +26,28 @@ import { DEFAULT_PAGE_SIZE } from "@admin/services/products";
  * replacement. Both are offered; only one is the first button.
  *
  * REVIEWS ARE NEVER WRITTEN HERE. A review is created by the storefront's
- * `submit-review` Edge Function, which verifies that the order actually
- * contains the product being reviewed. Nothing in this file inserts one.
+ * `submit-review` Edge Function. Nothing in this file inserts one.
+ *
+ * ---------------------------------------------------------------------------
+ * THIS SCREEN CARRIES MORE WEIGHT THAN IT USED TO
+ * ---------------------------------------------------------------------------
+ * Until 2026-09-05 a review could only be written by someone with a delivered
+ * order, and that gate did most of the work of keeping spam out — moderation
+ * was for the rare abusive customer. The client has since asked that anybody be
+ * able to review anything, with or without an account or a purchase, and
+ * attach photographs (`shared/reviews.ts`). Rate limiting bounds the volume;
+ * everything about the CONTENT now ends up here.
+ *
+ * Two things follow, and both are in the UI:
+ *
+ *   - `unverified` joins the filter list, because "reviews nobody could match
+ *     to an order" is the query an admin opening this screen after the change
+ *     is actually trying to run;
+ *   - the list renders each review's photographs, since a review can now need
+ *     hiding for a picture rather than a sentence.
  */
 
-export type ReviewFilter = "all" | "visible" | "hidden" | "flagged";
+export type ReviewFilter = "all" | "visible" | "hidden" | "flagged" | "unverified";
 export type ReviewSort = "newest" | "oldest" | "rating-asc" | "rating-desc";
 
 export interface ReviewListOptions {
@@ -77,6 +94,10 @@ export async function listReviews(options: ReviewListOptions): Promise<Page<Admi
   // stored flag — this project has no report button — but it is the query an
   // admin opening this screen is actually trying to run.
   if (filter === "flagged") q = q.eq("hidden", false).lte("rating", 2);
+  // Everything the shop could NOT match to a delivered order — which, since
+  // reviews were opened, is most of them. Not a suspicion, just the pile that
+  // has had no other check applied to it.
+  if (filter === "unverified") q = q.eq("hidden", false).eq("verified_purchase", false);
 
   if (productId) q = q.eq("product_id", productId);
 
@@ -138,9 +159,16 @@ export async function setReviewHidden(id: string, hidden: boolean): Promise<void
  * Delete a review permanently.
  *
  * Offered because the policy permits it and section 16 says "hide OR remove",
- * but it is the second option in the UI: deletion also frees the `(order_id,
- * product_id)` unique slot, which means the same customer can submit another
- * one. Hiding does not.
+ * but it is the second option in the UI. Hiding is reversible, removes the
+ * review from the shop just as completely, and — the part that matters now
+ * that anyone can write one — a hidden review still occupies its author's
+ * slot, whereas deleting frees it and invites the same person to post again.
+ *
+ * Deleting a review here does NOT remove any photographs it carried; those
+ * files stay in the `media` bucket under `reviews/`, unreferenced. That is
+ * deliberate (see migration 20260905000001): this is a plain PostgREST delete
+ * with no server code behind it, and a moderation button that half-succeeds
+ * would be worse than a few orphaned kilobytes.
  */
 export async function deleteReview(id: string): Promise<void> {
   const { error } = await getSupabase().from("reviews").delete().eq("id", id);

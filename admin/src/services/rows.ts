@@ -6,6 +6,7 @@ import type {
   ProductImage,
   ProductSummary,
   Review,
+  ReviewPhoto,
   Settings,
   SiteImage,
   SiteImageSlot,
@@ -369,6 +370,7 @@ export interface ReviewRow {
   rating: number;
   comment: string;
   display_name: string;
+  photos: ReviewPhoto[] | null;
   verified_purchase: boolean;
   hidden: boolean;
   created_at: string;
@@ -379,10 +381,18 @@ export interface ReviewRow {
  * `user_id` is not read. The moderation screen decides whether a comment is
  * abusive, and the customer's account id has no part in that judgement — the
  * storefront's own public review read leaves it out for the same reason
- * (see PUBLIC_REVIEW_COLUMNS in `supabaseSource.ts`).
+ * (see PUBLIC_REVIEW_COLUMNS in `supabaseSource.ts`). Nor is
+ * `author_token_hash`: it is how an anonymous reviewer proves a review is
+ * theirs, and moderation never needs to ask.
+ *
+ * `photos` IS read, and matters more here than anywhere else. Reviews have
+ * been open to everybody since 2026-09-05 and may carry pictures, which makes
+ * the moderation screen the only place in the shop where an admin can see an
+ * uploaded image before deciding about it — a review is now as likely to need
+ * hiding for what is IN a photograph as for what is written.
  */
 export const REVIEW_COLUMNS =
-  "id, product_id, order_id, rating, comment, display_name, verified_purchase, hidden, " +
+  "id, product_id, order_id, rating, comment, display_name, photos, verified_purchase, hidden, " +
   "created_at, products(name, slug)";
 
 /** A review plus the name of the product it is about, for the moderation list. */
@@ -395,10 +405,12 @@ export function toReview(row: ReviewRow): AdminReview {
   return {
     id: row.id,
     productId: row.product_id,
-    orderId: row.order_id ?? "",
+    orderId: row.order_id ?? undefined,
     rating: row.rating as Review["rating"],
     comment: row.comment,
     displayName: row.display_name,
+    // Null on a database where the `photos` migration has not been applied.
+    photos: Array.isArray(row.photos) ? row.photos : [],
     verifiedPurchase: row.verified_purchase,
     hidden: row.hidden,
     createdAt: epoch(row.created_at),

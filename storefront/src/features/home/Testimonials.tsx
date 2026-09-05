@@ -40,14 +40,14 @@ export function Testimonials({
           align="center"
           eyebrow="Customer reviews"
           title="What people across Pakistan are saying"
-          description="Every review below comes from a delivered order — Lahore to Karachi, Islamabad to Multan."
+          description="Real words from customers across Pakistan — Lahore to Karachi, Islamabad to Multan."
         />
 
         {!loading && reviews && (
           <div className="mt-8 flex flex-col items-center gap-2">
             <Rating rating={average} size="md" />
             <p className="text-[0.625rem] tracking-eyebrow text-ink-muted uppercase">
-              {formatRating(average)} average from the {reviews.length} verified{" "}
+              {formatRating(average)} average from the {reviews.length}{" "}
               {reviews.length === 1 ? "review" : "reviews"} below
             </p>
           </div>

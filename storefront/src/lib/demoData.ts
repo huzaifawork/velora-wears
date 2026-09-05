@@ -682,13 +682,16 @@ const productIdBySlug = new Map(demoProducts.map((p) => [p.slug, p.id]));
 export const demoReviews: Review[] = reviewSeeds.map((seed, i) => ({
   id: `demo-rev-${String(i + 1).padStart(2, "0")}`,
   productId: productIdBySlug.get(seed.slug) ?? "",
-  // Reviews are authorised by the order, not by an account (requirements 16).
+  // The demo catalogue keeps every review tied to an order, so the shipped
+  // demo shows the Verified badge on all of them. Reviews written for real are
+  // open to anyone and mostly carry no order at all (`shared/reviews.ts`).
   orderId: `demo-ord-${String(i + 1).padStart(2, "0")}`,
   rating: seed.rating,
   comment: seed.comment,
   displayName: seed.displayName,
   verifiedPurchase: true,
   hidden: seed.hidden ?? false,
+  photos: [],
   createdAt: T0 + seed.on * day,
 }));
 
