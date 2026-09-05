@@ -116,11 +116,28 @@ async function call(body: Record<string, unknown>, authorship: ReviewAuthorship)
     );
   }
 
-  const headers: Record<string, string> = { "Content-Type": "application/json", apikey: ANON_KEY };
+  /**
+   * `Authorization` always carries SOMETHING — the signed-in customer's access
+   * token where there is one, the anon key otherwise.
+   *
+   * Not a formality. Supabase's own JWT check runs in front of an Edge
+   * Function and reads the bearer token rather than `apikey`, so a request
+   * without one can be refused before a single line of `submit-review` runs.
+   * This endpoint happens to be configured leniently today, and relying on
+   * that would make an unrelated project setting able to break reviewing.
+   *
+   * Sending the anon key here is safe and is what the Supabase SDK does: the
+   * function calls `auth.getUser()` on whatever it is given, gets nothing back
+   * for an anon key, and treats the caller as the guest they are.
+   */
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    apikey: ANON_KEY,
+    Authorization: `Bearer ${authorship.accessToken ?? ANON_KEY}`,
+  };
   const payload: Record<string, unknown> = { ...body, authorToken: authorship.authorToken };
 
   if (authorship.reviewId) payload.reviewId = authorship.reviewId;
-  if (authorship.accessToken) headers.Authorization = `Bearer ${authorship.accessToken}`;
   if (authorship.order) {
     payload.orderId = authorship.order.orderId;
     payload.reviewToken = authorship.order.reviewToken;
