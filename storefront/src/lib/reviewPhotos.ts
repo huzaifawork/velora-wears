@@ -70,7 +70,20 @@ async function put(blob: Blob, variant: "thumb" | "full", group: string): Promis
         // The raw bytes as the body, with the image's own type as the content
         // type — no multipart wrapper to parse on the far side, and nothing in
         // the request that the server turns into a file path.
-        headers: { "Content-Type": blob.type, apikey: ANON_KEY },
+        //
+        // BOTH `apikey` AND `Authorization` carry the anon key, and the second
+        // one is not optional: a newly deployed Edge Function has Supabase's
+        // JWT check on by default, and it reads the bearer token, not the
+        // apikey header. Without it every upload comes back
+        // `UNAUTHORIZED_NO_AUTH_HEADER` before this function's own code runs at
+        // all. (`lib/reviewLookup.ts` sends the same pair to PostgREST for the
+        // same reason.) The function itself never looks at either — a review
+        // photo has no signed-in user behind it.
+        headers: {
+          "Content-Type": blob.type,
+          apikey: ANON_KEY,
+          Authorization: `Bearer ${ANON_KEY}`,
+        },
         body: blob,
         signal: AbortSignal.timeout(TIMEOUT_MS),
       },

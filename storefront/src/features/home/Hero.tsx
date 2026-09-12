@@ -127,20 +127,39 @@ const SWIPE_PX = 50;
  * real photograph is up, a field left blank on that slide is omitted rather
  * than back-filled with the shop's own marketing line — otherwise a real
  * photograph ships with words nobody wrote for it.
+ *
+ * ---------------------------------------------------------------------------
+ * AND IT WAITS FOR THE READ BEFORE IT DECIDES
+ * ---------------------------------------------------------------------------
+ * "Nothing uploaded" and "not read yet" look identical from an empty array, and
+ * treating them the same made every visit to a shop that HAS heroes open on the
+ * bundled photograph and its bootstrap copy, then swap to the real banner a
+ * moment later. So `loading` is a prop: while the read is in flight the banner
+ * is its own dark box at the height it is about to fill, and the first thing
+ * that fades in is the real slide. The default belongs to a shop that has
+ * genuinely uploaded nothing, which we only know once the read lands.
  */
 export function Hero({
   settings,
   images,
+  loading = false,
 }: {
   settings: Settings | null | undefined;
   /** Admin-uploaded hero images, in display order. Empty is normal. */
   images?: SiteImage[];
+  /** Is that list still being read? Suppresses the default until it lands. */
+  loading?: boolean;
 }) {
   const threshold = settings?.freeDeliveryThreshold;
 
   const uploaded = images ?? [];
-  const slides: Slide[] = uploaded.length
-    ? uploaded.map((image) => ({
+  // Empty while `loading`: the box holds its shape and shows no photograph at
+  // all, rather than flashing one the admin replaced long ago.
+  const slides: Slide[] = !uploaded.length
+    ? loading
+      ? []
+      : [DEFAULT_SLIDE]
+    : uploaded.map((image) => ({
         key: image.id,
         src: image.full,
         alt: image.alt ?? "",
@@ -153,15 +172,15 @@ export function Hero({
         ctaHref: image.ctaHref,
         cta2Label: image.cta2Label,
         cta2Href: image.cta2Href,
-      }))
-    : [DEFAULT_SLIDE];
+      }));
 
   const [index, setIndex] = useState(0);
   // Clamped rather than reset in an effect: the list can shrink underneath
   // this when Realtime delivers a deletion, and an out-of-range index would
   // blank the slide for a frame.
-  const current = Math.min(index, slides.length - 1);
-  const slide = slides[current];
+  const current = Math.max(0, Math.min(index, slides.length - 1));
+  /** Undefined only while the read is in flight — see the block comment. */
+  const slide = slides[current] as Slide | undefined;
 
   // `current` is a dependency so that choosing a slide by hand restarts the
   // full interval rather than inheriting whatever was left of the last one.
@@ -186,7 +205,9 @@ export function Hero({
   // record written before the uploader stored dimensions would otherwise put
   // `Infinity` or `NaN` into the calc and collapse the banner.
   const ratio =
-    slide.width > 0 && slide.height > 0 ? slide.width / slide.height : 16 / 9;
+    slide && slide.width > 0 && slide.height > 0
+      ? slide.width / slide.height
+      : 16 / 9;
 
   /*
     BOTH BUTTONS BELONG TO THE ADMIN.
@@ -204,14 +225,14 @@ export function Hero({
     category fill the second.
   */
   const shopAll = { label: "Shop the collection", href: PRODUCTS };
-  const ownPrimary = Boolean(slide.ctaLabel && slide.ctaHref);
+  const ownPrimary = Boolean(slide?.ctaLabel && slide?.ctaHref);
 
   const primary = ownPrimary
-    ? { label: slide.ctaLabel!, href: slide.ctaHref! }
+    ? { label: slide!.ctaLabel!, href: slide!.ctaHref! }
     : shopAll;
 
   const secondary =
-    slide.cta2Label && slide.cta2Href
+    slide?.cta2Label && slide.cta2Href
       ? { label: slide.cta2Label, href: slide.cta2Href }
       : ownPrimary
         ? shopAll
@@ -275,43 +296,50 @@ export function Hero({
           wide
           className="pointer-events-none absolute inset-0 flex flex-col justify-center pb-16 lg:pb-20"
         >
+          {/* No slide yet means the read is still in flight: the `h1` below
+              keeps the landmark, and the words arrive with the photograph
+              rather than a moment before it in someone else's wording. */}
+          {!slide && <h1 className="sr-only">Velora Wears</h1>}
+
           {/* `key` restarts the rise-in on every slide change, so the words
               read as changing WITH the photograph. */}
-          <div key={current} className="pointer-events-auto max-w-xl animate-rise">
-            {slide.eyebrow && (
-              <p className="flex items-center gap-3 text-[0.625rem] tracking-eyebrow text-accent-soft uppercase">
-                <span aria-hidden="true" className="h-px w-10 bg-accent-soft" />
-                {slide.eyebrow}
-              </p>
-            )}
+          {slide && (
+            <div key={current} className="pointer-events-auto max-w-xl animate-rise">
+              {slide.eyebrow && (
+                <p className="flex items-center gap-3 text-[0.625rem] tracking-eyebrow text-accent-soft uppercase">
+                  <span aria-hidden="true" className="h-px w-10 bg-accent-soft" />
+                  {slide.eyebrow}
+                </p>
+              )}
 
-            {/* The page's one real `h1` still exists even when the current
-                slide has no title — visually hidden rather than dropped, so
-                the homepage keeps its heading landmark without printing text
-                nobody asked for. */}
-            {slide.title ? (
-              <h1
-                className={`text-[2.125rem] leading-[1.06] tracking-tight text-balance text-canvas drop-shadow-[0_2px_18px_rgb(20_18_26_/_0.55)] sm:text-5xl lg:text-[3.25rem] xl:text-6xl ${
-                  slide.eyebrow ? "mt-4 sm:mt-5" : ""
-                }`}
-              >
-                {slide.title}
-              </h1>
-            ) : (
-              <h1 className="sr-only">Velora Wears</h1>
-            )}
+              {/* The page's one real `h1` still exists even when the current
+                  slide has no title — visually hidden rather than dropped, so
+                  the homepage keeps its heading landmark without printing text
+                  nobody asked for. */}
+              {slide.title ? (
+                <h1
+                  className={`text-[2.125rem] leading-[1.06] tracking-tight text-balance text-canvas drop-shadow-[0_2px_18px_rgb(20_18_26_/_0.55)] sm:text-5xl lg:text-[3.25rem] xl:text-6xl ${
+                    slide.eyebrow ? "mt-4 sm:mt-5" : ""
+                  }`}
+                >
+                  {slide.title}
+                </h1>
+              ) : (
+                <h1 className="sr-only">Velora Wears</h1>
+              )}
 
-            {slide.body && (
-              <p className="mt-4 max-w-lg text-[0.9375rem] leading-relaxed text-pretty text-canvas/80 sm:mt-5 sm:text-base">
-                {slide.body}
-              </p>
-            )}
+              {slide.body && (
+                <p className="mt-4 max-w-lg text-[0.9375rem] leading-relaxed text-pretty text-canvas/80 sm:mt-5 sm:text-base">
+                  {slide.body}
+                </p>
+              )}
 
-            <div className="mt-7 flex flex-wrap items-center gap-3 sm:mt-8">
-              <HeroCta {...primary} variant="accent" />
-              <HeroCta {...secondary} variant="onDark" />
+              <div className="mt-7 flex flex-wrap items-center gap-3 sm:mt-8">
+                <HeroCta {...primary} variant="accent" />
+                <HeroCta {...secondary} variant="onDark" />
+              </div>
             </div>
-          </div>
+          )}
         </Container>
 
         {/*
