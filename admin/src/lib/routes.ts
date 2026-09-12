@@ -29,6 +29,7 @@ export const DASHBOARD = ADMIN;
 export const PRODUCTS = `${ADMIN}/products`;
 export const PRODUCT_NEW = `${ADMIN}/products/new`;
 export const CATEGORIES = `${ADMIN}/categories`;
+export const DISCOUNTS = `${ADMIN}/discounts`;
 export const ORDERS = `${ADMIN}/orders`;
 export const CUSTOMERS = `${ADMIN}/customers`;
 export const FEATURED = `${ADMIN}/featured`;

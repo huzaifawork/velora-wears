@@ -61,6 +61,9 @@ export interface SummaryRow {
   featured: boolean;
   featured_position: number;
   size_scale: string | null;
+  /** Null whenever nothing is on offer — see `ProductSummary.salePrice`. */
+  sale_price: number | null;
+  discount_ends_at: string | null;
 }
 
 /**
@@ -74,7 +77,7 @@ export interface SummaryRow {
 export const SUMMARY_COLUMNS =
   "id, slug, name, price, category_slug, thumb, in_stock, low_stock, total_stock, " +
   "rating_avg, rating_count, active, created_at, search_text, featured, featured_position, " +
-  "size_scale";
+  "size_scale, sale_price, discount_ends_at";
 
 export function toSummary(row: SummaryRow): ProductSummary {
   return {
@@ -98,6 +101,12 @@ export function toSummary(row: SummaryRow): ProductSummary {
     // The inventory screen labels its stock columns from this without having to
     // read the full product for every row on the page.
     sizeScale: isSizeScaleId(row.size_scale) ? row.size_scale : undefined,
+    // What a customer is being charged for this piece today, computed by the
+    // view from whatever discounts are running. The dashboard shows it so an
+    // admin scanning the catalogue sees the shop's own prices rather than a
+    // list that disagrees with the storefront.
+    salePrice: row.sale_price ?? undefined,
+    discountEndsAt: row.discount_ends_at ? epoch(row.discount_ends_at) : undefined,
   };
 }
 
@@ -248,6 +257,8 @@ export interface OrderItemRow {
   size_label: string | null;
   qty: number;
   unit_price: number;
+  /** What it would have cost without the discount. Null when there was none. */
+  list_price: number | null;
 }
 
 export interface OrderRow {
@@ -263,6 +274,7 @@ export interface OrderRow {
   notes: string | null;
   subtotal: number;
   delivery_charge: number;
+  discount_total: number | null;
   total: number;
   payment_method: string | null;
   is_guest: boolean;
@@ -283,14 +295,14 @@ export interface OrderRow {
  */
 export const ORDER_LIST_COLUMNS =
   "id, order_number, status, full_name, email, phone, city, subtotal, delivery_charge, " +
-  "total, payment_method, is_guest, user_id, archived_at, created_at, updated_at";
+  "discount_total, total, payment_method, is_guest, user_id, archived_at, created_at, updated_at";
 
 /** The detail read: everything the list has, plus the address and the lines. */
 export const ORDER_DETAIL_COLUMNS =
   "id, order_number, status, full_name, email, phone, address, city, postal_code, notes, " +
-  "subtotal, delivery_charge, total, payment_method, is_guest, user_id, archived_at, " +
-  "created_at, updated_at, " +
-  "order_items(id, product_id, name, slug, thumb, size, size_label, qty, unit_price)";
+  "subtotal, delivery_charge, discount_total, total, payment_method, is_guest, user_id, " +
+  "archived_at, created_at, updated_at, " +
+  "order_items(id, product_id, name, slug, thumb, size, size_label, qty, unit_price, list_price)";
 
 /**
  * An order as the dashboard holds it.
@@ -324,6 +336,10 @@ export function toOrderItem(row: OrderItemRow): OrderItem {
     sizeLabel: row.size_label ?? undefined,
     qty: row.qty,
     unitPrice: row.unit_price,
+    // What it would have cost without the sale it was bought in. Frozen onto
+    // the line at the moment of the order, so ending the discount cannot
+    // rewrite what this order says was saved.
+    listPrice: row.list_price ?? undefined,
   };
 }
 
@@ -346,6 +362,9 @@ export function toOrder(row: OrderRow): AdminOrder {
     items: row.order_items ? row.order_items.map(toOrderItem) : undefined,
     subtotal: row.subtotal,
     deliveryCharge: row.delivery_charge,
+    // `subtotal` is ALREADY net of this; it is here so a screen can say what
+    // came off without reading every line back.
+    discountTotal: row.discount_total ?? 0,
     total: row.total,
     // Resolved through `paymentMethodOf()` at the point of display, so an order
     // written before the column existed reads as cash on delivery rather than

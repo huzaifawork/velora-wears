@@ -251,6 +251,19 @@ export function OrderDetailPage() {
                     <p className="mt-0.5 text-xs text-ink-muted">
                       {orderLineSize(item)} · {item.qty} ×{" "}
                       {formatPrice(item.unitPrice)}
+                      {/* What this piece normally sells for, when it was bought
+                          on offer. Frozen onto the line at the moment of the
+                          order — ending the discount cannot change what this
+                          order says was charged. */}
+                      {item.listPrice !== undefined && item.listPrice > item.unitPrice && (
+                        <>
+                          {" "}
+                          <s>
+                            <span className="sr-only">normally </span>
+                            {formatPrice(item.listPrice)}
+                          </s>
+                        </>
+                      )}
                     </p>
                   </div>
 
@@ -264,6 +277,16 @@ export function OrderDetailPage() {
             {/* --- The arithmetic ------------------------------------- */}
             <dl className="space-y-2 border-t border-line bg-surface-raised px-5 py-4 text-sm print:px-3 print:py-3 sm:px-6">
               <Row label="Subtotal" value={formatPrice(data.subtotal)} />
+              {/* Stated, not subtracted: the subtotal above is already net of
+                  it, exactly as the customer's own breakdown was. Absent on an
+                  order with nothing discounted, which is every order placed
+                  before discounts existed. */}
+              {(data.discountTotal ?? 0) > 0 && (
+                <Row
+                  label="Discount applied"
+                  value={`−${formatPrice(data.discountTotal ?? 0)}`}
+                />
+              )}
               <Row
                 label="Delivery"
                 value={

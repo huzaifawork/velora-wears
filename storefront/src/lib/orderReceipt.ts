@@ -44,7 +44,17 @@ export interface ReceiptLine {
    */
   sizeLabel?: string;
   qty: number;
+  /** What was actually charged for one piece — the sale price when one applied. */
   unitPrice: number;
+  /**
+   * What it would have cost without the discount, when this line had one.
+   *
+   * Absent means it was not discounted. Snapshotted like everything else on a
+   * receipt: a sale ends, and a confirmation that recalculated the saving from
+   * today's offers would start disagreeing with the amount the courier is
+   * collecting.
+   */
+  listPrice?: number;
 }
 
 export interface OrderReceipt {
@@ -52,6 +62,17 @@ export interface OrderReceipt {
   orderNumber: string;
   /** The SERVER's total. Never the browser's arithmetic (section 17). */
   total: number;
+  /**
+   * What the discounts took off, as the SERVER resolved them — not the sum of
+   * the lines above.
+   *
+   * The two can legitimately differ by the width of one sale ending: the bag
+   * was priced when the page was read, and `place_order()` resolves the
+   * discount again at the moment the order is written. The server's figure is
+   * the one that matches what will actually be collected, so it is the one
+   * shown. Absent for an order with no discounted line.
+   */
+  discountTotal?: number;
   /**
    * Grants review access to a guest, who has no account to prove anything with
    * (requirements section 16). Section 16's review flow reads it from here; it
@@ -127,4 +148,21 @@ export function clearReceipt(): void {
 /** What the lines came to, before delivery. Derived, never stored twice. */
 export function receiptSubtotal(receipt: OrderReceipt): number {
   return receipt.lines.reduce((sum, line) => sum + line.unitPrice * line.qty, 0);
+}
+
+/**
+ * What this order saved, preferring the SERVER's figure over the lines'.
+ *
+ * The lines are what the bag showed; `discountTotal` is what the order was
+ * actually written with. They agree except across the exact moment a sale ends,
+ * and when they disagree the server is right — see `OrderReceipt.discountTotal`.
+ */
+export function receiptSaved(receipt: OrderReceipt): number {
+  if (typeof receipt.discountTotal === "number") return Math.max(0, receipt.discountTotal);
+
+  return receipt.lines.reduce(
+    (sum, line) =>
+      sum + (line.listPrice !== undefined ? Math.max(0, line.listPrice - line.unitPrice) * line.qty : 0),
+    0,
+  );
 }

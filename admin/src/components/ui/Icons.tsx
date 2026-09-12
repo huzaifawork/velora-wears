@@ -84,6 +84,14 @@ export const DeliveryIcon = (p: IconProps) => (
   />
 );
 
+/** A price tag with its hole — the universal mark for an offer. */
+export const DiscountsIcon = (p: IconProps) => (
+  <Glyph
+    {...p}
+    d="M20.6 12.6 12.4 20.8a2 2 0 0 1-2.8 0l-6.4-6.4a2 2 0 0 1-.6-1.4V4.6a2 2 0 0 1 2-2h8.4a2 2 0 0 1 1.4.6l6.2 6.2a2 2 0 0 1 0 2.8zM7.5 7.5h.01"
+  />
+);
+
 export const AccountIcon = (p: IconProps) => (
   <Glyph
     {...p}

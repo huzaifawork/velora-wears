@@ -59,6 +59,11 @@ export function useCatalogRealtime(onChange?: () => void): void {
         // The landing page's hero and banners (section 8). An admin swapping the
         // hero photograph updates every open tab, exactly as a price edit does.
         .on("postgres_changes", { event: "*", schema: "public", table: "site_images" }, invalidate)
+        // Discounts. An admin starting or stopping a sale re-prices every open
+        // tab, exactly as a price edit does — and it has to, because the sale
+        // price is computed inside `product_summaries` and nothing about the
+        // products themselves changes when a discount begins.
+        .on("postgres_changes", { event: "*", schema: "public", table: "discounts" }, invalidate)
         .subscribe();
 
       teardown = () => void supabase.removeChannel(channel);

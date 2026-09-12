@@ -1,4 +1,5 @@
-import type { Product, Settings, Size } from "@shared/types";
+import type { Product, ProductSummary, Settings, Size } from "@shared/types";
+import { noOffer, offerOf, type Offer } from "@shared/discounts";
 import { MAX_ORDER_LINES, MAX_QTY_PER_LINE } from "@shared/checkout";
 import { isPlausibleSizeCode } from "@/lib/sizes";
 import { stockInSize } from "@shared/stock";
@@ -185,8 +186,19 @@ export interface CartLine {
   item: CartItem;
   /** Null when the piece has been retired or the slug no longer resolves. */
   product: Product | null;
-  /** Read from the catalog on every render. Never from storage. */
+  /**
+   * What this piece costs right now, and what it cost before any discount.
+   *
+   * Read from the catalog on every render, like everything else priced here —
+   * so a sale that started while the bag sat open is applied, and one that
+   * ended is not. `place_order()` resolves it a third time when the order is
+   * actually written, and that resolution is the one that counts.
+   */
+  offer: Offer;
+  /** What the customer pays per piece — `offer.salePrice`. Never from storage. */
   unitPrice: number;
+  /** What this line's discount takes off in total. Zero when nothing is running. */
+  savedTotal: number;
   /** Stock remaining in THIS line's size, right now. */
   available: number;
   problem?: CartLineProblem;
@@ -197,7 +209,16 @@ export interface CartLine {
 
 export interface CartTotals {
   lines: CartLine[];
+  /**
+   * What the orderable lines come to AFTER any discount — the figure delivery
+   * and the total are built on, and the one `place_order()` computes too.
+   */
   subtotal: number;
+  /**
+   * What the discounts took off, across the bag. Display only: `subtotal` is
+   * already net of it, so adding this to anything would be counting it twice.
+   */
+  discountTotal: number;
   deliveryCharge: number;
   total: number;
   /** Garments counted across orderable lines. */
@@ -219,6 +240,21 @@ export function buildCart(
   items: CartItem[],
   products: Map<string, Product | null>,
   settings: Settings | null | undefined,
+  /**
+   * The list projection for the same products, keyed by slug.
+   *
+   * The bag needs BOTH records and they answer different questions: only the
+   * full product carries per-size stock, and only the summary carries the sale
+   * price Postgres computed. Reading the discount off the summary rather than
+   * resolving it here is what guarantees a cart line and the card it was added
+   * from show the same figure — there is one calculation, and it happened in
+   * the database.
+   *
+   * Optional, and a missing entry simply means no offer. A bag priced without
+   * it is the bag exactly as it was before discounts existed, which is the
+   * right behaviour while that read is still in flight or has failed.
+   */
+  summaries?: Map<string, ProductSummary | null>,
 ): CartTotals {
   const lines: CartLine[] = items.map((item) => {
     const product = products.get(item.slug) ?? null;
@@ -227,13 +263,24 @@ export function buildCart(
       return {
         item,
         product: null,
+        offer: noOffer(0),
         unitPrice: 0,
+        savedTotal: 0,
         available: 0,
         problem: "gone",
         orderableQty: 0,
         lineTotal: 0,
       };
     }
+
+    const summary = summaries?.get(item.slug) ?? null;
+    // The summary's own `price` is the same column as the product's, but the
+    // product is the record this line is otherwise built from — so the offer is
+    // rebuilt against THAT price, and a summary that is somehow stale cannot
+    // strike through a figure this line never showed.
+    const offer = summary
+      ? offerOf({ ...summary, price: product.price })
+      : noOffer(product.price);
 
     const available = stockInSize(product.sizes, item.size);
     const orderableQty = Math.min(item.qty, available);
@@ -243,21 +290,29 @@ export function buildCart(
     return {
       item,
       product,
-      unitPrice: product.price,
+      offer,
+      unitPrice: offer.salePrice,
+      savedTotal: offer.saved * orderableQty,
       available,
       problem,
       orderableQty,
-      lineTotal: product.price * orderableQty,
+      lineTotal: offer.salePrice * orderableQty,
     };
   });
 
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
+  const discountTotal = lines.reduce((sum, line) => sum + line.savedTotal, 0);
   const count = lines.reduce((n, line) => n + line.orderableQty, 0);
 
   /**
    * Delivery is admin-configured (requirements section 10) and shown here so
    * the bag's total is the real one. The SERVER recomputes it at checkout —
    * this is display, never the figure an order is written from (section 17).
+   *
+   * Tested against the DISCOUNTED subtotal, because that is what the customer
+   * is actually spending — and because `place_order()` tests the same figure.
+   * Qualifying on the pre-discount total would have the bag promise free
+   * delivery the order then charges for.
    */
   const threshold = settings?.freeDeliveryThreshold;
   const qualifies = threshold !== undefined && subtotal >= threshold;
@@ -266,6 +321,7 @@ export function buildCart(
   return {
     lines,
     subtotal,
+    discountTotal,
     deliveryCharge,
     total: subtotal + deliveryCharge,
     count,

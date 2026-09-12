@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import type { ProductSummary } from "@shared/types";
+import { hasOffer, offerOf } from "@shared/discounts";
 import { buttonClasses } from "@admin/components/ui/Button";
 import { Card, PageHeader } from "@admin/components/ui/Card";
 import { Badge, StockBadge } from "@admin/components/ui/Badge";
@@ -183,9 +184,28 @@ export function ProductsPage() {
       key: "price",
       label: "Price",
       align: "right",
-      cell: (product) => (
-        <span className="text-sm text-ink tabular-nums">{formatPrice(product.price)}</span>
-      ),
+      /**
+       * The price the SHOP is charging, which is not always the price on the
+       * product. A piece caught by a running discount is shown at its reduced
+       * price with its own struck through, so this list and the storefront
+       * cannot disagree about what a customer pays — the alternative is an
+       * admin quoting a figure over the phone that the website does not honour.
+       */
+      cell: (product) => {
+        const offer = offerOf(product);
+
+        return (
+          <span className="text-sm text-ink tabular-nums">
+            {formatPrice(offer.salePrice)}
+            {hasOffer(offer) && (
+              <s className="ml-1.5 text-xs text-ink-muted">
+                <span className="sr-only">normally </span>
+                {formatPrice(offer.price)}
+              </s>
+            )}
+          </span>
+        );
+      },
     },
     {
       key: "stock",

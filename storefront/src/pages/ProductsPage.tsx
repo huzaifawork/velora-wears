@@ -63,6 +63,9 @@ export function ProductsPage() {
   const search = params.get("q")?.trim() ?? "";
   const sort = parseSort(params.get("sort"));
   const inStockOnly = params.get("stock") === "in";
+  /** `?sale=on` — the discounted pieces only. A linkable address, so the shop
+   *  can point a campaign straight at it. */
+  const saleOnly = params.get("sale") === "on";
 
   /**
    * Every parameter change goes through here, so one control can never wipe
@@ -93,7 +96,7 @@ export function ProductsPage() {
    * asked for is in it, which makes it both the reload trigger and the thing
    * "load more" has to reset against.
    */
-  const queryKey = `${categorySlug ?? "all"}:${search}:${sort}:${inStockOnly}`;
+  const queryKey = `${categorySlug ?? "all"}:${search}:${sort}:${inStockOnly}:${saleOnly}`;
 
   /**
    * How many pages have been asked for, STAMPED with the query they were asked
@@ -108,7 +111,7 @@ export function ProductsPage() {
   const state = useAsync(
     () =>
       Promise.all([
-        listProducts({ categorySlug, search, inStockOnly, sort, limit }),
+        listProducts({ categorySlug, search, inStockOnly, saleOnly, sort, limit }),
         getCategories(),
       ]),
     `products:${queryKey}:${limit}`,
@@ -140,7 +143,7 @@ export function ProductsPage() {
   // new — cheaper than a count query on every page.
   const mayHaveMore = !state.loading && count === limit;
 
-  const filtered = searching || inStockOnly || Boolean(categorySlug);
+  const filtered = searching || inStockOnly || saleOnly || Boolean(categorySlug);
 
   // Named from the slug while the categories are still in flight, so the title
   // does not flip from "the whole collection" to "Hoodies" as the data lands.
@@ -278,6 +281,10 @@ export function ProductsPage() {
                 onInStockChange={(only) =>
                   updateParams({ stock: only ? "in" : undefined }, { preserveScroll: true })
                 }
+                saleOnly={saleOnly}
+                onSaleOnlyChange={(only) =>
+                  updateParams({ sale: only ? "on" : undefined }, { preserveScroll: true })
+                }
               />
             </div>
 
@@ -304,7 +311,9 @@ export function ProductsPage() {
                   ? "The collection could not be loaded just now. Please refresh the page."
                   : searching
                     ? `Nothing matches “${search}”. Search looks at the start of a product name, so try a shorter word — or clear the search and browse the collection.`
-                    : inStockOnly
+                    : saleOnly
+                      ? "Nothing is on offer here at the moment. Turn off “on sale” to see the full edit."
+                      : inStockOnly
                       ? "Everything here is sold out at the moment. Turn off “in stock only” to see the full edit."
                       : categorySlug
                         ? "Nothing in this edit yet. Try another category above — the whole collection is one tap away."

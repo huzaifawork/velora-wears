@@ -6,6 +6,7 @@ import type {
   Settings,
   SiteImage,
 } from "@shared/types";
+import { offerOf } from "@shared/discounts";
 
 /**
  * The catalog read contract.
@@ -47,6 +48,13 @@ export interface ListProductsOptions {
   search?: string;
   /** Hide what cannot be bought (requirements sections 11 and 14). */
   inStockOnly?: boolean;
+  /**
+   * Show only what is currently discounted — the "On sale" filter.
+   *
+   * Answered by the database, which is the only thing that knows: a summary's
+   * `salePrice` is computed from the discounts live at read time.
+   */
+  saleOnly?: boolean;
   sort?: SortOption;
   limit?: number;
 }
@@ -70,6 +78,7 @@ export interface ResolvedListOptions {
   categorySlugs?: readonly string[];
   search?: string;
   inStockOnly: boolean;
+  saleOnly: boolean;
   sort: SortOption;
   limit: number;
 }
@@ -136,9 +145,9 @@ export function sortSummaries(rows: ProductSummary[], sort: SortOption): Product
 
   switch (sort) {
     case "price-asc":
-      return rows.sort((a, b) => a.price - b.price || newestFirst(a, b));
+      return rows.sort((a, b) => payable(a) - payable(b) || newestFirst(a, b));
     case "price-desc":
-      return rows.sort((a, b) => b.price - a.price || newestFirst(a, b));
+      return rows.sort((a, b) => payable(b) - payable(a) || newestFirst(a, b));
     case "rating":
       // An unrated piece is not a zero-star piece — it sorts below everything
       // rated rather than competing with the worst review in the shop.
@@ -148,6 +157,20 @@ export function sortSummaries(rows: ProductSummary[], sort: SortOption): Product
     default:
       return rows.sort(newestFirst);
   }
+}
+
+/**
+ * What a visitor would actually pay for this piece — the discounted price while
+ * an offer is running, the plain one otherwise.
+ *
+ * Sorting by price has to use THIS or the control lies: a shirt marked down
+ * from 6,000 to 3,000 belongs among the 3,000s in "price: low to high", not
+ * where its old label used to put it. `offerOf` is also what discards an offer
+ * whose end time has passed since the page was read, so an expired sale stops
+ * affecting the order as well as the label.
+ */
+function payable(row: ProductSummary): number {
+  return offerOf(row).salePrice;
 }
 
 /**
@@ -165,7 +188,7 @@ export function sortSummaries(rows: ProductSummary[], sort: SortOption): Product
  */
 export function applyFilters(
   rows: ProductSummary[],
-  { categorySlug, categorySlugs, search, inStockOnly }: ResolvedListOptions,
+  { categorySlug, categorySlugs, search, inStockOnly, saleOnly }: ResolvedListOptions,
 ): ProductSummary[] {
   const term = normaliseSearch(search);
 
@@ -181,6 +204,7 @@ export function applyFilters(
     if (!row.active) return false;
     if (branch && !branch.has(row.categorySlug)) return false;
     if (inStockOnly && !row.inStock) return false;
+    if (saleOnly && offerOf(row).saved === 0) return false;
     if (term && !row.searchText.startsWith(term)) return false;
     return true;
   });

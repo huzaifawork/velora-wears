@@ -167,6 +167,10 @@ export function CheckoutPage() {
       sizeLabel: sizeLabel(line.product?.sizeScale, line.item.size),
       qty: line.orderableQty,
       unitPrice: line.unitPrice,
+      // Only when there was actually a discount. Undefined is "full price",
+      // which is what keeps a receipt from striking through a figure that never
+      // came down.
+      listPrice: line.offer.saved > 0 ? line.offer.price : undefined,
     }));
 
     try {
@@ -174,12 +178,17 @@ export function CheckoutPage() {
         subtotal: cart.subtotal,
         deliveryCharge: cart.deliveryCharge,
         total: cart.total,
+        discountTotal: cart.discountTotal,
       });
 
       saveReceipt({
         orderId: result.orderId,
         orderNumber: result.orderNumber,
         total: result.total,
+        // The server's own figure, resolved when the order was written — not
+        // the bag's `cart.discountTotal`, which was computed when the page was
+        // read and can differ across the moment a sale ends.
+        discountTotal: result.discountTotal,
         reviewToken: result.reviewToken,
         paymentMethod: result.paymentMethod,
         city: customer.city,

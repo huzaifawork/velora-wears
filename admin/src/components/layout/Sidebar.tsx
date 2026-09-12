@@ -7,6 +7,7 @@ import {
   CategoriesIcon,
   DashboardIcon,
   DeliveryIcon,
+  DiscountsIcon,
   ExternalIcon,
   FeaturedIcon,
   ImagesIcon,
@@ -67,6 +68,9 @@ export function navGroups(openOrders?: number): NavGroup[] {
       caption: "Selling",
       items: [
         { to: routes.ORDERS, label: "Orders", icon: OrdersIcon, badge: openOrders },
+        // Under SELLING rather than CATALOG: a discount is a decision about
+        // what the shop is asking for a piece this week, not about the piece.
+        { to: routes.DISCOUNTS, label: "Discounts", icon: DiscountsIcon },
         { to: routes.CUSTOMERS, label: "Customers", icon: AccountIcon },
         { to: routes.REVIEWS, label: "Reviews", icon: ReviewsIcon },
         { to: routes.DELIVERY, label: "Delivery & store", icon: DeliveryIcon },

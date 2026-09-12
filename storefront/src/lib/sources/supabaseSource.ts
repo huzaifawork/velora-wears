@@ -67,6 +67,11 @@ interface SummaryRow {
   created_at: string;
   search_text: string;
   size_scale: string | null;
+  /** Null whenever nothing is on offer — see `ProductSummary.salePrice`. */
+  sale_price: number | null;
+  discount_ends_at: string | null;
+  /** `sale_price` when there is one, `price` otherwise. What sorting reads. */
+  effective_price: number;
 }
 
 interface ImageRow {
@@ -164,6 +169,11 @@ function toSummary(row: SummaryRow): ProductSummary {
     active: row.active,
     createdAt: epoch(row.created_at),
     searchText: row.search_text,
+    // Left UNDEFINED when nothing is on offer, rather than set to the full
+    // price: "no discount" and "a discount that takes nothing off" are not the
+    // same statement, and only the first should leave a card unchanged.
+    salePrice: row.sale_price ?? undefined,
+    discountEndsAt: row.discount_ends_at ? epoch(row.discount_ends_at) : undefined,
   };
 }
 
@@ -239,7 +249,7 @@ function toReview(row: ReviewRow): Review {
 }
 
 const SUMMARY_COLUMNS =
-  "id, slug, name, price, category_slug, thumb, in_stock, low_stock, total_stock, rating_avg, rating_count, active, created_at, search_text, size_scale";
+  "id, slug, name, price, category_slug, thumb, in_stock, low_stock, total_stock, rating_avg, rating_count, active, created_at, search_text, size_scale, sale_price, discount_ends_at, effective_price";
 
 /**
  * What a PUBLIC review listing needs, and nothing more (requirements section
@@ -281,6 +291,7 @@ async function listProducts({
   categorySlugs,
   search,
   inStockOnly,
+  saleOnly,
   sort,
   limit,
 }: ResolvedListOptions): Promise<ProductSummary[]> {
@@ -302,16 +313,21 @@ async function listProducts({
     q = branch.length === 1 ? q.eq("category_slug", branch[0]) : q.in("category_slug", branch);
   }
   if (inStockOnly) q = q.eq("in_stock", true);
+  // Only the database knows what is on offer — `sale_price` is computed from
+  // the discounts live at the moment of the read.
+  if (saleOnly) q = q.not("sale_price", "is", null);
 
   const term = normaliseSearch(search);
   if (term) q = q.ilike("search_text", `%${escapeLike(term)}%`);
 
   switch (sort) {
+    // `effective_price`, not `price`: the sort has to mean the figure on the
+    // label, or a marked-down piece sorts where its old price used to put it.
     case "price-asc":
-      q = q.order("price", { ascending: true });
+      q = q.order("effective_price", { ascending: true });
       break;
     case "price-desc":
-      q = q.order("price", { ascending: false });
+      q = q.order("effective_price", { ascending: false });
       break;
     case "rating":
       q = q
@@ -547,7 +563,7 @@ function toSiteImage(row: SiteImageRow): SiteImage {
  */
 async function listFeatured(limit: number): Promise<ProductSummary[]> {
   const newest = () =>
-    listProducts({ inStockOnly: false, sort: "newest", limit });
+    listProducts({ inStockOnly: false, saleOnly: false, sort: "newest", limit });
 
   try {
     const { data, error } = await getSupabase()

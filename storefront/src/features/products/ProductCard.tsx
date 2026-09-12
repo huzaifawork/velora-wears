@@ -1,7 +1,9 @@
 import { Link } from "react-router-dom";
 
 import type { ProductSummary } from "@shared/types";
+import { offerOf } from "@shared/discounts";
 import { Image } from "@/components/ui/Image";
+import { Price, SaleBadge } from "@/components/ui/Price";
 import { Rating } from "@/components/ui/Rating";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { StockBadge } from "@/features/products/StockBadge";
@@ -38,12 +40,20 @@ export function ProductCard({
 }) {
   const soldOut = !product.inStock;
 
+  /**
+   * The discount the database resolved for this piece, if any. `offerOf` is
+   * what every other surface reads too — and it is what drops an offer whose
+   * end time has passed while this page sat open, so a finished sale stops
+   * being advertised without waiting for a refetch.
+   */
+  const offer = offerOf(product);
+
   return (
     <article className="group">
       <Link
         to={productPath(product.slug)}
         className="block focus-visible:outline-none"
-        aria-label={`${product.name} — ${formatPrice(product.price)}`}
+        aria-label={`${product.name} — ${formatPrice(offer.salePrice)}`}
       >
         <div className="relative isolate overflow-hidden rounded-sm bg-canvas-deep">
           <Image
@@ -59,6 +69,13 @@ export function ProductCard({
 
           <div className="absolute top-3 left-3">
             <StockBadge product={product} />
+          </div>
+
+          {/* The flag a shopper scanning the grid sees before reading a single
+              figure. Opposite corner from the stock badge so the two never
+              collide on a piece that is both discounted and nearly gone. */}
+          <div className="absolute top-3 right-3">
+            <SaleBadge offer={offer} />
           </div>
 
           {/* Hover affordance: on a phone there is no hover, so the whole card
@@ -83,8 +100,8 @@ export function ProductCard({
           {product.ratingCount > 0 && (
             <Rating rating={product.ratingAvg} count={product.ratingCount} />
           )}
-          <p className="mt-0.5 flex items-baseline gap-2 text-base font-medium text-ink">
-            {formatPrice(product.price)}
+          <p className="mt-0.5 flex items-baseline gap-2">
+            <Price offer={offer} />
             <span
               aria-hidden="true"
               className="h-px w-0 bg-accent transition-all duration-500 ease-brand group-hover:w-8"

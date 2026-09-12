@@ -129,6 +129,7 @@ async function listTestimonials(limit: number): Promise<Review[]> {
 async function listFeatured(limit: number): Promise<ProductSummary[]> {
   const rows = applyFilters(demoSummaries, {
     inStockOnly: false,
+    saleOnly: false,
     sort: "newest",
     limit,
   });
