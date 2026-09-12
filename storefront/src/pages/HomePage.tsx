@@ -45,15 +45,15 @@ export function HomePage() {
 
   const [products, categories] = featured.data ?? [undefined, undefined];
 
-  // Split by slot here rather than in two queries. Both arrays are empty until
-  // the read lands, which is the same thing as "nothing uploaded" — so the
-  // sections below render their defaults during loading and never flash.
+  // Split by slot here rather than in two queries. Both are undefined until the
+  // read lands; `Hero` is told so explicitly, because a shop that HAS uploaded
+  // heroes must not open on the bundled default and then swap.
   const heroImages = siteImages.data?.filter((image) => image.slot === "hero");
   const promoBanners = siteImages.data?.filter((image) => image.slot === "promo");
 
   return (
     <>
-      <Hero settings={settings.data} images={heroImages} />
+      <Hero settings={settings.data} images={heroImages} loading={siteImages.loading} />
       <ValueProps settings={settings.data} />
       <CategoryStrip categories={categories} loading={featured.loading} />
       <FeaturedProducts
