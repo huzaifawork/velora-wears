@@ -595,9 +595,18 @@ reviews             product_id, order_id, rating, comment, display_name,
                                            submit-review (Edge Function, service role) -
                                            no insert/update/delete policy for anon/authenticated,
                                            same as orders
-orders              customer PII, subtotal/delivery/total, payment_method,
+orders              customer PII, subtotal/discount_total/delivery/total, payment_method,
                     review_token                                   SERVER-WRITTEN ONLY
+                                        <- subtotal is ALREADY net of any discount;
+                                           discount_total is for display only
 order_items         snapshot of name/slug/thumb/size/qty/unit_price at order time
+                    plus list_price — what it would have cost without the discount,
+                    NULL when the line was not discounted
+discounts           id, name, scope (all|category|product), category_slug FK,
+                    product_id FK, kind (percent|amount), value, starts_at,
+                    ends_at (EXCLUSIVE), active         <- section 8. ADMIN-WRITTEN.
+                                           Public SELECT is limited to LIVE rows, so a
+                                           scheduled sale is not readable with the anon key
 settings            ONE row: delivery_charge, free_delivery_threshold, low_stock_threshold
 settings_private    admin only
 admins              user_id FK auth.users            <- is_admin() reads this
@@ -608,6 +617,11 @@ find_order_for_review(order_number, email)   *** A FUNCTION, not a table ***
                     SECURITY DEFINER, like is_admin() - lets an anon caller prove they own
                     a guest order (section 16) without a select policy on orders existing.
                     Callable directly via PostgREST RPC with the anon key; read-only.
+
+best_discount(product_id, price, category_slug)   *** A FUNCTION, not a table ***
+                    The ONE place a sale price is resolved. Called by the summaries view
+                    AND by place_order(), so what a card advertises and what an invoice
+                    charges are computed by the same code.
 ```
 
 ### The one thing to understand before writing any data code
@@ -619,6 +633,9 @@ customers the wrong price. Postgres computes it instead:
 - `in_stock` / `low_stock` / `total_stock` — summed from `product_sizes`
 - `rating_avg` / `rating_count` — averaged from visible `reviews`
 - `thumb` — the first `product_images` row by position
+- `sale_price` / `discount_ends_at` / `effective_price` — `best_discount()` against the
+  discounts running at read time. `sale_price` is NULL when nothing is on offer, and
+  `effective_price` is what "sort by price" and the "on sale" filter read
 
 So **there is nothing to keep in sync, and it cannot go stale.** The whole class of bug is
 gone, and the obligation that used to be on Developer B is gone with it.
@@ -626,6 +643,23 @@ gone, and the obligation that used to be on Developer B is gone with it.
 The view is declared `security_invoker = on`, which makes it run with the caller's
 permissions so RLS on the underlying tables applies. Without that a view silently runs as
 its owner and becomes a way around RLS. **Do not remove it.**
+
+### Discounts: a rule, never a rewritten price
+
+A discount does not touch `products.price`. Nothing runs when a sale starts and nothing
+runs when it ends — the reduced price is COMPUTED, by the view for every listing and by
+`place_order()` at the moment of purchase. So a sale cannot outlive its end date because a
+job failed to put the prices back, which is the classic way a shop ends up discounting
+forever.
+
+Two implementations of the same rule exist ON PURPOSE, and must change together:
+`shared/discounts.ts` (what the browser DISPLAYS) and
+`supabase/migrations/20260912000001_discounts.sql` (what the shop CHARGES). The browser
+resolves nothing itself — it reads the figure the database computed off the summary — and
+the only decision it makes alone is whether the end time has passed since the page loaded.
+
+**Offers never stack.** A piece caught by several discounts gets the single best one. See
+the long note at the top of `shared/discounts.ts`.
 
 ### snake_case vs camelCase
 

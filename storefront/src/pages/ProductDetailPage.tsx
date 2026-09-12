@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import type { Size } from "@shared/types";
+import { hasOffer, noOffer, offerOf } from "@shared/discounts";
 import { FALLBACK_LOW_STOCK_THRESHOLD, availableSizes, joinNames, stockInSize } from "@shared/stock";
 import { parentOfCategory } from "@shared/categories";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { Container } from "@/components/layout/Container";
 import { ValueProps } from "@/components/layout/ValueProps";
 import { Button, buttonClasses } from "@/components/ui/Button";
+import { Price } from "@/components/ui/Price";
 import { Rating } from "@/components/ui/Rating";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useCart } from "@/features/cart/CartContext";
@@ -145,6 +147,22 @@ export function ProductDetailPage() {
 
   const soldOut = availableSizes(product.sizes, product.sizeScale).length === 0;
 
+  /**
+   * The offer, read off the SUMMARY rather than the full product.
+   *
+   * `products` is a table and the discount is computed in the `product_summaries`
+   * view, so the summary is the record that carries it — which is the same
+   * reason the rating and the stock flags are read from there. This page already
+   * fetches both in one wave, so it costs nothing extra, and it means the price
+   * here and the price on the card that led to it are the same number from the
+   * same query rather than two client-side calculations that could differ.
+   *
+   * No summary yet (a read that failed while the product itself landed) means no
+   * offer, never a guessed one: showing a discount the database did not confirm
+   * is the one failure mode worth being careful about here.
+   */
+  const offer = summary ? offerOf(summary) : noOffer(product.price);
+
   /** Stock in the chosen size — the cap on what can go into the bag. */
   const availableInSize = size ? stockInSize(product.sizes, size) : 0;
 
@@ -221,7 +239,14 @@ export function ProductDetailPage() {
                 </a>
               )}
 
-              <p className="text-2xl font-medium text-ink">{formatPrice(product.price)}</p>
+              <div className="flex flex-col gap-1">
+                <Price offer={offer} size="lg" showDeadline />
+                {hasOffer(offer) && (
+                  <p className="text-sm text-success">
+                    You save {formatPrice(offer.saved)} on this piece.
+                  </p>
+                )}
+              </div>
             </div>
 
             <p className="leading-relaxed text-pretty text-ink-soft">{product.description}</p>

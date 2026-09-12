@@ -98,11 +98,12 @@ export function listProducts({
   categorySlug,
   search,
   inStockOnly = false,
+  saleOnly = false,
   sort = DEFAULT_SORT,
   limit = 24,
 }: ListProductsOptions = {}): Promise<ProductSummary[]> {
   const term = normaliseSearch(search);
-  const key = `list:${categorySlug ?? "all"}:${term}:${inStockOnly}:${sort}:${limit}`;
+  const key = `list:${categorySlug ?? "all"}:${term}:${inStockOnly}:${saleOnly}:${sort}:${limit}`;
 
   return cached(key, async () =>
     (await source()).listProducts({
@@ -116,6 +117,7 @@ export function listProducts({
         : undefined,
       search: term || undefined,
       inStockOnly,
+      saleOnly,
       sort,
       limit,
     }),

@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 
+import { hasOffer } from "@shared/discounts";
 import { Image } from "@/components/ui/Image";
+import { Price } from "@/components/ui/Price";
 import { QuantityStepper } from "@/features/cart/QuantityStepper";
 import { useCart } from "@/features/cart/CartContext";
 import { formatPrice } from "@/lib/format";
@@ -66,7 +68,7 @@ export function CartLineRow({
   readOnly?: boolean;
 }) {
   const { setQty, remove } = useCart();
-  const { item, product, unitPrice, available, problem } = line;
+  const { item, product, offer, available, problem } = line;
 
   const name = product?.name ?? "This piece";
   const sizeText = labelFor(line);
@@ -119,8 +121,16 @@ export function CartLineRow({
           </p>
         </div>
 
-        {!unavailable && item.qty > 1 && (
-          <p className="text-xs text-ink-muted">{formatPrice(unitPrice)} each</p>
+        {/* The per-piece price, and what it was before any discount.
+            Shown for a single piece too when it is on offer — on a one-item
+            line the total above is the unit price, and without this the bag
+            would be the one surface that never mentions the sale the piece was
+            added from. */}
+        {!unavailable && (item.qty > 1 || hasOffer(offer)) && (
+          <p className="flex items-baseline gap-2 text-xs text-ink-muted">
+            <Price offer={offer} size="sm" />
+            <span>each</span>
+          </p>
         )}
 
         <div className="mt-1 flex flex-wrap items-center justify-between gap-3">

@@ -9,8 +9,8 @@ import { AccountMenu, AccountMobileLink } from "@/features/account/AccountMenu";
 import { CartButton } from "@/features/cart/CartButton";
 import { SearchBar } from "@/features/products/SearchBar";
 import { useAsync } from "@/hooks/useAsync";
-import { getCategories, getSettings } from "@/lib/queries";
-import { CATEGORIES, PRODUCTS, categoryPath, searchPath } from "@/lib/routes";
+import { getCategories, getSettings, listProducts } from "@/lib/queries";
+import { CATEGORIES, PRODUCTS, SALE, categoryPath, searchPath } from "@/lib/routes";
 
 /**
  * Site header. Carries the brand logo on every page (requirements section 1)
@@ -97,6 +97,21 @@ export function Header() {
     "categories",
   );
 
+  /**
+   * Is anything on offer right now?
+   *
+   * One bounded read that asks the database for a single discounted piece, and
+   * exists purely to decide whether the bar carries a "Sale" link. Cached and
+   * shared like every other read here, and dropped the moment a discount
+   * changes (`useCatalogRealtime`), so starting a sale puts the link up in every
+   * open tab and ending one takes it down.
+   */
+  const { data: onSale } = useAsync(
+    () => listProducts({ saleOnly: true, inStockOnly: true, limit: 1 }),
+    "nav:sale",
+  );
+  const saleLive = (onSale?.length ?? 0) > 0;
+
   const links: NavItem[] = [
     { to: PRODUCTS, label: "Shop all" },
     ...topLevelCategories(categories ?? [])
@@ -107,6 +122,9 @@ export function Header() {
         category: category.slug,
       })),
     { to: CATEGORIES, label: "Categories", exactPath: CATEGORIES },
+    // Last, and only while something is actually reduced — see `saleLive`.
+    // A "Sale" link that opens an empty grid is worse than no link at all.
+    ...(saleLive ? [{ to: SALE, label: "Sale", exactPath: SALE }] : []),
   ];
 
   /**

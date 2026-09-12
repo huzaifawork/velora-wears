@@ -57,6 +57,9 @@ const ProductEditorPage = lazy(() =>
 const CategoriesPage = lazy(() =>
   import("@admin/pages/CategoriesPage").then((m) => ({ default: m.CategoriesPage })),
 );
+const DiscountsPage = lazy(() =>
+  import("@admin/pages/DiscountsPage").then((m) => ({ default: m.DiscountsPage })),
+);
 const OrdersPage = lazy(() =>
   import("@admin/pages/OrdersPage").then((m) => ({ default: m.OrdersPage })),
 );
@@ -158,6 +161,7 @@ export function AdminApp() {
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="inventory" element={<InventoryPage />} />
 
+            <Route path="discounts" element={<DiscountsPage />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="orders/:id" element={<OrderDetailPage />} />
             <Route path="customers" element={<CustomersPage />} />

@@ -1,8 +1,8 @@
-import type { Product } from "@shared/types";
+import type { Product, ProductSummary } from "@shared/types";
 import { useCart } from "@/features/cart/CartContext";
 import { useAsync } from "@/hooks/useAsync";
 import { buildCart, type CartTotals } from "@/lib/cart";
-import { getProductBySlug, getSettings } from "@/lib/queries";
+import { getProductBySlug, getProductSummaryBySlug, getSettings } from "@/lib/queries";
 
 /**
  * Joins the stored bag to the live catalog and prices it (requirements
@@ -23,6 +23,15 @@ import { getProductBySlug, getSettings } from "@/lib/queries";
  * tracked per size and only `products/{id}.sizes` carries it; the summary's
  * `inStock` flag cannot answer "is Medium still there".
  *
+ * It needs the SUMMARY as well, and only for one field: the sale price Postgres
+ * computed (`product_summaries.sale_price`). A discount is resolved in the
+ * database, never in the browser — so rather than the bag working out its own
+ * answer from a list of discounts, it reads the same figure the card and the
+ * product page read. One calculation, three surfaces, no way for them to
+ * disagree about what a shirt costs today. Both reads share the cache in
+ * `queries.ts`, and a visitor who just came from the product page has both
+ * already.
+ *
  * Both the drawer and the cart page call this, so the mini bag and the full bag
  * cannot disagree about a total (section 18).
  */
@@ -40,19 +49,32 @@ export function useCartContents(): CartContents {
 
   const catalog = useAsync(
     async () => {
-      if (slugs.length === 0) return [] as Array<Product | null>;
-      return Promise.all(slugs.map((slug) => getProductBySlug(slug)));
+      if (slugs.length === 0) {
+        return [[], []] as [Array<Product | null>, Array<ProductSummary | null>];
+      }
+      // One wave, not two: the bag cannot be priced until both halves are in,
+      // and settling them separately would price it at full price for a frame
+      // and then flicker down to the sale price.
+      return Promise.all([
+        Promise.all(slugs.map((slug) => getProductBySlug(slug))),
+        Promise.all(slugs.map((slug) => getProductSummaryBySlug(slug))),
+      ]);
     },
     `cart:${slugs.join(",")}`,
   );
 
   const settings = useAsync(() => getSettings(), "settings");
 
+  const [fullProducts, summaryRows] = catalog.data ?? [undefined, undefined];
+
   const products = new Map<string, Product | null>(
-    slugs.map((slug, i) => [slug, catalog.data?.[i] ?? null]),
+    slugs.map((slug, i) => [slug, fullProducts?.[i] ?? null]),
+  );
+  const summaries = new Map<string, ProductSummary | null>(
+    slugs.map((slug, i) => [slug, summaryRows?.[i] ?? null]),
   );
 
-  const totals = buildCart(items, products, settings.data);
+  const totals = buildCart(items, products, settings.data, summaries);
 
   return {
     ...totals,

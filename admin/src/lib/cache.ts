@@ -40,6 +40,7 @@
 export type CacheTag =
   | "products"
   | "categories"
+  | "discounts"
   | "orders"
   | "reviews"
   | "settings"

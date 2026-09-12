@@ -9,8 +9,16 @@
 
 import type { PaymentMethod } from "./payment";
 import type { Size, SizeScaleId } from "./sizes";
+import type { Discount, DiscountKind, DiscountScope } from "./discounts";
 
 export type { PaymentMethod };
+
+/**
+ * An automatic price reduction — a category or a piece on offer for a stated
+ * number of days. `shared/discounts.ts` holds the record, the arithmetic, and
+ * the rule that decides which of several offers a piece actually gets.
+ */
+export type { Discount, DiscountKind, DiscountScope };
 
 /**
  * A size code, and the scale it belongs to.
@@ -98,6 +106,23 @@ export interface ProductSummary {
   featured?: boolean;
   /** Ascending display order within the featured strip. Ties break on `createdAt`. */
   featuredPosition?: number;
+  /**
+   * What this piece costs while a discount is running, computed by Postgres —
+   * `product_summaries.sale_price` (see `20260912000001_discounts.sql`).
+   *
+   * ABSENT IS THE NORMAL CASE and it means "nothing is on offer": `price` above
+   * is then the one figure a surface has to render, exactly as it was before
+   * discounts existed. Never assume this is the lower of the two — render it
+   * through `offerOf()` in `shared/discounts.ts`, which is also what drops an
+   * offer whose end time has passed since the page was read.
+   *
+   * The browser never works this out for itself. A discount is resolved in the
+   * database and resolved AGAIN by `place_order()` at the moment of purchase,
+   * for the same reason a price is (requirements section 17).
+   */
+  salePrice?: number;
+  /** When the running offer stops. Absent for an undated one, or for no offer. */
+  discountEndsAt?: number;
 }
 
 /** `products/{productId}` — the DETAIL view. Only ever fetched one at a time. */
@@ -285,6 +310,19 @@ export interface OrderItem {
   qty: number;
   /** Price at the time of ordering, written by the server — never sent by the client. */
   unitPrice: number;
+  /**
+   * What this piece would have cost WITHOUT the discount it got.
+   *
+   * Absent when the line was not discounted — and on every line written before
+   * discounts existed, which is the truth about those orders. `unitPrice` above
+   * is always what was actually charged, discounted or not, so every total ever
+   * written stays correct and nothing has to be recomputed.
+   *
+   * Snapshotted for exactly the reason `name` and `unitPrice` are: a sale ends,
+   * and a receipt that recalculated the saving from today's discounts would
+   * start disagreeing with the amount the courier collected.
+   */
+  listPrice?: number;
 }
 
 export interface OrderCustomer {
@@ -309,6 +347,15 @@ export interface Order {
   subtotal: number;
   deliveryCharge: number;
   total: number;
+  /**
+   * What the discounts took off, summed across the lines — for display only.
+   *
+   * `subtotal` is ALREADY the discounted figure and `total` is unchanged by
+   * this field; it exists so an order can say "you saved Rs 1,200" without
+   * reading every line back. Optional because orders written before discounts
+   * existed carry none; read a missing value as zero.
+   */
+  discountTotal?: number;
   /**
    * HOW the order is paid (requirements section 9). Written by the server, not
    * sent by the browser — see `shared/payment.ts`. Optional on this type only
@@ -460,6 +507,8 @@ export interface PlaceOrderResult {
   orderNumber: string;
   reviewToken: string;
   total: number;
+  /** What the discounts took off, as the SERVER resolved them. Zero when none ran. */
+  discountTotal?: number;
   /** What the store recorded the order as being paid by (section 9). */
   paymentMethod: PaymentMethod;
 }

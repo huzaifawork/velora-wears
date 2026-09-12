@@ -120,6 +120,8 @@ export interface DemoOrderTotals {
   subtotal: number;
   deliveryCharge: number;
   total: number;
+  /** What the bag's discounts took off. Zero in demo mode, which runs no sales. */
+  discountTotal?: number;
 }
 
 /** A short, unmistakably-fake stand-in for `place_order()`'s own `VW-YYMMDD-XXXXX` shape. */
@@ -146,6 +148,7 @@ function placeDemoOrder(input: PlaceOrderInput, totals: DemoOrderTotals): PlaceO
     orderNumber: demoOrderNumber(),
     reviewToken: crypto.randomUUID(),
     total: totals.total,
+    discountTotal: totals.discountTotal ?? 0,
     paymentMethod: DEFAULT_PAYMENT_METHOD,
   };
 }
@@ -237,6 +240,12 @@ export async function placeOrder(
     orderNumber: result.orderNumber,
     reviewToken: result.reviewToken ?? "",
     total: result.total,
+    /**
+     * What the server says the discounts came to. A response from a database
+     * that predates discounts carries none, and zero is the truth about that
+     * order — nothing was on offer when it was placed.
+     */
+    discountTotal: typeof result.discountTotal === "number" ? result.discountTotal : 0,
     /**
      * The method the STORE recorded, not one this file assumed. It is missing
      * only from an order placed against a database that predates the column, and

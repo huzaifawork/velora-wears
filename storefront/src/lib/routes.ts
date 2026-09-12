@@ -52,6 +52,19 @@ export function searchPath(term: string): string {
 }
 
 /**
+ * Everything currently discounted.
+ *
+ * A STATE of the products page, like a category or a search, rather than a page
+ * of its own — so a shopper can arrive on it and still narrow by category, hide
+ * what is sold out, and sort. A separate `/sale` route would have been a grid
+ * that quietly supported none of that.
+ *
+ * Linkable on purpose: it is the address a campaign, a post or a printed card
+ * can point at.
+ */
+export const SALE = `${PRODUCTS}?sale=on`;
+
+/**
  * Optional customer accounts — the note added to requirements section 12 on
  * 2026-08-29. Guest checkout (section 7) is unaffected: nothing links here
  * from the checkout form itself, only from the header and, as a convenience,

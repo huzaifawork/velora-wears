@@ -4,8 +4,9 @@ import { Container } from "@/components/layout/Container";
 import { Image } from "@/components/ui/Image";
 import { buttonClasses } from "@/components/ui/Button";
 import { OrderSuccessAnimation } from "@/features/checkout/OrderSuccessAnimation";
+import { Saved } from "@/components/ui/Price";
 import { formatPrice } from "@/lib/format";
-import { readReceipt, receiptSubtotal } from "@/lib/orderReceipt";
+import { readReceipt, receiptSaved, receiptSubtotal } from "@/lib/orderReceipt";
 import { CART, HOME, PRODUCTS, productPath } from "@/lib/routes";
 import { orderLineSize } from "@/lib/sizes";
 import { paymentMethodCopy } from "@shared/payment";
@@ -37,6 +38,13 @@ export function OrderConfirmedPage() {
 
   const subtotal = receiptSubtotal(receipt);
   const delivery = receipt.total - subtotal;
+  /**
+   * What the sale took off, as the SERVER resolved it when the order was
+   * written. Stated rather than subtracted: `subtotal` above is already net of
+   * it, exactly as the bag's was, so this line says what was saved rather than
+   * saving it a second time.
+   */
+  const saved = receiptSaved(receipt);
   /**
    * The total is the SERVER's figure and is shown as it came back. The
    * breakdown is derived from it, so it is only shown when the arithmetic
@@ -139,8 +147,18 @@ export function OrderConfirmedPage() {
                     </p>
                   </div>
 
-                  <p className="shrink-0 text-sm font-medium tabular-nums text-ink">
+                  <p className="shrink-0 text-right text-sm font-medium tabular-nums text-ink">
                     {formatPrice(line.unitPrice * line.qty)}
+                    {/* The old price, when this line was bought on offer.
+                        Frozen onto the receipt at the moment of the order, so
+                        it keeps saying what was actually saved long after the
+                        sale has ended. */}
+                    {line.listPrice !== undefined && line.listPrice > line.unitPrice && (
+                      <s className="mt-0.5 block text-xs font-normal text-ink-muted">
+                        <span className="sr-only">was </span>
+                        {formatPrice(line.listPrice * line.qty)}
+                      </s>
+                    )}
                   </p>
                 </div>
 
@@ -174,6 +192,14 @@ export function OrderConfirmedPage() {
                   <dt className="text-ink-soft">Subtotal</dt>
                   <dd className="font-medium tabular-nums text-ink">{formatPrice(subtotal)}</dd>
                 </div>
+                {saved > 0 && (
+                  <div className="flex items-baseline justify-between gap-4 text-sm">
+                    <dt className="text-ink-soft">You saved</dt>
+                    <dd className="font-medium">
+                      <Saved amount={saved} />
+                    </dd>
+                  </div>
+                )}
                 <div className="flex items-baseline justify-between gap-4 text-sm">
                   <dt className="text-ink-soft">Delivery</dt>
                   <dd className="font-medium tabular-nums text-ink">

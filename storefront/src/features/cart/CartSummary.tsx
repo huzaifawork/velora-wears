@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { Button, buttonClasses } from "@/components/ui/Button";
+import { Saved } from "@/components/ui/Price";
 import { useCart } from "@/features/cart/CartContext";
 import { formatPrice } from "@/lib/format";
 import { CHECKOUT, PRODUCTS } from "@/lib/routes";
@@ -43,7 +44,8 @@ export function CartSummary({
   showActions?: boolean;
 }) {
   const { removeMany } = useCart();
-  const { subtotal, deliveryCharge, total, hasProblems, freeDeliveryRemaining } = cart;
+  const { subtotal, discountTotal, deliveryCharge, total, hasProblems, freeDeliveryRemaining } =
+    cart;
 
   const blocked = hasProblems || subtotal === 0;
   const unfulfillable = cart.lines.filter((line) => line.problem !== undefined).map((l) => l.item);
@@ -57,10 +59,30 @@ export function CartSummary({
       )}
 
       <dl className={`flex flex-col gap-3 ${compact ? "" : "mt-6"}`}>
+        {/*
+          THE SUBTOTAL IS ALREADY NET OF THE DISCOUNT.
+
+          So the savings line below it is stated, not subtracted — it says what
+          the sale took off rather than taking it off again. Written the other
+          way round (full-price subtotal, then a negative row) the arithmetic
+          reads the same but the figure `place_order()` computes is the net one,
+          and the two breakdowns would only agree by coincidence.
+
+          The row is absent entirely when nothing in the bag is discounted, so a
+          shop running no sale keeps precisely the summary it has always had.
+        */}
         <div className={row}>
           <dt className="text-ink-soft">Subtotal</dt>
           <dd className="font-medium tabular-nums text-ink">{formatPrice(subtotal)}</dd>
         </div>
+        {discountTotal > 0 && (
+          <div className={row}>
+            <dt className="text-ink-soft">You saved</dt>
+            <dd className="font-medium">
+              <Saved amount={discountTotal} />
+            </dd>
+          </div>
+        )}
         <div className={row}>
           <dt className="text-ink-soft">Delivery</dt>
           <dd className="font-medium tabular-nums text-ink">

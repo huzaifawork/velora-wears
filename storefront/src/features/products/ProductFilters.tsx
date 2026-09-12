@@ -28,15 +28,21 @@ export function ProductFilters({
   onSortChange,
   inStockOnly,
   onInStockChange,
+  saleOnly,
+  onSaleOnlyChange,
   className = "",
 }: {
   sort: SortOption;
   onSortChange: (sort: SortOption) => void;
   inStockOnly: boolean;
   onInStockChange: (only: boolean) => void;
+  /** Show only what is currently discounted. */
+  saleOnly: boolean;
+  onSaleOnlyChange: (only: boolean) => void;
   className?: string;
 }) {
   const stockId = useId();
+  const saleId = useId();
 
   return (
     <div className={`flex flex-wrap items-center gap-x-6 gap-y-3 ${className}`}>
@@ -53,6 +59,28 @@ export function ProductFilters({
           className="cursor-pointer text-[0.625rem] tracking-eyebrow text-ink-soft uppercase select-none"
         >
           In stock only
+        </label>
+      </div>
+
+      {/* "On sale" sits beside the stock filter rather than in the sort list,
+          because it answers the same kind of question — narrow what I am
+          looking at — and because a shopper who came for a sale wants it
+          combinable with a category and a size, which a sort option is not.
+          Whether anything is discounted is a question only the database can
+          answer, so this is a filter it applies, not one the page fakes. */}
+      <div className="flex items-center gap-3">
+        <input
+          id={saleId}
+          type="checkbox"
+          checked={saleOnly}
+          onChange={(event) => onSaleOnlyChange(event.target.checked)}
+          className="h-4 w-4 shrink-0 accent-brand"
+        />
+        <label
+          htmlFor={saleId}
+          className="cursor-pointer text-[0.625rem] tracking-eyebrow text-ink-soft uppercase select-none"
+        >
+          On sale
         </label>
       </div>
 
